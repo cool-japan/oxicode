@@ -43,7 +43,12 @@ pub enum Error {
     },
 
     /// Configuration limit exceeded
-    LimitExceeded,
+    LimitExceeded {
+        /// The limit that was configured
+        limit: u64,
+        /// The value that exceeded the limit
+        found: u64,
+    },
 
     /// IO error during encoding or decoding
     #[cfg(feature = "std")]
@@ -54,10 +59,17 @@ pub enum Error {
         message: String,
     },
 
-    /// Custom error message
+    /// Custom error message (static string)
     Custom {
         /// Error message
         message: &'static str,
+    },
+
+    /// Custom error message (owned string, from serde or dynamic sources)
+    #[cfg(feature = "alloc")]
+    OwnedCustom {
+        /// Error message
+        message: alloc::string::String,
     },
 
     /// Value outside usize range (for platforms with smaller usize)
@@ -91,6 +103,15 @@ pub enum Error {
     InvalidSystemTime {
         /// Duration before UNIX_EPOCH
         duration: std::time::Duration,
+    },
+
+    /// Checksum mismatch during data verification
+    #[cfg(feature = "checksum")]
+    ChecksumMismatch {
+        /// Expected CRC32 checksum
+        expected: u32,
+        /// Found CRC32 checksum
+        found: u32,
     },
 }
 
@@ -185,11 +206,20 @@ impl fmt::Display for Error {
                 write!(f, "Invalid char encoding: {:?}", bytes)
             }
             #[cfg(feature = "alloc")]
-            Error::Utf8 { inner } => write!(f, "UTF-8 error: {}", inner),
-            Error::LimitExceeded => write!(f, "Configuration limit exceeded"),
+            Error::Utf8 { inner } => write!(
+                f,
+                "UTF-8 error at byte offset {}: {}",
+                inner.valid_up_to(),
+                inner
+            ),
+            Error::LimitExceeded { limit, found } => {
+                write!(f, "limit exceeded: found {} but limit is {}", found, limit)
+            }
             #[cfg(feature = "std")]
             Error::Io { kind, message } => write!(f, "IO error ({:?}): {}", kind, message),
             Error::Custom { message } => write!(f, "{}", message),
+            #[cfg(feature = "alloc")]
+            Error::OwnedCustom { message } => write!(f, "{}", message),
             Error::OutsideUsizeRange(v) => {
                 write!(f, "Value {} outside usize range", v)
             }
@@ -197,7 +227,11 @@ impl fmt::Display for Error {
                 write!(f, "NonZero{} type decoded as zero", non_zero_type)
             }
             Error::UnexpectedVariant { found, type_name } => {
-                write!(f, "Unexpected variant {} for enum {}", found, type_name)
+                write!(
+                    f,
+                    "unexpected variant for type `{}`: found discriminant {}",
+                    type_name, found
+                )
             }
             #[cfg(feature = "std")]
             Error::InvalidDuration { secs, nanos } => {
@@ -210,6 +244,14 @@ impl fmt::Display for Error {
             #[cfg(feature = "std")]
             Error::InvalidSystemTime { duration } => {
                 write!(f, "Invalid SystemTime: {:?} before UNIX_EPOCH", duration)
+            }
+            #[cfg(feature = "checksum")]
+            Error::ChecksumMismatch { expected, found } => {
+                write!(
+                    f,
+                    "Checksum mismatch: expected 0x{:08x}, found 0x{:08x}",
+                    expected, found
+                )
             }
         }
     }

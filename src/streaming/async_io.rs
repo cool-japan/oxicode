@@ -227,6 +227,15 @@ impl<R: AsyncRead + Unpin> AsyncStreamingDecoder<R> {
         }
     }
 
+    /// Create an async streaming decoder with explicit configuration.
+    ///
+    /// The configuration is accepted for API symmetry with [`AsyncStreamingEncoder::with_config`]
+    /// but the decoder determines framing from the on-wire chunk format, so most config fields
+    /// (e.g. `chunk_size`) are advisory only.
+    pub fn with_config(reader: R, _config: StreamingConfig) -> Self {
+        Self::new(reader)
+    }
+
     /// Read the next item from the stream asynchronously.
     ///
     /// Returns `None` when the stream is exhausted.

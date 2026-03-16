@@ -12,7 +12,7 @@ pub use self::decoder::DecoderImpl;
 pub use self::read::{Reader, SliceReader, SliceReaderBorrow};
 
 #[cfg(feature = "std")]
-pub use self::read::{IoReader, StdReader};
+pub use self::read::{BufferedIoReader, IoReader, StdReader};
 
 /// Decode trait for types that can be decoded from binary format
 ///

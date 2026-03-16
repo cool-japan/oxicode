@@ -5,9 +5,9 @@
 //!
 //! Run with: cargo run --example validation
 
-use oxicode::validation::{Constraints, ValidationConfig, Validator};
 #[allow(unused_imports)]
 use oxicode::validation::ValidationError;
+use oxicode::validation::{Constraints, ValidationConfig, Validator};
 use oxicode::{Decode, Encode};
 
 #[allow(dead_code)]

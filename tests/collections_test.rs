@@ -1,5 +1,82 @@
 //! Comprehensive tests for all collection types
 
+#![allow(
+    clippy::approx_constant,
+    clippy::useless_vec,
+    clippy::len_zero,
+    clippy::unnecessary_cast,
+    clippy::redundant_closure,
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    clippy::needless_borrow,
+    clippy::enum_variant_names,
+    clippy::upper_case_acronyms,
+    clippy::inconsistent_digit_grouping,
+    clippy::unit_cmp,
+    clippy::assertions_on_constants,
+    clippy::iter_on_single_items,
+    clippy::expect_fun_call,
+    clippy::redundant_pattern_matching,
+    variant_size_differences,
+    clippy::absurd_extreme_comparisons,
+    clippy::nonminimal_bool,
+    clippy::for_kv_map,
+    clippy::needless_range_loop,
+    clippy::single_match,
+    clippy::collapsible_if,
+    clippy::needless_return,
+    clippy::redundant_clone,
+    clippy::map_entry,
+    clippy::match_single_binding,
+    clippy::bool_comparison,
+    clippy::derivable_impls,
+    clippy::manual_range_contains,
+    clippy::needless_borrows_for_generic_args,
+    clippy::manual_map,
+    clippy::vec_init_then_push,
+    clippy::identity_op,
+    clippy::manual_flatten,
+    clippy::single_char_pattern,
+    clippy::search_is_some,
+    clippy::option_map_unit_fn,
+    clippy::while_let_on_iterator,
+    clippy::clone_on_copy,
+    clippy::box_collection,
+    clippy::redundant_field_names,
+    clippy::ptr_arg,
+    clippy::large_enum_variant,
+    clippy::match_ref_pats,
+    clippy::needless_pass_by_value,
+    clippy::unused_unit,
+    clippy::let_and_return,
+    clippy::suspicious_else_formatting,
+    clippy::manual_strip,
+    clippy::match_like_matches_macro,
+    clippy::from_over_into,
+    clippy::wrong_self_convention,
+    clippy::inherent_to_string,
+    clippy::new_without_default,
+    clippy::unnecessary_wraps,
+    clippy::field_reassign_with_default,
+    clippy::manual_find,
+    clippy::unnecessary_lazy_evaluations,
+    clippy::should_implement_trait,
+    clippy::missing_safety_doc,
+    clippy::unusual_byte_groupings,
+    clippy::bool_assert_comparison,
+    clippy::zero_prefixed_literal,
+    clippy::await_holding_lock,
+    clippy::manual_saturating_arithmetic,
+    clippy::explicit_counter_loop,
+    clippy::needless_lifetimes,
+    clippy::single_component_path_imports,
+    clippy::uninlined_format_args,
+    clippy::iter_cloned_collect,
+    clippy::manual_str_repeat,
+    clippy::excessive_precision,
+    clippy::precedence,
+    clippy::unnecessary_literal_unwrap
+)]
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 
 #[test]
@@ -121,6 +198,63 @@ fn test_binaryheap_roundtrip() {
     original_vec.sort();
     decoded_vec.sort();
     assert_eq!(original_vec, decoded_vec);
+}
+
+#[test]
+fn test_linkedlist_roundtrip() {
+    use std::collections::LinkedList;
+    let list: LinkedList<i32> = vec![-3, -2, -1, 0, 1, 2, 3].into_iter().collect();
+    let bytes = oxicode::encode_to_vec(&list).expect("Failed to encode");
+    let (decoded, _): (LinkedList<i32>, _) =
+        oxicode::decode_from_slice(&bytes).expect("Failed to decode");
+    assert_eq!(list, decoded);
+}
+
+#[test]
+fn test_nested_hashmap_vec_roundtrip() {
+    let mut outer: HashMap<String, Vec<u32>> = HashMap::new();
+    outer.insert("primes".to_string(), vec![2, 3, 5, 7, 11]);
+    outer.insert("evens".to_string(), vec![2, 4, 6, 8, 10]);
+
+    let bytes = oxicode::encode_to_vec(&outer).expect("Failed to encode");
+    let (decoded, _): (HashMap<String, Vec<u32>>, _) =
+        oxicode::decode_from_slice(&bytes).expect("Failed to decode");
+    assert_eq!(outer, decoded);
+}
+
+#[test]
+fn test_empty_collections_roundtrip() {
+    let empty_map: BTreeMap<u32, u32> = BTreeMap::new();
+    let empty_set: HashSet<String> = HashSet::new();
+    let empty_deque: VecDeque<i64> = VecDeque::new();
+
+    let enc_map = oxicode::encode_to_vec(&empty_map).expect("encode map");
+    let enc_set = oxicode::encode_to_vec(&empty_set).expect("encode set");
+    let enc_deque = oxicode::encode_to_vec(&empty_deque).expect("encode deque");
+
+    let (dec_map, _): (BTreeMap<u32, u32>, _) =
+        oxicode::decode_from_slice(&enc_map).expect("decode map");
+    let (dec_set, _): (HashSet<String>, _) =
+        oxicode::decode_from_slice(&enc_set).expect("decode set");
+    let (dec_deque, _): (VecDeque<i64>, _) =
+        oxicode::decode_from_slice(&enc_deque).expect("decode deque");
+
+    assert_eq!(empty_map, dec_map);
+    assert_eq!(empty_set, dec_set);
+    assert_eq!(empty_deque, dec_deque);
+}
+
+#[test]
+fn test_btreemap_string_key_roundtrip() {
+    let mut map = BTreeMap::new();
+    map.insert("alpha".to_string(), 1u32);
+    map.insert("beta".to_string(), 2u32);
+    map.insert("gamma".to_string(), 3u32);
+
+    let bytes = oxicode::encode_to_vec(&map).expect("Failed to encode");
+    let (decoded, _): (BTreeMap<String, u32>, _) =
+        oxicode::decode_from_slice(&bytes).expect("Failed to decode");
+    assert_eq!(map, decoded);
 }
 
 #[test]

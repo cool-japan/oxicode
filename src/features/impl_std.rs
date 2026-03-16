@@ -12,7 +12,6 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     path::{Path, PathBuf},
     sync::{Mutex, RwLock},
-    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 // ===== HashMap<K, V> =====
@@ -113,61 +112,6 @@ impl<T: Encode> Encode for RwLock<T> {
 impl<T: Decode> Decode for RwLock<T> {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(RwLock::new(T::decode(decoder)?))
-    }
-}
-
-// ===== Duration =====
-
-impl Encode for Duration {
-    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
-        self.as_secs().encode(encoder)?;
-        self.subsec_nanos().encode(encoder)
-    }
-}
-
-impl Decode for Duration {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        let secs = u64::decode(decoder)?;
-        let nanos = u32::decode(decoder)?;
-
-        // Validate nanos < 1_000_000_000
-        if nanos >= 1_000_000_000 {
-            return Err(Error::InvalidDuration { secs, nanos });
-        }
-
-        Ok(Duration::new(secs, nanos))
-    }
-}
-
-// ===== SystemTime =====
-
-impl Encode for SystemTime {
-    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
-        match self.duration_since(UNIX_EPOCH) {
-            Ok(duration) => {
-                0u8.encode(encoder)?;
-                duration.encode(encoder)
-            }
-            Err(e) => {
-                1u8.encode(encoder)?;
-                e.duration().encode(encoder)
-            }
-        }
-    }
-}
-
-impl Decode for SystemTime {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        let variant = u8::decode(decoder)?;
-        let duration = Duration::decode(decoder)?;
-
-        match variant {
-            0 => Ok(UNIX_EPOCH + duration),
-            1 => Ok(UNIX_EPOCH - duration),
-            _ => Err(Error::InvalidData {
-                message: "Invalid SystemTime variant",
-            }),
-        }
     }
 }
 
@@ -413,5 +357,83 @@ impl Encode for CStr {
         let bytes = self.to_bytes();
         (bytes.len() as u64).encode(encoder)?;
         encoder.writer().write(bytes)
+    }
+}
+
+// ===== OsStr & OsString =====
+
+#[cfg(not(target_family = "wasm"))]
+impl Encode for std::ffi::OsStr {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.to_string_lossy().as_ref().encode(encoder)
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl Encode for std::ffi::OsString {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.as_os_str().encode(encoder)
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl Decode for std::ffi::OsString {
+    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        let s = String::decode(decoder)?;
+        Ok(std::ffi::OsString::from(s))
+    }
+}
+
+// ===== BorrowDecode for std types (delegate to Decode) =====
+
+crate::impl_borrow_decode!(PathBuf);
+crate::impl_borrow_decode!(IpAddr);
+crate::impl_borrow_decode!(Ipv4Addr);
+crate::impl_borrow_decode!(Ipv6Addr);
+crate::impl_borrow_decode!(SocketAddr);
+crate::impl_borrow_decode!(SocketAddrV4);
+crate::impl_borrow_decode!(SocketAddrV6);
+crate::impl_borrow_decode!(CString);
+#[cfg(not(target_family = "wasm"))]
+crate::impl_borrow_decode!(std::ffi::OsString);
+
+impl<'de, T, S> crate::de::BorrowDecode<'de> for HashSet<T, S>
+where
+    T: crate::de::Decode + Eq + Hash + 'static,
+    S: BuildHasher + Default + 'static,
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        HashSet::<T, S>::decode(decoder)
+    }
+}
+
+impl<'de, K, V, S> crate::de::BorrowDecode<'de> for HashMap<K, V, S>
+where
+    K: crate::de::Decode + Eq + Hash + 'static,
+    V: crate::de::Decode + 'static,
+    S: BuildHasher + Default + 'static,
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        HashMap::<K, V, S>::decode(decoder)
+    }
+}
+
+impl<'de, T: crate::de::Decode + 'static> crate::de::BorrowDecode<'de> for Mutex<T> {
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        Mutex::<T>::decode(decoder)
+    }
+}
+
+impl<'de, T: crate::de::Decode + 'static> crate::de::BorrowDecode<'de> for RwLock<T> {
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        RwLock::<T>::decode(decoder)
     }
 }

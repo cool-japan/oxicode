@@ -1,5 +1,5 @@
 # Rust
-/target
+**/target/
 **/*.rs.bk
 *.pdb
 Cargo.lock
@@ -7,6 +7,9 @@ Cargo.lock
 # IDE
 .idea/
 .vscode/
+
+# Claude AI config
+**/.claude/
 *.swp
 *.swo
 *~
@@ -24,3 +27,6 @@ Thumbs.db
 
 # Documentation
 /target/doc
+
+# Rustc ICE dumps
+rustc-ice-*.txt

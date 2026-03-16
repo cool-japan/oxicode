@@ -1,0 +1,44 @@
+[workspace]
+
+[package]
+name = "oxicode-fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+oxicode = { path = "..", features = ["std", "derive", "checksum", "compression-lz4"] }
+
+# Optimize for fuzzing
+[profile.release]
+debug = true
+overflow-checks = true
+
+[[bin]]
+name = "fuzz_decode_slice"
+path = "fuzz_targets/fuzz_decode_slice.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_roundtrip"
+path = "fuzz_targets/fuzz_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_streaming"
+path = "fuzz_targets/fuzz_streaming.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_versioned"
+path = "fuzz_targets/fuzz_versioned.rs"
+test = false
+doc = false

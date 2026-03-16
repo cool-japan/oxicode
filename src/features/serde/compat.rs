@@ -37,7 +37,7 @@ where
         let serializer = super::ser::Serializer::new(encoder);
         self.0
             .serialize(serializer)
-            .map_err(|e| Error::Custom { message: e.msg })
+            .map_err(|e| Error::OwnedCustom { message: e.msg })
     }
 }
 
@@ -49,7 +49,7 @@ where
         let deserializer = super::de::Deserializer::new(decoder);
         T::deserialize(deserializer)
             .map(Compat)
-            .map_err(|e| Error::Custom { message: e.msg })
+            .map_err(|e| Error::OwnedCustom { message: e.msg })
     }
 }
 
@@ -67,7 +67,7 @@ where
         let serializer = super::ser::Serializer::new(encoder);
         self.0
             .serialize(serializer)
-            .map_err(|e| Error::Custom { message: e.msg })
+            .map_err(|e| Error::OwnedCustom { message: e.msg })
     }
 }
 
@@ -79,6 +79,6 @@ where
         let deserializer = super::de::Deserializer::new(decoder);
         T::deserialize(deserializer)
             .map(BorrowCompat)
-            .map_err(|e| Error::Custom { message: e.msg })
+            .map_err(|e| Error::OwnedCustom { message: e.msg })
     }
 }

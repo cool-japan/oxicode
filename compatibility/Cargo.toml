@@ -14,7 +14,7 @@ categories = ["encoding", "development-tools::testing"]
 publish = false
 
 [dependencies]
-oxicode = { path = "..", version = "0.1.0" }
+oxicode = { path = "..", version = "0.2.0" }
 serde = { workspace = true, features = ["derive"] }
 bincode = "2.0"
 

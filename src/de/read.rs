@@ -140,6 +140,60 @@ impl<R: std::io::Read> Reader for IoReader<R> {
 #[cfg(feature = "std")]
 pub type StdReader<R> = IoReader<R>;
 
+/// A buffered reader wrapping any `std::io::Read` source.
+///
+/// Uses `std::io::BufReader` internally to batch syscalls, dramatically
+/// improving throughput when decoding from files or network sockets.
+#[cfg(feature = "std")]
+pub struct BufferedIoReader<R: std::io::Read> {
+    inner: std::io::BufReader<R>,
+}
+
+#[cfg(feature = "std")]
+impl<R: std::io::Read> BufferedIoReader<R> {
+    /// Create with default 8 KiB internal buffer.
+    pub fn new(reader: R) -> Self {
+        Self {
+            inner: std::io::BufReader::new(reader),
+        }
+    }
+
+    /// Create with a custom buffer capacity in bytes.
+    pub fn with_capacity(capacity: usize, reader: R) -> Self {
+        Self {
+            inner: std::io::BufReader::with_capacity(capacity, reader),
+        }
+    }
+
+    /// Get a reference to the underlying reader.
+    pub fn inner(&self) -> &R {
+        self.inner.get_ref()
+    }
+
+    /// Get a mutable reference to the underlying reader.
+    pub fn inner_mut(&mut self) -> &mut R {
+        self.inner.get_mut()
+    }
+
+    /// Consume the BufferedIoReader and return the underlying reader.
+    pub fn into_inner(self) -> R {
+        self.inner.into_inner()
+    }
+}
+
+#[cfg(feature = "std")]
+impl<R: std::io::Read> Reader for BufferedIoReader<R> {
+    fn read(&mut self, bytes: &mut [u8]) -> crate::error::Result<()> {
+        use std::io::Read as _;
+        self.inner
+            .read_exact(bytes)
+            .map_err(|e| crate::error::Error::Io {
+                kind: e.kind(),
+                message: e.to_string(),
+            })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -54,6 +54,14 @@ pub use async_io::{
     CancellationToken,
 };
 
+/// Short alias for [`AsyncStreamingEncoder`] — available when the `async-tokio` feature is enabled.
+#[cfg(feature = "async-tokio")]
+pub type AsyncEncoder<W> = AsyncStreamingEncoder<W>;
+
+/// Short alias for [`AsyncStreamingDecoder`] — available when the `async-tokio` feature is enabled.
+#[cfg(feature = "async-tokio")]
+pub type AsyncDecoder<R> = AsyncStreamingDecoder<R>;
+
 /// Default chunk size for streaming operations (64KB).
 pub const DEFAULT_CHUNK_SIZE: usize = 64 * 1024;
 

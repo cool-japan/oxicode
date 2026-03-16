@@ -90,7 +90,6 @@ pub fn check_compatibility(
 /// Check if a data version can be migrated to a target version.
 ///
 /// Returns true if migration is possible (not necessarily automatic).
-#[allow(dead_code)]
 pub fn can_migrate(from: Version, to: Version) -> bool {
     // Can always migrate within same major version
     if from.major == to.major {
@@ -106,7 +105,6 @@ pub fn can_migrate(from: Version, to: Version) -> bool {
 /// Returns a list of intermediate versions that should be migrated through.
 /// Empty list means direct migration is possible.
 #[cfg(feature = "alloc")]
-#[allow(dead_code)]
 pub fn migration_path(from: Version, to: Version) -> alloc::vec::Vec<Version> {
     let mut path = alloc::vec::Vec::new();
 

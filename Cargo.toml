@@ -3,13 +3,14 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
-authors = ["OxiCode Contributors"]
+version = "0.2.0"
+authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.74.0"
 repository = "https://github.com/cool-japan/oxicode"
-license = "MIT"
+license = "Apache-2.0"
 description = "A modern binary serialization library - successor to bincode"
+readme = "README.md"
 
 [workspace.dependencies]
 # Proc macro dependencies
@@ -19,11 +20,13 @@ proc-macro2 = "1.0"
 
 # Core dependencies
 serde = { version = "1.0", default-features = false }
+crc32fast = { version = "1.5" }
 
 # Dev dependencies
 criterion = "0.8.1"
-tempfile = "3.24"
+tempfile = "3.27"
 serde_json = { version = "1.0", default-features = false }
+proptest = "1.8"
 
 [package]
 name = "oxicode"
@@ -33,6 +36,7 @@ authors.workspace = true
 repository.workspace = true
 license.workspace = true
 description.workspace = true
+readme.workspace = true
 rust-version.workspace = true
 
 keywords = ["binary", "encode", "serialize", "bincode", "serialization"]
@@ -49,17 +53,21 @@ serde = ["dep:serde", "alloc"]  # Serde integration (optional)
 simd = []  # SIMD-optimized array encoding (auto-detects CPU capabilities)
 compression-lz4 = ["lz4_flex"]  # LZ4 compression (fast, default)
 compression-zstd = ["zstd"]    # Zstd compression (better ratio)
+compression-zstd-pure = ["ruzstd"]  # Pure Rust zstd decompression (decode-only, no C toolchain)
 compression = ["compression-lz4"]  # Default compression feature
 async-tokio = ["tokio"]  # Async streaming with tokio
-async-io = ["futures-io"]  # Generic async IO traits
+checksum = ["dep:crc32fast"]  # CRC32 integrity checking for encoded data
+validation = []               # Enable validation trait implementations in tests
+versioning = []               # Enable versioning API tests
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.1.0", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.0", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
 lz4_flex = { version = "0.12", optional = true }
 zstd = { version = "0.13", optional = true, default-features = false }
-tokio = { version = "1.48", features = ["io-util"], optional = true }
-futures-io = { version = "0.3", optional = true }
+ruzstd = { version = "0.8", optional = true }
+tokio = { version = "1.50", features = ["io-util"], optional = true }
+crc32fast = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
@@ -67,7 +75,8 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
 bincode = "2.0" # Never upgrade to 3.0
-tokio = { version = "1.48", features = ["rt", "macros", "io-util"] }
+tokio = { version = "1.50", features = ["rt", "macros", "io-util", "fs", "time"] }
+proptest = { workspace = true }
 
 [[bench]]
 name = "encoding_bench"

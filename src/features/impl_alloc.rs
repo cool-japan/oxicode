@@ -8,7 +8,7 @@ use crate::{
 use alloc::{
     borrow::{Cow, ToOwned},
     boxed::Box,
-    collections::{BTreeMap, BTreeSet, BinaryHeap, VecDeque},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, LinkedList, VecDeque},
     rc::Rc,
     string::String,
     sync::Arc,
@@ -151,6 +151,38 @@ where
 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(Cow::Owned(T::Owned::decode(decoder)?))
+    }
+}
+
+// ===== Decode for Cow<'_, str> and Cow<'_, [u8]> (unsized T specializations) =====
+// The generic `Decode for Cow<'a, T>` requires T: Sized, which excludes str and [u8].
+// These concrete impls cover those unsized cases.
+
+impl Decode for Cow<'_, str> {
+    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Ok(Cow::Owned(String::decode(decoder)?))
+    }
+}
+
+impl Decode for Cow<'_, [u8]> {
+    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Ok(Cow::Owned(Vec::<u8>::decode(decoder)?))
+    }
+}
+
+// ===== BorrowDecode for Cow<'de, str> (zero-copy) =====
+
+impl<'de> BorrowDecode<'de> for Cow<'de, str> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Ok(Cow::Borrowed(<&'de str>::borrow_decode(decoder)?))
+    }
+}
+
+// ===== BorrowDecode for Cow<'de, [u8]> (zero-copy) =====
+
+impl<'de> BorrowDecode<'de> for Cow<'de, [u8]> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Ok(Cow::Borrowed(<&'de [u8]>::borrow_decode(decoder)?))
     }
 }
 
@@ -351,6 +383,138 @@ impl<T: Decode> Decode for VecDeque<T> {
     }
 }
 
+// ===== LinkedList<T> =====
+
+impl<T: Encode> Encode for LinkedList<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        (self.len() as u64).encode(encoder)?;
+        for item in self.iter() {
+            item.encode(encoder)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Decode> Decode for LinkedList<T> {
+    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        let len = u64::decode(decoder)? as usize;
+
+        let mut list = LinkedList::new();
+        for _ in 0..len {
+            list.push_back(T::decode(decoder)?);
+        }
+        Ok(list)
+    }
+}
+
+// ===== BorrowDecode for owned alloc types (delegate to Decode) =====
+// These allow BorrowDecode derive to work with owned fields like String, Vec<T>, etc.
+
+crate::impl_borrow_decode!(String);
+
+impl<'de, T: Decode + Ord + 'static> BorrowDecode<'de> for BinaryHeap<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        BinaryHeap::<T>::decode(decoder)
+    }
+}
+
+impl<'de, K: Decode + Ord + 'static, V: Decode + 'static> BorrowDecode<'de> for BTreeMap<K, V> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        BTreeMap::<K, V>::decode(decoder)
+    }
+}
+
+impl<'de, T: Decode + Ord + 'static> BorrowDecode<'de> for BTreeSet<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        BTreeSet::<T>::decode(decoder)
+    }
+}
+
+impl<'de, T: Decode + 'static> BorrowDecode<'de> for VecDeque<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        VecDeque::<T>::decode(decoder)
+    }
+}
+
+impl<'de, T: Decode + 'static> BorrowDecode<'de> for LinkedList<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        LinkedList::<T>::decode(decoder)
+    }
+}
+
+impl<'de, T> BorrowDecode<'de> for alloc::vec::Vec<T>
+where
+    T: BorrowDecode<'de>,
+{
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        let len = u64::decode(decoder)? as usize;
+        decoder.claim_container_read::<T>(len)?;
+        let mut vec = alloc::vec::Vec::with_capacity(len);
+        for _ in 0..len {
+            vec.push(T::borrow_decode(decoder)?);
+        }
+        Ok(vec)
+    }
+}
+
+impl<'de, T> BorrowDecode<'de> for Option<T>
+where
+    T: BorrowDecode<'de>,
+{
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        let variant = u8::decode(decoder)?;
+        match variant {
+            0 => Ok(None),
+            1 => Ok(Some(T::borrow_decode(decoder)?)),
+            _ => Err(Error::InvalidData {
+                message: "Invalid Option variant",
+            }),
+        }
+    }
+}
+
+impl<'de, T: Decode + 'static> BorrowDecode<'de> for alloc::boxed::Box<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Box::<T>::decode(decoder)
+    }
+}
+
+impl<'de, T: Decode + 'static> BorrowDecode<'de> for alloc::boxed::Box<[T]> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Box::<[T]>::decode(decoder)
+    }
+}
+
+impl<'de> BorrowDecode<'de> for alloc::boxed::Box<str> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Box::<str>::decode(decoder)
+    }
+}
+
+impl<'de, T: Decode + 'static> BorrowDecode<'de> for alloc::sync::Arc<[T]> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Arc::<[T]>::decode(decoder)
+    }
+}
+
+impl<'de> BorrowDecode<'de> for alloc::sync::Arc<str> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Arc::<str>::decode(decoder)
+    }
+}
+
+impl<'de, T: Decode + 'static> BorrowDecode<'de> for alloc::rc::Rc<[T]> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Rc::<[T]>::decode(decoder)
+    }
+}
+
+impl<'de> BorrowDecode<'de> for alloc::rc::Rc<str> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Rc::<str>::decode(decoder)
+    }
+}
+
 // ===== BorrowDecode for &[u8] (zero-copy) =====
 
 impl<'de> BorrowDecode<'de> for &'de [u8] {
@@ -376,5 +540,30 @@ impl<'de> BorrowDecode<'de> for &'de str {
 
         // Validate UTF-8
         core::str::from_utf8(bytes).map_err(|e| Error::Utf8 { inner: e })
+    }
+}
+
+// ===== BorrowDecode for &[i8] (zero-copy signed bytes) =====
+
+/// Zero-copy decode for `&[i8]`.
+///
+/// Since `i8` and `u8` have identical bit patterns, we can reinterpret
+/// the `&[u8]` taken from the input buffer as `&[i8]` using a safe transmute.
+/// This is valid because:
+/// 1. `i8` has the same size and alignment as `u8`
+/// 2. All bit patterns are valid for `i8`
+impl<'de> BorrowDecode<'de> for &'de [i8] {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        use crate::de::Decode;
+        let len = u64::decode(decoder)? as usize;
+        decoder.claim_bytes_read(len)?;
+
+        let bytes: &'de [u8] = decoder.borrow_reader().take_bytes(len)?;
+
+        // Safety: &[u8] and &[i8] have the same size, alignment, and all bit patterns are valid.
+        // The lifetime 'de is preserved correctly.
+        let signed_bytes: &'de [i8] =
+            unsafe { core::slice::from_raw_parts(bytes.as_ptr() as *const i8, bytes.len()) };
+        Ok(signed_bytes)
     }
 }

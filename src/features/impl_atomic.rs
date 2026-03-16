@@ -3,7 +3,7 @@
 //! These implementations read/write the inner values using relaxed ordering.
 
 use crate::{
-    de::{Decode, Decoder},
+    de::{BorrowDecode, BorrowDecoder, Decode, Decoder},
     enc::{Encode, Encoder},
     error::Error,
 };
@@ -24,7 +24,16 @@ impl Decode for AtomicBool {
     }
 }
 
-// Macro to implement Encode/Decode for atomic integer types
+#[cfg(target_has_atomic = "8")]
+impl<'__de> BorrowDecode<'__de> for AtomicBool {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        Ok(AtomicBool::new(bool::decode(decoder)?))
+    }
+}
+
+// Macro to implement Encode/Decode/BorrowDecode for atomic integer types
 macro_rules! impl_atomic_int {
     ($atomic:ty, $inner:ty, $cfg:meta) => {
         #[cfg($cfg)]
@@ -37,6 +46,15 @@ macro_rules! impl_atomic_int {
         #[cfg($cfg)]
         impl Decode for $atomic {
             fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+                Ok(<$atomic>::new(<$inner>::decode(decoder)?))
+            }
+        }
+
+        #[cfg($cfg)]
+        impl<'__de> BorrowDecode<'__de> for $atomic {
+            fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+                decoder: &mut D,
+            ) -> Result<Self, Error> {
                 Ok(<$atomic>::new(<$inner>::decode(decoder)?))
             }
         }
@@ -83,6 +101,15 @@ impl Decode for AtomicUsize {
 }
 
 #[cfg(target_has_atomic = "ptr")]
+impl<'__de> BorrowDecode<'__de> for AtomicUsize {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        Ok(AtomicUsize::new(usize::decode(decoder)?))
+    }
+}
+
+#[cfg(target_has_atomic = "ptr")]
 impl Encode for AtomicIsize {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
         self.load(Ordering::Relaxed).encode(encoder)
@@ -93,5 +120,36 @@ impl Encode for AtomicIsize {
 impl Decode for AtomicIsize {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(AtomicIsize::new(isize::decode(decoder)?))
+    }
+}
+
+#[cfg(target_has_atomic = "ptr")]
+impl<'__de> BorrowDecode<'__de> for AtomicIsize {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        Ok(AtomicIsize::new(isize::decode(decoder)?))
+    }
+}
+
+// ===== ManuallyDrop =====
+
+impl<T: Encode> Encode for core::mem::ManuallyDrop<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        (**self).encode(encoder)
+    }
+}
+
+impl<T: Decode> Decode for core::mem::ManuallyDrop<T> {
+    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        Ok(core::mem::ManuallyDrop::new(T::decode(decoder)?))
+    }
+}
+
+impl<'__de, T: BorrowDecode<'__de>> BorrowDecode<'__de> for core::mem::ManuallyDrop<T> {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        Ok(core::mem::ManuallyDrop::new(T::borrow_decode(decoder)?))
     }
 }

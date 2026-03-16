@@ -1,6 +1,8 @@
 //! Validator for applying constraints to decoded data.
 
+#[cfg(feature = "alloc")]
 use super::constraints::{Constraint, ValidationResult};
+#[cfg(feature = "alloc")]
 use super::ValidationConfig;
 
 #[cfg(feature = "alloc")]
@@ -40,21 +42,15 @@ impl core::fmt::Display for ValidationError {
 #[cfg(feature = "std")]
 impl std::error::Error for ValidationError {}
 
-/// Field validation entry for the validator.
-pub struct FieldValidation<T> {
-    /// The field name.
-    pub field: &'static str,
-    /// The constraint to apply.
-    constraint: Box<dyn ConstraintWrapper<T>>,
-}
-
 /// Type-erased constraint wrapper.
+#[cfg(feature = "alloc")]
 trait ConstraintWrapper<T: ?Sized>: Send + Sync {
     fn validate(&self, value: &T) -> ValidationResult;
     #[allow(dead_code)]
     fn description(&self) -> &'static str;
 }
 
+#[cfg(feature = "alloc")]
 impl<T: ?Sized, C: Constraint<T> + Send + Sync + 'static> ConstraintWrapper<T> for C {
     fn validate(&self, value: &T) -> ValidationResult {
         Constraint::validate(self, value)
@@ -65,6 +61,16 @@ impl<T: ?Sized, C: Constraint<T> + Send + Sync + 'static> ConstraintWrapper<T> f
     }
 }
 
+/// Field validation entry for the validator.
+#[cfg(feature = "alloc")]
+pub struct FieldValidation<T> {
+    /// The field name.
+    pub field: &'static str,
+    /// The constraint to apply.
+    constraint: Box<dyn ConstraintWrapper<T>>,
+}
+
+#[cfg(feature = "alloc")]
 impl<T> FieldValidation<T> {
     /// Create a new field validation.
     pub fn new<C: Constraint<T> + Send + Sync + 'static>(
@@ -170,11 +176,65 @@ impl<T> Validator<T> {
     pub fn constraint_count(&self) -> usize {
         self.validations.len()
     }
+
+    /// Validate a value, returning it if valid or a `default` if any constraint fails.
+    ///
+    /// All constraints are evaluated against `value`. If every constraint passes the
+    /// value is returned as-is; otherwise `default` is returned without allocating an
+    /// error vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use oxicode::validation::{Validator, Constraints};
+    ///
+    /// let validator: Validator<i32> = Validator::new()
+    ///     .constraint("value", Constraints::range(Some(0i32), Some(100i32)));
+    ///
+    /// assert_eq!(validator.validate_or_default(50, 0), 50);
+    /// assert_eq!(validator.validate_or_default(-1, 0), 0);
+    /// assert_eq!(validator.validate_or_default(101, 0), 0);
+    /// ```
+    pub fn validate_or_default(&self, value: T, default: T) -> T
+    where
+        T: Clone,
+    {
+        match self.validate_first(&value) {
+            Ok(()) => value,
+            Err(_) => default,
+        }
+    }
+
+    /// Validate a value, returning a clone if valid or computing a default via `default_fn`
+    /// if any constraint fails.
+    ///
+    /// This avoids evaluating the default expression when validation succeeds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use oxicode::validation::{Validator, Constraints};
+    ///
+    /// let validator: Validator<i32> = Validator::new()
+    ///     .constraint("value", Constraints::range(Some(0i32), Some(100i32)));
+    ///
+    /// assert_eq!(validator.validate_or_default_with(&50, || 42), 50);
+    /// assert_eq!(validator.validate_or_default_with(&-1, || 42), 42);
+    /// ```
+    pub fn validate_or_default_with<F>(&self, value: &T, default_fn: F) -> T
+    where
+        T: Clone,
+        F: FnOnce() -> T,
+    {
+        match self.validate_first(value) {
+            Ok(()) => value.clone(),
+            Err(_) => default_fn(),
+        }
+    }
 }
 
 /// Validator for string fields with common constraints.
 #[cfg(feature = "alloc")]
-#[allow(dead_code)]
 pub struct StringValidator {
     max_len: Option<usize>,
     min_len: Option<usize>,
@@ -190,7 +250,6 @@ impl Default for StringValidator {
 }
 
 #[cfg(feature = "alloc")]
-#[allow(dead_code)]
 impl StringValidator {
     /// Create a new string validator.
     pub const fn new() -> Self {
@@ -254,7 +313,6 @@ impl StringValidator {
 
 /// Validator for numeric values with range constraints.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
 pub struct NumericValidator<T> {
     min: Option<T>,
     max: Option<T>,
@@ -266,7 +324,6 @@ impl<T> Default for NumericValidator<T> {
     }
 }
 
-#[allow(dead_code)]
 impl<T> NumericValidator<T> {
     /// Create a new numeric validator.
     pub const fn new() -> Self {
@@ -296,7 +353,6 @@ impl<T> NumericValidator<T> {
     }
 }
 
-#[allow(dead_code)]
 impl<T: PartialOrd> NumericValidator<T> {
     /// Validate a value.
     pub fn validate(&self, value: &T) -> Result<(), &'static str> {
@@ -318,14 +374,12 @@ impl<T: PartialOrd> NumericValidator<T> {
 
 /// Validator for collections with size constraints.
 #[derive(Debug, Clone, Copy, Default)]
-#[allow(dead_code)]
 pub struct CollectionValidator {
     max_len: Option<usize>,
     min_len: Option<usize>,
     non_empty: bool,
 }
 
-#[allow(dead_code)]
 impl CollectionValidator {
     /// Create a new collection validator.
     pub const fn new() -> Self {
@@ -383,12 +437,15 @@ impl CollectionValidator {
 
 #[cfg(test)]
 mod tests {
-    use super::super::constraints::{MaxLength, MinLength, Range};
     use super::*;
+
+    #[cfg(feature = "alloc")]
+    use super::super::constraints::{MaxLength, MinLength, Range};
 
     #[cfg(feature = "alloc")]
     use alloc::{format, string::String};
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn test_validation_error() {
         let error = ValidationError::new("name", "too long");
@@ -492,5 +549,94 @@ mod tests {
         assert!(validator.validate(&short).is_ok());
         assert!(validator.validate(&long).is_err());
         assert!(validator.validate(&empty).is_err());
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_or_default_returns_value_when_valid() {
+        let validator: Validator<i32> =
+            Validator::new().constraint("n", Range::new(Some(0), Some(100)));
+
+        assert_eq!(validator.validate_or_default(50, -1), 50);
+        assert_eq!(validator.validate_or_default(0, -1), 0);
+        assert_eq!(validator.validate_or_default(100, -1), 100);
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_or_default_returns_default_when_invalid() {
+        let validator: Validator<i32> =
+            Validator::new().constraint("n", Range::new(Some(0), Some(100)));
+
+        assert_eq!(validator.validate_or_default(-1, 42), 42);
+        assert_eq!(validator.validate_or_default(200, 42), 42);
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_or_default_no_constraints_always_returns_value() {
+        let validator: Validator<i32> = Validator::new();
+        assert_eq!(validator.validate_or_default(999, 0), 999);
+        assert_eq!(validator.validate_or_default(-999, 0), -999);
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_or_default_with_returns_value_when_valid() {
+        let validator: Validator<i32> =
+            Validator::new().constraint("n", Range::new(Some(0), Some(100)));
+
+        let mut default_called = false;
+        let result = validator.validate_or_default_with(&75, || {
+            default_called = true;
+            -1
+        });
+        assert_eq!(result, 75);
+        assert!(
+            !default_called,
+            "default closure must not be called when valid"
+        );
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_or_default_with_invokes_closure_when_invalid() {
+        let validator: Validator<i32> =
+            Validator::new().constraint("n", Range::new(Some(0), Some(100)));
+
+        let mut default_called = false;
+        let result = validator.validate_or_default_with(&-5, || {
+            default_called = true;
+            99
+        });
+        assert_eq!(result, 99);
+        assert!(
+            default_called,
+            "default closure must be called when invalid"
+        );
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_or_default_with_string() {
+        let validator: Validator<String> = Validator::new()
+            .constraint("s", MaxLength::new(10))
+            .constraint("s", MinLength::new(1));
+
+        assert_eq!(
+            validator.validate_or_default_with(&String::from("hello"), || String::from("default")),
+            "hello"
+        );
+        assert_eq!(
+            validator.validate_or_default_with(
+                &String::from("this is way too long for the constraint"),
+                || String::from("default")
+            ),
+            "default"
+        );
+        assert_eq!(
+            validator.validate_or_default_with(&String::new(), || String::from("default")),
+            "default"
+        );
     }
 }

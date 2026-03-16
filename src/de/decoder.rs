@@ -1,7 +1,7 @@
 //! Decoder implementation
 
 use super::{BorrowDecoder, BorrowReader, Decoder, Reader};
-use crate::{config::Config, utils::Sealed};
+use crate::{config::Config, error::Error, utils::Sealed};
 
 /// A Decoder that reads bytes from a given reader `R`.
 ///
@@ -39,26 +39,30 @@ pub struct DecoderImpl<R: Reader, C: Config, Ctx = ()> {
     reader: R,
     config: C,
     context: Ctx,
+    /// Tracks how many bytes have been claimed so far (for limit enforcement).
+    bytes_claimed: usize,
 }
 
 impl<R: Reader, C: Config> DecoderImpl<R, C, ()> {
     /// Create a new Decoder with unit context
-    pub const fn new(reader: R, config: C) -> Self {
+    pub fn new(reader: R, config: C) -> Self {
         Self {
             reader,
             config,
             context: (),
+            bytes_claimed: 0,
         }
     }
 }
 
 impl<R: Reader, C: Config, Ctx> DecoderImpl<R, C, Ctx> {
     /// Create a new Decoder with custom context
-    pub const fn with_context(reader: R, config: C, context: Ctx) -> Self {
+    pub fn with_context(reader: R, config: C, context: Ctx) -> Self {
         Self {
             reader,
             config,
             context,
+            bytes_claimed: 0,
         }
     }
 
@@ -105,6 +109,26 @@ impl<R: Reader, C: Config, Ctx> Decoder for DecoderImpl<R, C, Ctx> {
     #[inline]
     fn context(&mut self) -> &mut Self::Context {
         &mut self.context
+    }
+
+    #[inline]
+    fn claim_bytes_read(&mut self, n: usize) -> Result<(), Error> {
+        if let Some(limit) = self.config.limit() {
+            let new_total = self.bytes_claimed.saturating_add(n);
+            if new_total > limit {
+                return Err(Error::LimitExceeded {
+                    limit: limit as u64,
+                    found: new_total as u64,
+                });
+            }
+            self.bytes_claimed = new_total;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn unclaim_bytes_read(&mut self, n: usize) {
+        self.bytes_claimed = self.bytes_claimed.saturating_sub(n);
     }
 }
 

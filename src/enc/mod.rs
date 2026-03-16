@@ -9,7 +9,7 @@ pub mod write;
 use crate::{config::Config, error::Error, utils::Sealed};
 
 pub use self::encoder::EncoderImpl;
-pub use self::write::{SliceWriter, Writer};
+pub use self::write::{SizeWriter, SliceWriter, Writer};
 
 #[cfg(feature = "alloc")]
 pub use self::write::VecWriter;

@@ -68,16 +68,42 @@ const fn generate<E, I, L>() -> Configuration<E, I, L> {
 
 impl<E, I, L> Configuration<E, I, L> {
     /// Makes oxicode encode all integer types in big endian.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = oxicode::config::standard().with_big_endian();
+    /// let bytes = oxicode::encode_to_vec_with_config(&1u32, config).expect("encode");
+    /// assert!(!bytes.is_empty());
+    /// ```
     pub const fn with_big_endian(self) -> Configuration<BigEndian, I, L> {
         generate()
     }
 
     /// Makes oxicode encode all integer types in little endian.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = oxicode::config::standard().with_little_endian();
+    /// let bytes = oxicode::encode_to_vec_with_config(&1u32, config).expect("encode");
+    /// assert!(!bytes.is_empty());
+    /// ```
     pub const fn with_little_endian(self) -> Configuration<LittleEndian, I, L> {
         generate()
     }
 
     /// Makes oxicode encode all integer types with a variable integer encoding.
+    ///
+    /// Small values are encoded compactly — integers below 128 take a single byte.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = oxicode::config::standard().with_variable_int_encoding();
+    /// let bytes = oxicode::encode_to_vec_with_config(&127u64, config).expect("encode");
+    /// assert_eq!(bytes.len(), 1);
+    /// ```
     pub const fn with_variable_int_encoding(self) -> Configuration<E, Varint, L> {
         generate()
     }
@@ -87,16 +113,44 @@ impl<E, I, L> Configuration<E, I, L> {
     /// * Fixed size integers are encoded directly
     /// * Enum discriminants are encoded as u32
     /// * Lengths and usize are encoded as u64
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = oxicode::config::standard().with_fixed_int_encoding();
+    /// let bytes = oxicode::encode_to_vec_with_config(&1u32, config).expect("encode");
+    /// assert_eq!(bytes.len(), 4); // u32 always occupies 4 bytes with fixed encoding
+    /// ```
     pub const fn with_fixed_int_encoding(self) -> Configuration<E, Fixint, L> {
         generate()
     }
 
     /// Sets the byte limit to `limit`.
+    ///
+    /// Encoding or decoding more than `N` bytes will return an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = oxicode::config::standard().with_limit::<64>();
+    /// let bytes = oxicode::encode_to_vec_with_config(&42u8, config).expect("encode within limit");
+    /// assert!(!bytes.is_empty());
+    /// ```
     pub const fn with_limit<const N: usize>(self) -> Configuration<E, I, Limit<N>> {
         generate()
     }
 
     /// Clear the byte limit.
+    ///
+    /// Removes any previously set byte limit, allowing arbitrarily large payloads.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let config = oxicode::config::standard().with_limit::<64>().with_no_limit();
+    /// let bytes = oxicode::encode_to_vec_with_config(&42u8, config).expect("encode");
+    /// assert!(!bytes.is_empty());
+    /// ```
     pub const fn with_no_limit(self) -> Configuration<E, I, NoLimit> {
         generate()
     }

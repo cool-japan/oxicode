@@ -29,14 +29,19 @@ mod compatibility;
 mod header;
 mod version;
 
-pub use compatibility::{check_compatibility, CompatibilityLevel};
+pub use compatibility::{can_migrate, check_compatibility, CompatibilityLevel};
+
+#[cfg(feature = "alloc")]
+pub use compatibility::migration_path;
 pub use header::{VersionedHeader, VERSIONED_MAGIC};
 pub use version::Version;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use crate::{Error, Result};
+#[cfg(feature = "alloc")]
+use crate::Error;
+use crate::Result;
 
 /// Encode data with a version header.
 #[cfg(feature = "alloc")]
@@ -102,6 +107,7 @@ pub fn extract_version(data: &[u8]) -> Result<Version> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "alloc")]
     use super::*;
 
     #[cfg(feature = "alloc")]

@@ -184,6 +184,7 @@ mod tests {
         assert_eq!(Version::parse(""), None);
     }
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn test_version_display() {
         let v = Version::new(1, 2, 3);

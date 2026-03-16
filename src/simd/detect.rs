@@ -126,7 +126,6 @@ pub fn is_simd_available() -> bool {
 /// This returns the vector width of the detected SIMD capability,
 /// which is the ideal alignment for memory operations.
 #[inline]
-#[allow(dead_code)]
 pub fn optimal_alignment() -> usize {
     detect_capability().vector_width()
 }

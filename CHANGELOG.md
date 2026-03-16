@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-16
+
+### Added
+- `SizeWriter` struct for pre-computing encoded size without allocating
+- `encoded_size()` and `encoded_size_with_config()` top-level functions
+- `encode_to_file()` / `decode_from_file()` file I/O functions (std feature)
+- `encode_to_fixed_array::<N>()` for stack-allocated encoding
+- `decode_value::<D>()` without size tracking
+- `encode_bytes()` alias for encode_to_vec
+- `EncodedBytes` / `EncodedBytesOwned` display wrappers with hex_dump()
+- `BufferedIoReader<R>` wrapping BufReader for efficient streaming decode
+- `DecodeIter<T>` lazy decoding iterator via `decode_iter_from_slice()`
+- `encode_iter_to_vec()` / `encode_seq_to_vec()` / `encode_seq_into_slice()`
+- Checksum feature: CRC32 integrity checking via `crc32fast`
+- `compression-zstd-pure` feature using pure Rust `ruzstd` for decompression
+- GitHub Actions CI with matrix (stable + MSRV 1.70.0, ubuntu + macos)
+- Miri CI job for undefined behavior detection
+- 4 cargo-fuzz targets for fuzzing
+- BorrowDecode derive macro for zero-copy decoding
+- Derive attributes: `skip`, `default`, `flatten`, `bytes`, `with`, `rename`, `seq_len`
+- Container attributes: `bound`, `rename_all`, `crate`, `transparent`
+- Variant attributes: `variant` (custom discriminant), `rename`
+- Encode/Decode for `core::cmp::Ordering`, `core::convert::Infallible`, `core::ops::ControlFlow`
+- BorrowDecode for `ControlFlow<B, C>`
+- Encode/Decode for `LinkedList<T>`, `BTreeMap<K,V>`, `BTreeSet<T>`, `BinaryHeap<T>`
+- BorrowDecode for `Box<T>`, `Box<[T]>`, `Box<str>`, `Arc<[T]>`, `Arc<str>`, `Rc<[T]>`, `Rc<str>`
+- BorrowDecode for `String`, `char`, `&[i8]`
+- Encode/Decode for `OsStr` / `OsString`
+- Wrapping property-based tests via proptest
+- `src/display.rs` module with hex formatting utilities
+- Non-zero integer types BorrowDecode impls
+- `encode_with`/`decode_with` individual field transformation function attributes
+- `tag_type` container attribute: control enum discriminant width (u8/u16/u32/u64)
+- `default_value` attribute: inline expression defaults for skipped fields
+- `ManuallyDrop<T>` Encode/Decode/BorrowDecode implementations
+- `PhantomData<T: ?Sized>` with unsized type bounds
+- BorrowDecode for all atomic types, `Wrapping<T>`, `Reverse<T>`
+- `encode_serde`/`decode_serde` convenience functions for serde integration
+- i128/u128 support in serde serializer/deserializer
+- `encode_versioned_value` / `decode_versioned_value` top-level convenience functions for versioned encoding
+- `Cow<str>` and `Cow<[u8]>` BorrowDecode implementations for zero-copy borrowed decoding
+- `encode_to_hex`/`decode_from_hex` for hex string encoding
+- `encode_to_writer`/`decode_from_reader` std::io convenience functions
+- `encode_to_vec_with_size_hint` for pre-allocated encoding
+- `encoded_size`/`encoded_size_with_config` functions via `SizeWriter`
+- `BorrowDecode` for `Box<[T]>`, `Box<str>`, `Arc<[T]>`, `Arc<str>`
+- `Encode`/`Decode`/`BorrowDecode` for `RangeFull`, `RangeFrom<T>`, `RangeTo<T>`, `RangeToInclusive<T>`
+- `encode_to_writer_with_config`/`decode_from_reader_with_config` convenience functions
+- `encode_to_vec_checked`/`decode_from_slice_checked` checksum-verified encoding shortcuts
+- `encode_copy` for Copy types (by-value convenience)
+- Binary format specification tests (`tests/format_spec_test.rs`)
+- Validation tests, SIMD large-array tests, config endianness tests
+
+### Changed
+- `rust-version` set to 1.70.0 (aligned with SciRS2 ecosystem MSRV)
+- Improved `DecodeError::UnexpectedVariant` display with type name
+- Improved `DecodeError::LimitExceeded` display message
+- `DecodeError::LimitExceeded` display now shows "limit: N, found: M" for actionable diagnostics
+- `DecodeError::Utf8Error` display now includes byte offset of invalid sequence
+- `DecodeError::ChecksumMismatch` variant added
+
+### Fixed
+- Miri `format!` in no_std context (validation and versioning tests)
+- Upgraded tokio to 1.50 to resolve RUSTSEC-2026-0007 (bytes integer overflow)
+- Removed unused `futures-io` dependency
+
+### Quality
+- 19,929 tests passing (0 regressions, 0 warnings, 0 clippy errors)
+- 42 tests pass under Miri `--no-default-features` (0 undefined behavior errors)
+- `cargo publish --dry-run` passes for `oxicode_derive` and `oxicode`
+- All files under 2000 lines (refactoring policy maintained)
+
 ## [0.1.0] - 2025-12-28
 
 ### Added
@@ -194,4 +266,5 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 ---
 
+[0.2.0]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cool-japan/oxicode/releases/tag/v0.1.0

@@ -14,6 +14,7 @@ use crate::{Error, Result};
 extern crate alloc;
 
 /// Default compression level for Zstd.
+#[allow(dead_code)]
 pub const DEFAULT_LEVEL: i32 = 3;
 
 /// Compress data using Zstd with the specified compression level.

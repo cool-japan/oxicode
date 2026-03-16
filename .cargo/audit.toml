@@ -1,0 +1,23 @@
+# cargo-audit configuration for oxicode
+#
+# This file suppresses known advisories that are intentional and expected.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2025-0141: bincode is unmaintained
+    #
+    # bincode is kept as a dev-dependency intentionally for two purposes:
+    #   1. Format compatibility verification (compatibility/src/lib.rs): oxicode
+    #      must produce binary output that is wire-compatible with bincode 2.0,
+    #      so bincode is used in tests to cross-verify encoding/decoding.
+    #   2. Benchmark comparisons (benches/): performance benchmarks compare
+    #      oxicode against bincode to measure relative throughput.
+    #
+    # bincode is NOT used in any production (non-dev) code path; it does not
+    # appear in [dependencies], only in [dev-dependencies]. End users of oxicode
+    # are not exposed to bincode at all.
+    #
+    # The advisory is suppressed because the usage is intentional, controlled,
+    # and limited to development/testing tooling only.
+    "RUSTSEC-2025-0141",
+]

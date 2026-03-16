@@ -33,7 +33,7 @@ pub use array::{
     decode_f32_array, decode_f64_array, decode_i32_array, decode_i64_array, decode_u8_array,
     encode_f32_array, encode_f64_array, encode_i32_array, encode_i64_array, encode_u8_array,
 };
-pub use detect::{detect_capability, is_simd_available, SimdCapability};
+pub use detect::{detect_capability, is_simd_available, optimal_alignment, SimdCapability};
 
 use crate::Result;
 

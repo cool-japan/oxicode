@@ -15,7 +15,7 @@ impl Encode for () {
     }
 }
 
-impl<T> Encode for PhantomData<T> {
+impl<T: ?Sized> Encode for PhantomData<T> {
     fn encode<E: Encoder>(&self, _: &mut E) -> Result<(), Error> {
         Ok(())
     }
@@ -314,6 +314,45 @@ impl_encode_nonzero!(NonZeroI64, i64);
 impl_encode_nonzero!(NonZeroI128, i128);
 impl_encode_nonzero!(NonZeroIsize, isize);
 
+// ===== Ordering =====
+
+impl Encode for core::cmp::Ordering {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        let val: i8 = match self {
+            core::cmp::Ordering::Less => -1,
+            core::cmp::Ordering::Equal => 0,
+            core::cmp::Ordering::Greater => 1,
+        };
+        val.encode(encoder)
+    }
+}
+
+// ===== Infallible =====
+
+impl Encode for core::convert::Infallible {
+    fn encode<E: Encoder>(&self, _encoder: &mut E) -> Result<(), Error> {
+        // Cannot be reached since Infallible cannot be constructed
+        match *self {}
+    }
+}
+
+// ===== ControlFlow =====
+
+impl<B: Encode, C: Encode> Encode for core::ops::ControlFlow<B, C> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        match self {
+            core::ops::ControlFlow::Continue(c) => {
+                0u32.encode(encoder)?;
+                c.encode(encoder)
+            }
+            core::ops::ControlFlow::Break(b) => {
+                1u32.encode(encoder)?;
+                b.encode(encoder)
+            }
+        }
+    }
+}
+
 // ===== Wrapping & Reverse =====
 
 use core::cmp::Reverse;
@@ -331,9 +370,19 @@ impl<T: Encode> Encode for Reverse<T> {
     }
 }
 
+// ===== Saturating =====
+
+use core::num::Saturating;
+
+impl<T: Encode> Encode for Saturating<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.0.encode(encoder)
+    }
+}
+
 // ===== Range types =====
 
-use core::ops::{Bound, Range, RangeInclusive};
+use core::ops::{Bound, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 
 impl<T: Encode> Encode for Range<T> {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
@@ -362,6 +411,30 @@ impl<T: Encode> Encode for Bound<T> {
                 value.encode(encoder)
             }
         }
+    }
+}
+
+impl Encode for RangeFull {
+    fn encode<E: Encoder>(&self, _encoder: &mut E) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl<T: Encode> Encode for RangeFrom<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.start.encode(encoder)
+    }
+}
+
+impl<T: Encode> Encode for RangeTo<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.end.encode(encoder)
+    }
+}
+
+impl<T: Encode> Encode for RangeToInclusive<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.end.encode(encoder)
     }
 }
 
@@ -410,6 +483,46 @@ impl Encode for char {
                 (code >> 6 & 0x3F) as u8 | TAG_CONT,
                 (code & 0x3F) as u8 | TAG_CONT,
             ])
+        }
+    }
+}
+
+// ===== Duration =====
+
+impl Encode for core::time::Duration {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        self.as_secs().encode(encoder)?;
+        self.subsec_nanos().encode(encoder)
+    }
+}
+
+// ===== SystemTime =====
+
+#[cfg(feature = "std")]
+impl Encode for std::time::SystemTime {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        // Encode as signed i64 seconds + u32 nanos relative to UNIX_EPOCH.
+        // Negative seconds represent times before the epoch.
+        match self.duration_since(std::time::SystemTime::UNIX_EPOCH) {
+            Ok(dur) => {
+                // At or after epoch: seconds fits in i64 (u64 secs ≤ i64::MAX in practice)
+                let secs = dur.as_secs() as i64;
+                let nanos = dur.subsec_nanos();
+                secs.encode(encoder)?;
+                nanos.encode(encoder)
+            }
+            Err(err) => {
+                // Before epoch: encode as negative seconds
+                let dur = err.duration();
+                let secs = -(dur.as_secs() as i64) - if dur.subsec_nanos() > 0 { 1 } else { 0 };
+                let nanos = if dur.subsec_nanos() > 0 {
+                    1_000_000_000u32 - dur.subsec_nanos()
+                } else {
+                    0u32
+                };
+                secs.encode(encoder)?;
+                nanos.encode(encoder)
+            }
         }
     }
 }

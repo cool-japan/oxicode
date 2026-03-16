@@ -159,6 +159,39 @@ impl<W: std::io::Write> Writer for IoWriter<W> {
 #[cfg(feature = "std")]
 pub type StdWriter<W> = IoWriter<W>;
 
+/// Writer implementation that counts bytes without writing them.
+///
+/// Useful for calculating the encoded size of a value without
+/// actually performing the encoding to a buffer.
+pub struct SizeWriter {
+    bytes_written: usize,
+}
+
+impl SizeWriter {
+    /// Create a new SizeWriter.
+    pub fn new() -> Self {
+        Self { bytes_written: 0 }
+    }
+
+    /// Get the number of bytes that would be written.
+    pub fn bytes_written(&self) -> usize {
+        self.bytes_written
+    }
+}
+
+impl Default for SizeWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Writer for SizeWriter {
+    fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.bytes_written += bytes.len();
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,6 +205,25 @@ mod tests {
 
         writer.write(&[0x43, 0x44]).expect("Failed to write");
         assert_eq!(writer.as_slice(), &[0x42, 0x43, 0x44]);
+    }
+
+    #[test]
+    fn test_size_writer() {
+        let mut writer = SizeWriter::new();
+        writer.write(&[0x42]).expect("Failed to write");
+        assert_eq!(writer.bytes_written(), 1);
+
+        writer.write(&[0x43, 0x44]).expect("Failed to write");
+        assert_eq!(writer.bytes_written(), 3);
+
+        writer.write(&[0xFF; 100]).expect("Failed to write");
+        assert_eq!(writer.bytes_written(), 103);
+    }
+
+    #[test]
+    fn test_size_writer_default() {
+        let writer = SizeWriter::default();
+        assert_eq!(writer.bytes_written(), 0);
     }
 
     #[test]

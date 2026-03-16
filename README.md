@@ -4,7 +4,7 @@ A modern binary serialization library for Rust - the successor to bincode.
 
 [![CI](https://github.com/cool-japan/oxicode/workflows/CI/badge.svg)](https://github.com/cool-japan/oxicode/actions)
 [![Crates.io](https://img.shields.io/crates/v/oxicode.svg)](https://crates.io/crates/oxicode)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 ## About
 
@@ -16,13 +16,19 @@ This project serves as the spiritual successor to [bincode](https://github.com/b
 
 ### Core Features (100% Bincode Compatible)
 
-- **Compact encoding**: Minimal overhead in serialized format
+- **Compact encoding**: Efficient binary serialization with compact varint encoding
 - **Fast**: Optimized for performance with zero-copy operations where possible
 - **Flexible**: Support for various encoding configurations
 - **Safe**: Strict no-unwrap policy, comprehensive error handling
 - **Modern**: Built with latest Rust practices and 2021 edition features
-- **no_std support**: Works in embedded and resource-constrained environments
-- **Bincode compatibility**: 100% binary format compatibility with bincode 2.0
+- **no_std support**: Works in embedded and resource-constrained environments (with `alloc` feature)
+- **Bincode compatibility**: 100% binary format compatibility with bincode 2.0 (`config::legacy()`)
+- **BorrowDecode**: Zero-copy decoding via the `BorrowDecode` trait — decode into borrowed slices without allocation
+- **encoded_size API**: Pre-calculate exact encoded byte length without allocating via `encoded_size` / `encoded_size_with_config`
+- **Fixed-array encoding**: `encode_to_fixed_array::<N>()` — encode directly into a stack-allocated `[u8; N]`
+- **Sequence API**: `encode_seq_to_vec` / `decode_iter_from_slice` for streaming multi-item buffers
+- **Checksum API**: `encode_with_checksum` / `decode_with_checksum` — CRC32 integrity protection (optional feature)
+- **Hex display**: `encode_to_display` / `EncodedBytes` — display encoded bytes as hex without allocating a `String`
 
 ### 150% Enhancement Features (Beyond Bincode)
 
@@ -52,29 +58,29 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxicode = "0.1"
+oxicode = "0.2"
 
 # With serde support (for serde::Serialize/Deserialize types)
-oxicode = { version = "0.1", features = ["serde"] }
+oxicode = { version = "0.2", features = ["serde"] }
 
 # Optional features
-oxicode = { version = "0.1", features = ["simd", "compression", "async-tokio"] }
+oxicode = { version = "0.2", features = ["simd", "compression", "async-tokio"] }
 ```
 
 ### Feature Flags
 
 ```toml
 default = ["std", "derive"]
-std = ["alloc"]              # Standard library support
-alloc = []                   # Heap allocations (for no_std + alloc)
-derive = []                  # Derive macros for Encode/Decode
-serde = []                   # Serde integration (optional)
-simd = []                    # SIMD-accelerated array encoding
-compression-lz4 = []         # LZ4 compression (fast)
-compression-zstd = []        # Zstd compression (better ratio)
-compression = ["compression-lz4"]  # Default compression
-async-tokio = ["tokio"]      # Async streaming with tokio
-async-io = ["futures-io"]    # Generic async IO traits
+std = ["alloc"]                        # Standard library support
+alloc = []                             # Heap allocations (for no_std + alloc)
+derive = []                            # Derive macros for Encode/Decode/BorrowDecode
+serde = []                             # Serde integration (optional)
+simd = []                              # SIMD-accelerated array encoding
+checksum = []                          # CRC32 integrity checking
+compression-lz4 = []                   # LZ4 compression (pure Rust, fast)
+compression-zstd = []                  # Zstd compression (requires C toolchain)
+compression-zstd-pure = []             # Pure Rust zstd decompression
+async-tokio = ["tokio"]               # Async streaming with Tokio
 ```
 
 ## Quick Start
@@ -100,6 +106,110 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(point, decoded);
     Ok(())
 }
+```
+
+## Derive Macros
+
+OxiCode provides first-class derive macro support for `Encode`, `Decode`, and `BorrowDecode`.
+
+```rust
+use oxicode::{Encode, Decode, BorrowDecode};
+
+#[derive(Encode, Decode, BorrowDecode, Debug, PartialEq)]
+struct Packet<'a> {
+    id: u32,
+    payload: &'a [u8],  // zero-copy via BorrowDecode
+}
+```
+
+### Field Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `#[oxicode(skip)]` | Skip this field during encode/decode (uses `Default::default()` on decode) |
+| `#[oxicode(default)]` | Use `Default::default()` if field is missing during decode |
+| `#[oxicode(flatten)]` | Inline the fields of a nested struct |
+| `#[oxicode(bytes)]` | Encode `Vec<u8>` or `&[u8]` as raw bytes without a length prefix |
+| `#[oxicode(with = "module")]` | Use custom encode/decode functions from `module` |
+| `#[oxicode(encode_with = "fn")]` | Use a custom encode function |
+| `#[oxicode(decode_with = "fn")]` | Use a custom decode function |
+| `#[oxicode(rename = "name")]` | Use a different name for this field in the encoded format |
+| `#[oxicode(seq_len)]` | Mark field as carrying the sequence length |
+
+### Container Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `#[oxicode(bound = "T: Trait")]` | Override the trait bounds on the generated impl |
+| `#[oxicode(rename_all = "camelCase")]` | Rename all fields using a naming convention |
+| `#[oxicode(crate = "path")]` | Specify a custom path to the oxicode crate |
+| `#[oxicode(transparent)]` | Treat a single-field struct as its inner type (no wrapper) |
+| `#[oxicode(tag_type = "u8")]` | Set the integer type used for enum discriminants |
+
+### Variant Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `#[oxicode(variant = 5)]` | Assign a custom discriminant value to this variant |
+| `#[oxicode(rename = "name")]` | Rename this variant in the encoded format |
+
+## Supported Types (120+)
+
+OxiCode provides built-in `Encode`/`Decode` implementations for 120+ types:
+
+### Primitives & Core
+`bool`, `u8`–`u128`, `i8`–`i128`, `f32`, `f64`, `usize`, `isize`, `char`, `str`, `String`
+
+### Option & Result
+`Option<T>`, `Result<T, E>`
+
+### Collections
+`Vec<T>`, `HashMap<K,V>`, `HashSet<T>`, `BTreeMap<K,V>`, `BTreeSet<T>`, `BinaryHeap<T>`, `LinkedList<T>`, `VecDeque<T>`
+
+### Smart Pointers & Slices
+`Box<T>`, `Arc<T>`, `Rc<T>`, `Box<[T]>`, `Arc<[T]>`, `Arc<str>`, `Cow<'_, T>`
+
+### Network & Time
+`IpAddr`, `Ipv4Addr`, `Ipv6Addr`, `SocketAddr`, `SocketAddrV4`, `SocketAddrV6`, `Duration`, `SystemTime`
+
+### Core Types
+`Range<T>`, `RangeInclusive<T>`, `Bound<T>`, `Cell<T>`, `RefCell<T>`, `Wrapping<T>`
+
+### Atomic Types
+`AtomicBool`, `AtomicI8`–`AtomicI64`, `AtomicU8`–`AtomicU64`, `AtomicIsize`, `AtomicUsize`
+
+### OS & Path
+`OsStr`, `OsString`, `Path`, `PathBuf`
+
+### Miscellaneous
+`Ordering`, `Infallible`, `ControlFlow<B,C>`, `NonZeroU8`–`NonZeroU128`, `NonZeroI8`–`NonZeroI128`, `ManuallyDrop<T>`, `PhantomData<T>`, tuples (up to 12 elements), arrays `[T; N]`
+
+## API Highlights
+
+```rust
+use oxicode::{Encode, Decode};
+
+// Basic encode/decode
+let bytes: Vec<u8> = oxicode::encode_to_vec(&value)?;
+let (decoded, bytes_read): (T, usize) = oxicode::decode_from_slice(&bytes)?;
+
+// File I/O
+oxicode::encode_to_file(&value, "data.bin")?;
+let decoded: T = oxicode::decode_from_file("data.bin")?;
+
+// Pre-calculate size without allocating
+let size: usize = oxicode::encoded_size(&value)?;
+
+// Encode into a fixed-size stack array
+let arr: [u8; 32] = oxicode::encode_to_fixed_array::<32>(&value)?;
+
+// Sequence encoding — encode multiple items into one buffer
+let bytes = oxicode::encode_seq_to_vec(&[item1, item2, item3])?;
+let items: Vec<T> = oxicode::decode_iter_from_slice(&bytes)?.collect::<Result<_, _>>()?;
+
+// Hex display without allocating a String
+use oxicode::EncodedBytes;
+println!("{}", EncodedBytes::new(&bytes)); // prints hex
 ```
 
 ## Using with Serde
@@ -136,7 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 **Enable serde feature in Cargo.toml:**
 ```toml
 [dependencies]
-oxicode = { version = "0.1", features = ["serde"] }
+oxicode = { version = "0.2", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -165,6 +275,24 @@ let (decoded, _) = oxicode::decode_from_slice_with_config(&bytes, cfg)?;
 ```
 
 ## Advanced Features
+
+### Checksum (CRC32 Integrity)
+
+Protect data against corruption with built-in CRC32 checksums:
+
+```rust
+use oxicode::checksum::{encode_with_checksum, decode_with_checksum};
+
+let data = MyStruct { /* ... */ };
+
+// Encode with CRC32 checksum appended
+let bytes = encode_with_checksum(&data)?;
+
+// Decode and verify checksum automatically — returns Err if checksum does not match
+let (decoded, _): (MyStruct, _) = decode_with_checksum(&bytes)?;
+```
+
+Enable with `features = ["checksum"]`.
 
 ### SIMD-Accelerated Arrays
 
@@ -298,6 +426,36 @@ let (decoded, _) = oxicode::decode_from_slice(&bytes, config::standard())?;
 
 For detailed migration guide, see [MIGRATION.md](MIGRATION.md).
 
+## Comparison with bincode
+
+OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::legacy()`), oxicode produces byte-for-byte identical output to bincode 2.0, making it a true drop-in replacement.
+
+### Wire Format Compatibility
+
+| Mode | Endianness | Int Encoding | Compatible with bincode? |
+|------|-----------|--------------|--------------------------|
+| `config::legacy()` | Little-endian | Fixed-width | Yes — 100% identical |
+| `config::standard()` | Little-endian | Varint | No (more compact) |
+
+### Feature Delta
+
+| Capability | bincode | oxicode |
+|-----------|---------|---------|
+| Supported types | ~60 | **120+** |
+| `BorrowDecode` / zero-copy | No | **Yes** |
+| Derive field attributes | Limited | **9 attributes** |
+| Container/variant attributes | No | **Yes** |
+| Checksums (CRC32) | No | **Yes** (`checksum` feature) |
+| Compression | No | **Yes** (LZ4, Zstd, pure-Rust Zstd) |
+| Async streaming | No | **Yes** (`async-tokio` feature) |
+| Validation middleware | No | **Yes** |
+| Schema versioning | No | **Yes** |
+| `encoded_size` | No | **Yes** |
+| `encode_to_fixed_array` | No | **Yes** |
+| `encode_seq_to_vec` / `decode_iter_from_slice` | No | **Yes** |
+| `no_std` | Yes | **Yes** |
+| SIMD acceleration | No | **Yes** (`simd` feature) |
+
 ## Feature Comparison
 
 | Feature | bincode | rkyv | postcard | borsh | **oxicode** |
@@ -314,17 +472,17 @@ For detailed migration guide, see [MIGRATION.md](MIGRATION.md).
 
 ## Project Status
 
-**🎯 Version 0.1.0 - Production Ready**
+**🎯 Version 0.2.0 - Production Ready**
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 
-**Statistics** (as of 2025-12-28):
-- **Lines of Code**: 10,860 (Rust source, excluding tests)
-- **Files**: 61 Rust files
-- **Test Coverage**: 211 tests passing (100% pass rate)
+**Statistics** (as of 2026-03-16):
+- **Lines of Code**: 513,228 (Rust source lines across 974 files)
+- **Files**: 974 Rust files
+- **Test Coverage**: 19,929 tests passing (100% pass rate, 0 skipped)
   - 18 binary compatibility tests (100% byte-for-byte identical to bincode)
-  - 193+ feature and integration tests
-- **Type Coverage**: 112+ types with full Encode/Decode support
+  - 19,911+ feature, integration, property-based, and stress tests
+- **Type Coverage**: 120+ types with full Encode/Decode support
 - **Binary Compatibility**: 100% verified through cross-library testing
 - **Code Quality**: ✓ Zero unwrap(), ✓ Zero warnings, ✓ All files < 2000 lines
 
@@ -400,13 +558,49 @@ cargo run --example compression --features compression
 cargo run --example async_streaming --features async-tokio
 ```
 
+## Fuzzing
+
+OxiCode ships with [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) targets in the `fuzz/` directory.
+
+```bash
+# Install cargo-fuzz
+cargo install cargo-fuzz
+
+# Run the decode-slice fuzzer
+cargo fuzz run fuzz_decode_slice
+
+# Run roundtrip fuzzer
+cargo fuzz run fuzz_roundtrip
+```
+
+Targets:
+- `fuzz_decode_slice` — decode arbitrary bytes as multiple types (no panics)
+- `fuzz_roundtrip` — encode + decode must be identity on structured data
+- `fuzz_streaming` — streaming decoder on arbitrary bytes
+- `fuzz_versioned` — versioned decode on arbitrary bytes
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## Sponsorship
+
+OxiCode is developed and maintained by **COOLJAPAN OU (Team Kitasan)**.
+
+If you find OxiCode useful, please consider sponsoring the project to support continued development of the Pure Rust ecosystem.
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/cool-japan)
+
+**[https://github.com/sponsors/cool-japan](https://github.com/sponsors/cool-japan)**
+
+Your sponsorship helps us:
+- Maintain and improve the COOLJAPAN ecosystem
+- Keep the entire ecosystem (OxiBLAS, OxiFFT, SciRS2, etc.) 100% Pure Rust
+- Provide long-term support and security updates
+
 ## License
 
-Licensed under the MIT license. See [LICENSE](LICENSE.md) for details.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE.md) for details.
 
 ## Acknowledgments
 

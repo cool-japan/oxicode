@@ -44,6 +44,9 @@ mod lz4;
 #[cfg(feature = "compression-zstd")]
 mod zstd_impl;
 
+#[cfg(feature = "compression-zstd-pure")]
+mod ruzstd_impl;
+
 /// Magic bytes for identifying compressed data.
 /// Format: [0x4F, 0x58, 0x43, version, codec_id]
 /// OXC = "OXiCode Compressed"
@@ -63,11 +66,11 @@ pub enum Compression {
     Lz4,
 
     /// Zstd compression - better ratio, still fast
-    #[cfg(feature = "compression-zstd")]
+    #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
     Zstd,
 
     /// Zstd with specified compression level (1-22, default 3)
-    #[cfg(feature = "compression-zstd")]
+    #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
     ZstdLevel(u8),
 }
 
@@ -78,9 +81,9 @@ impl Compression {
             Compression::None => 0,
             #[cfg(feature = "compression-lz4")]
             Compression::Lz4 => 1,
-            #[cfg(feature = "compression-zstd")]
+            #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
             Compression::Zstd => 2,
-            #[cfg(feature = "compression-zstd")]
+            #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
             Compression::ZstdLevel(_) => 2,
         }
     }
@@ -91,9 +94,9 @@ impl Compression {
             Compression::None => "none",
             #[cfg(feature = "compression-lz4")]
             Compression::Lz4 => "lz4",
-            #[cfg(feature = "compression-zstd")]
+            #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
             Compression::Zstd => "zstd",
-            #[cfg(feature = "compression-zstd")]
+            #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
             Compression::ZstdLevel(_) => "zstd",
         }
     }
@@ -109,7 +112,7 @@ impl Compression {
             0 => Some(Compression::None),
             #[cfg(feature = "compression-lz4")]
             1 => Some(Compression::Lz4),
-            #[cfg(feature = "compression-zstd")]
+            #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
             2 => Some(Compression::Zstd),
             _ => None,
         }
@@ -196,6 +199,14 @@ pub fn compress(data: &[u8], compression: Compression) -> Result<alloc::vec::Vec
             output.extend_from_slice(&compressed);
             Ok(output)
         }
+
+        // When only pure Rust is available, compression is not supported
+        #[cfg(all(feature = "compression-zstd-pure", not(feature = "compression-zstd")))]
+        Compression::Zstd | Compression::ZstdLevel(_) => {
+            Err(Error::Custom {
+                message: "Zstd compression requires the 'compression-zstd' feature (C toolchain). The 'compression-zstd-pure' feature only supports decompression.",
+            })
+        }
     }
 }
 
@@ -260,6 +271,9 @@ pub fn decompress(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
 
         #[cfg(feature = "compression-zstd")]
         Compression::Zstd | Compression::ZstdLevel(_) => zstd_impl::decompress(payload),
+
+        #[cfg(all(feature = "compression-zstd-pure", not(feature = "compression-zstd")))]
+        Compression::Zstd | Compression::ZstdLevel(_) => ruzstd_impl::decompress(payload),
     }
 }
 
@@ -391,7 +405,7 @@ mod tests {
         assert_eq!(Compression::None.codec_id(), 0);
         #[cfg(feature = "compression-lz4")]
         assert_eq!(Compression::Lz4.codec_id(), 1);
-        #[cfg(feature = "compression-zstd")]
+        #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
         assert_eq!(Compression::Zstd.codec_id(), 2);
     }
 
@@ -400,7 +414,7 @@ mod tests {
         assert_eq!(Compression::None.name(), "none");
         #[cfg(feature = "compression-lz4")]
         assert_eq!(Compression::Lz4.name(), "lz4");
-        #[cfg(feature = "compression-zstd")]
+        #[cfg(any(feature = "compression-zstd", feature = "compression-zstd-pure"))]
         assert_eq!(Compression::Zstd.name(), "zstd");
     }
 }

@@ -6,13 +6,22 @@ use serde::de;
 /// Error type for serde deserialization
 #[derive(Debug)]
 pub struct DeError {
-    pub(crate) msg: &'static str,
+    pub(crate) msg: alloc::string::String,
+}
+
+impl DeError {
+    /// Create a DeError from a static string slice
+    pub(crate) fn from_static(msg: &'static str) -> Self {
+        DeError {
+            msg: alloc::string::String::from(msg),
+        }
+    }
 }
 
 impl de::Error for DeError {
-    fn custom<T: core::fmt::Display>(_msg: T) -> Self {
+    fn custom<T: core::fmt::Display>(msg: T) -> Self {
         DeError {
-            msg: "Deserialization error",
+            msg: alloc::format!("{}", msg),
         }
     }
 }
@@ -28,7 +37,7 @@ impl std::error::Error for DeError {}
 
 impl From<DeError> for crate::error::Error {
     fn from(err: DeError) -> Self {
-        crate::error::Error::Custom { message: err.msg }
+        crate::error::Error::OwnedCustom { message: err.msg }
     }
 }
 
@@ -38,6 +47,7 @@ pub struct Deserializer<'a, D: Decoder> {
 }
 
 impl<'a, D: Decoder<Context = ()>> Deserializer<'a, D> {
+    /// Create a new Deserializer wrapping the given Decoder
     pub fn new(decoder: &'a mut D) -> Self {
         Self { decoder }
     }
@@ -47,104 +57,104 @@ impl<'de, 'a, D: Decoder<Context = ()>> de::Deserializer<'de> for Deserializer<'
     type Error = DeError;
 
     fn deserialize_any<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        Err(DeError {
-            msg: "deserialize_any not supported",
-        })
+        Err(DeError::from_static("deserialize_any not supported"))
     }
 
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = bool::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode bool",
-        })?;
+        let value = bool::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode bool"))?;
         visitor.visit_bool(value)
     }
 
     fn deserialize_i8<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = i8::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode i8",
-        })?;
+        let value =
+            i8::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode i8"))?;
         visitor.visit_i8(value)
     }
 
     fn deserialize_i16<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = i16::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode i16",
-        })?;
+        let value =
+            i16::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode i16"))?;
         visitor.visit_i16(value)
     }
 
     fn deserialize_i32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = i32::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode i32",
-        })?;
+        let value =
+            i32::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode i32"))?;
         visitor.visit_i32(value)
     }
 
     fn deserialize_i64<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = i64::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode i64",
-        })?;
+        let value =
+            i64::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode i64"))?;
         visitor.visit_i64(value)
+    }
+
+    fn deserialize_i128<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        use crate::de::Decode;
+        let value = i128::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode i128"))?;
+        visitor.visit_i128(value)
     }
 
     fn deserialize_u8<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = u8::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode u8",
-        })?;
+        let value =
+            u8::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode u8"))?;
         visitor.visit_u8(value)
     }
 
     fn deserialize_u16<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = u16::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode u16",
-        })?;
+        let value =
+            u16::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode u16"))?;
         visitor.visit_u16(value)
     }
 
     fn deserialize_u32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = u32::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode u32",
-        })?;
+        let value =
+            u32::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode u32"))?;
         visitor.visit_u32(value)
     }
 
     fn deserialize_u64<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = u64::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode u64",
-        })?;
+        let value =
+            u64::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode u64"))?;
         visitor.visit_u64(value)
+    }
+
+    fn deserialize_u128<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        use crate::de::Decode;
+        let value = u128::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode u128"))?;
+        visitor.visit_u128(value)
     }
 
     fn deserialize_f32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = f32::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode f32",
-        })?;
+        let value =
+            f32::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode f32"))?;
         visitor.visit_f32(value)
     }
 
     fn deserialize_f64<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = f64::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode f64",
-        })?;
+        let value =
+            f64::decode(self.decoder).map_err(|_| DeError::from_static("Failed to decode f64"))?;
         visitor.visit_f64(value)
     }
 
     fn deserialize_char<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = char::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode char",
-        })?;
+        let value = char::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode char"))?;
         visitor.visit_char(value)
     }
 
@@ -154,9 +164,8 @@ impl<'de, 'a, D: Decoder<Context = ()>> de::Deserializer<'de> for Deserializer<'
 
     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = alloc::string::String::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode String",
-        })?;
+        let value = alloc::string::String::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode String"))?;
         visitor.visit_string(value)
     }
 
@@ -169,23 +178,19 @@ impl<'de, 'a, D: Decoder<Context = ()>> de::Deserializer<'de> for Deserializer<'
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let value = alloc::vec::Vec::<u8>::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode bytes",
-        })?;
+        let value = alloc::vec::Vec::<u8>::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode bytes"))?;
         visitor.visit_byte_buf(value)
     }
 
     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let variant = u8::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode Option variant",
-        })?;
+        let variant = u8::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode Option variant"))?;
         match variant {
             0 => visitor.visit_none(),
             1 => visitor.visit_some(self),
-            _ => Err(DeError {
-                msg: "Invalid Option variant",
-            }),
+            _ => Err(DeError::from_static("Invalid Option variant")),
         }
     }
 
@@ -211,9 +216,9 @@ impl<'de, 'a, D: Decoder<Context = ()>> de::Deserializer<'de> for Deserializer<'
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let len = u64::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode length",
-        })? as usize;
+        let len = u64::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode length"))?
+            as usize;
         visitor.visit_seq(SeqAccess::new(self.decoder, len))
     }
 
@@ -236,9 +241,9 @@ impl<'de, 'a, D: Decoder<Context = ()>> de::Deserializer<'de> for Deserializer<'
 
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         use crate::de::Decode;
-        let len = u64::decode(self.decoder).map_err(|_| DeError {
-            msg: "Failed to decode length",
-        })? as usize;
+        let len = u64::decode(self.decoder)
+            .map_err(|_| DeError::from_static("Failed to decode length"))?
+            as usize;
         visitor.visit_map(MapAccess::new(self.decoder, len))
     }
 
@@ -271,9 +276,9 @@ impl<'de, 'a, D: Decoder<Context = ()>> de::Deserializer<'de> for Deserializer<'
         self,
         _visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        Err(DeError {
-            msg: "deserialize_ignored_any not supported",
-        })
+        Err(DeError::from_static(
+            "deserialize_ignored_any not supported",
+        ))
     }
 }
 

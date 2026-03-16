@@ -12,7 +12,7 @@ Add `oxicode` to your `Cargo.toml` with the `derive` feature:
 
 ```toml
 [dependencies]
-oxicode = { version = "0.1", features = ["derive"] }
+oxicode = { version = "0.2", features = ["derive"] }
 ```
 
 Then use the derive macros on your types:
@@ -95,7 +95,7 @@ For detailed documentation, see the [OxiCode crate documentation](https://docs.r
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](../LICENSE.md) file for details.
+This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](../LICENSE.md) file for details.
 
 ## Contributing
 
