@@ -2,8 +2,11 @@
 
 use super::chunk::ChunkHeader;
 use super::StreamingProgress;
+#[cfg(feature = "std")]
+use crate::config::{LittleEndian, NoLimit, Varint};
 use crate::de::{Decode, DecoderImpl, SliceReader};
 use crate::{config, Error, Result};
+use crate::config::{Config, Configuration};
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -17,8 +20,9 @@ use std::io::Read;
 /// allowing processing of very large streams without loading
 /// everything into memory.
 #[cfg(feature = "std")]
-pub struct StreamingDecoder<R: Read> {
+pub struct StreamingDecoder<R: Read, C = Configuration<LittleEndian, Varint, NoLimit>> {
     reader: R,
+    config: C,
     current_chunk: Option<ChunkData>,
     progress: StreamingProgress,
     finished: bool,
@@ -37,12 +41,29 @@ impl<R: Read> StreamingDecoder<R> {
     pub fn new(reader: R) -> Self {
         Self {
             reader,
+            config: config::standard(),
             current_chunk: None,
             progress: StreamingProgress::default(),
             finished: false,
         }
     }
+}
 
+#[cfg(feature = "std")]
+impl<R: Read, C: Config> StreamingDecoder<R, C> {
+    /// Create a new streaming decoder with custom configuration.
+    /// Allows to create a decoder with specific endianness, integer encoding, and byte limits.
+    /// Really usefull for some performance readings (for example when reading the element number n of a p bit object) or to be compatible with some specific encoders.
+    pub fn new_with(reader: R, config: C) -> Self {
+        Self {
+            reader,
+            config,
+            current_chunk: None,
+            progress: StreamingProgress::default(),
+            finished: false,
+        }
+    }
+    
     /// Read the next item from the stream.
     ///
     /// Returns `None` when the stream is exhausted.
@@ -73,7 +94,7 @@ impl<R: Read> StreamingDecoder<R> {
 
         // Create reader from remaining chunk data
         let reader = SliceReader::new(&chunk.data[chunk.offset..]);
-        let mut decoder = DecoderImpl::new(reader, config::standard());
+        let mut decoder = DecoderImpl::new(reader, self.config);
         let item = T::decode(&mut decoder)?;
 
         // Update offset based on how much was read
