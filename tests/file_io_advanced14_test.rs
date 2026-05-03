@@ -80,7 +80,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum Theme {
@@ -135,7 +138,7 @@ fn test_user_preferences_file_roundtrip() {
         font_size: 14,
         custom_tags: vec!["work".to_string(), "urgent".to_string()],
     };
-    let path = temp_dir().join("oxicode_fileio14_test1.bin");
+    let path = tmp("oxicode_fileio14_test1");
     encode_to_file(&prefs, &path).expect("encode_to_file failed");
     let decoded: UserPreferences = decode_from_file(&path).expect("decode_from_file failed");
     assert_eq!(prefs, decoded);
@@ -147,7 +150,7 @@ fn test_user_preferences_file_roundtrip() {
 #[test]
 fn test_theme_light_roundtrip() {
     let theme = Theme::Light;
-    let path = temp_dir().join("oxicode_fileio14_test2.bin");
+    let path = tmp("oxicode_fileio14_test2");
     encode_to_file(&theme, &path).expect("encode Theme::Light");
     let decoded: Theme = decode_from_file(&path).expect("decode Theme::Light");
     assert_eq!(Theme::Light, decoded);
@@ -159,7 +162,7 @@ fn test_theme_light_roundtrip() {
 #[test]
 fn test_theme_dark_roundtrip() {
     let theme = Theme::Dark;
-    let path = temp_dir().join("oxicode_fileio14_test3.bin");
+    let path = tmp("oxicode_fileio14_test3");
     encode_to_file(&theme, &path).expect("encode Theme::Dark");
     let decoded: Theme = decode_from_file(&path).expect("decode Theme::Dark");
     assert_eq!(Theme::Dark, decoded);
@@ -171,7 +174,7 @@ fn test_theme_dark_roundtrip() {
 #[test]
 fn test_theme_high_contrast_roundtrip() {
     let theme = Theme::HighContrast;
-    let path = temp_dir().join("oxicode_fileio14_test4.bin");
+    let path = tmp("oxicode_fileio14_test4");
     encode_to_file(&theme, &path).expect("encode Theme::HighContrast");
     let decoded: Theme = decode_from_file(&path).expect("decode Theme::HighContrast");
     assert_eq!(Theme::HighContrast, decoded);
@@ -183,7 +186,7 @@ fn test_theme_high_contrast_roundtrip() {
 #[test]
 fn test_theme_system_roundtrip() {
     let theme = Theme::System;
-    let path = temp_dir().join("oxicode_fileio14_test5.bin");
+    let path = tmp("oxicode_fileio14_test5");
     encode_to_file(&theme, &path).expect("encode Theme::System");
     let decoded: Theme = decode_from_file(&path).expect("decode Theme::System");
     assert_eq!(Theme::System, decoded);
@@ -195,7 +198,7 @@ fn test_theme_system_roundtrip() {
 #[test]
 fn test_language_japanese_roundtrip() {
     let lang = Language::Japanese;
-    let path = temp_dir().join("oxicode_fileio14_test6.bin");
+    let path = tmp("oxicode_fileio14_test6");
     encode_to_file(&lang, &path).expect("encode Language::Japanese");
     let decoded: Language = decode_from_file(&path).expect("decode Language::Japanese");
     assert_eq!(Language::Japanese, decoded);
@@ -207,7 +210,7 @@ fn test_language_japanese_roundtrip() {
 #[test]
 fn test_language_chinese_roundtrip() {
     let lang = Language::Chinese;
-    let path = temp_dir().join("oxicode_fileio14_test7.bin");
+    let path = tmp("oxicode_fileio14_test7");
     encode_to_file(&lang, &path).expect("encode Language::Chinese");
     let decoded: Language = decode_from_file(&path).expect("decode Language::Chinese");
     assert_eq!(Language::Chinese, decoded);
@@ -219,7 +222,7 @@ fn test_language_chinese_roundtrip() {
 #[test]
 fn test_language_spanish_roundtrip() {
     let lang = Language::Spanish;
-    let path = temp_dir().join("oxicode_fileio14_test8.bin");
+    let path = tmp("oxicode_fileio14_test8");
     encode_to_file(&lang, &path).expect("encode Language::Spanish");
     let decoded: Language = decode_from_file(&path).expect("decode Language::Spanish");
     assert_eq!(Language::Spanish, decoded);
@@ -231,7 +234,7 @@ fn test_language_spanish_roundtrip() {
 #[test]
 fn test_language_french_roundtrip() {
     let lang = Language::French;
-    let path = temp_dir().join("oxicode_fileio14_test9.bin");
+    let path = tmp("oxicode_fileio14_test9");
     encode_to_file(&lang, &path).expect("encode Language::French");
     let decoded: Language = decode_from_file(&path).expect("decode Language::French");
     assert_eq!(Language::French, decoded);
@@ -243,7 +246,7 @@ fn test_language_french_roundtrip() {
 #[test]
 fn test_language_german_roundtrip() {
     let lang = Language::German;
-    let path = temp_dir().join("oxicode_fileio14_test10.bin");
+    let path = tmp("oxicode_fileio14_test10");
     encode_to_file(&lang, &path).expect("encode Language::German");
     let decoded: Language = decode_from_file(&path).expect("decode Language::German");
     assert_eq!(Language::German, decoded);
@@ -260,7 +263,7 @@ fn test_notification_settings_roundtrip() {
         sms: false,
         frequency_hours: 6,
     };
-    let path = temp_dir().join("oxicode_fileio14_test11.bin");
+    let path = tmp("oxicode_fileio14_test11");
     encode_to_file(&notif, &path).expect("encode NotificationSettings");
     let decoded: NotificationSettings =
         decode_from_file(&path).expect("decode NotificationSettings");
@@ -285,7 +288,7 @@ fn test_file_bytes_match_encode_to_vec() {
         font_size: 18,
         custom_tags: vec!["accessibility".to_string()],
     };
-    let path = temp_dir().join("oxicode_fileio14_test12.bin");
+    let path = tmp("oxicode_fileio14_test12");
     encode_to_file(&prefs, &path).expect("encode_to_file");
     let file_bytes = std::fs::read(&path).expect("read file bytes");
     let vec_bytes = encode_to_vec(&prefs).expect("encode_to_vec");
@@ -310,7 +313,7 @@ fn test_decode_from_slice_matches_file_decode() {
         font_size: 12,
         custom_tags: vec!["personal".to_string(), "hobby".to_string()],
     };
-    let path = temp_dir().join("oxicode_fileio14_test13.bin");
+    let path = tmp("oxicode_fileio14_test13");
     encode_to_file(&prefs, &path).expect("encode_to_file");
 
     let file_decoded: UserPreferences = decode_from_file(&path).expect("decode_from_file");
@@ -326,7 +329,7 @@ fn test_decode_from_slice_matches_file_decode() {
 
 #[test]
 fn test_overwrite_preferences_update_theme() {
-    let path = temp_dir().join("oxicode_fileio14_test14.bin");
+    let path = tmp("oxicode_fileio14_test14");
 
     let original = UserPreferences {
         user_id: 7,
@@ -385,7 +388,7 @@ fn test_large_custom_tags_roundtrip() {
         font_size: 16,
         custom_tags: tags.clone(),
     };
-    let path = temp_dir().join("oxicode_fileio14_test15.bin");
+    let path = tmp("oxicode_fileio14_test15");
     encode_to_file(&prefs, &path).expect("encode large tags");
     let decoded: UserPreferences = decode_from_file(&path).expect("decode large tags");
     assert_eq!(prefs.custom_tags.len(), decoded.custom_tags.len());
@@ -420,7 +423,7 @@ fn test_unicode_custom_tags_roundtrip() {
         font_size: 20,
         custom_tags: tags.clone(),
     };
-    let path = temp_dir().join("oxicode_fileio14_test16.bin");
+    let path = tmp("oxicode_fileio14_test16");
     encode_to_file(&prefs, &path).expect("encode unicode tags");
     let decoded: UserPreferences = decode_from_file(&path).expect("decode unicode tags");
     assert_eq!(tags, decoded.custom_tags);
@@ -474,7 +477,7 @@ fn test_multiple_files_parallel_persist() {
     ];
 
     let paths: Vec<_> = (17..=19)
-        .map(|i| temp_dir().join(format!("oxicode_fileio14_parallel{i}.bin")))
+        .map(|i| tmp(&format!("oxicode_fileio14_parallel{i}")))
         .collect();
 
     for (user, path) in users.iter().zip(paths.iter()) {
@@ -493,7 +496,7 @@ fn test_multiple_files_parallel_persist() {
 #[test]
 fn test_language_english_roundtrip() {
     let lang = Language::English;
-    let path = temp_dir().join("oxicode_fileio14_test18.bin");
+    let path = tmp("oxicode_fileio14_test18");
     encode_to_file(&lang, &path).expect("encode Language::English");
     let decoded: Language = decode_from_file(&path).expect("decode Language::English");
     assert_eq!(Language::English, decoded);
@@ -510,7 +513,7 @@ fn test_notification_settings_all_false_roundtrip() {
         sms: false,
         frequency_hours: 0,
     };
-    let path = temp_dir().join("oxicode_fileio14_test19.bin");
+    let path = tmp("oxicode_fileio14_test19");
     encode_to_file(&notif, &path).expect("encode all-false NotificationSettings");
     let decoded: NotificationSettings =
         decode_from_file(&path).expect("decode all-false NotificationSettings");
@@ -537,7 +540,7 @@ fn test_empty_custom_tags_roundtrip() {
         font_size: 11,
         custom_tags: vec![],
     };
-    let path = temp_dir().join("oxicode_fileio14_test20.bin");
+    let path = tmp("oxicode_fileio14_test20");
     encode_to_file(&prefs, &path).expect("encode empty tags");
     let decoded: UserPreferences = decode_from_file(&path).expect("decode empty tags");
     assert!(decoded.custom_tags.is_empty());
@@ -558,7 +561,7 @@ fn test_all_theme_variants_distinct_encoding() {
     let mut encodings: Vec<Vec<u8>> = Vec::new();
 
     for (idx, variant) in variants.iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_fileio14_test21_{idx}.bin"));
+        let path = tmp(&format!("oxicode_fileio14_test21_{idx}"));
         encode_to_file(variant, &path).expect("encode theme variant");
         let bytes = std::fs::read(&path).expect("read theme bytes");
         encodings.push(bytes);
@@ -597,7 +600,7 @@ fn test_max_font_size_all_notifications_enabled() {
             "u8::MAX".to_string(),
         ],
     };
-    let path = temp_dir().join("oxicode_fileio14_test22.bin");
+    let path = tmp("oxicode_fileio14_test22");
     encode_to_file(&prefs, &path).expect("encode max prefs");
     let decoded: UserPreferences = decode_from_file(&path).expect("decode max prefs");
     assert_eq!(u64::MAX, decoded.user_id);

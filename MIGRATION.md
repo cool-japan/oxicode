@@ -26,7 +26,7 @@ bincode = "2.0"
 
 # After
 [dependencies]
-oxicode = "0.1"
+oxicode = "0.2"
 ```
 
 ### Step 2: Update Imports
@@ -49,8 +49,8 @@ let encoded = bincode::serialize(&value)?;
 let decoded: T = bincode::deserialize(&encoded)?;
 
 // After (oxicode)
-let encoded = oxicode::encode(&value)?;
-let decoded: T = oxicode::decode(&encoded)?;
+let encoded = oxicode::encode_to_vec_with_config(&value, oxicode::config::standard())?;
+let (decoded, _len): (T, usize) = oxicode::decode_from_slice_with_config(&encoded, oxicode::config::standard())?;
 ```
 
 ## Configuration Migration
@@ -64,10 +64,8 @@ let config = config::standard();
 let encoded = bincode::encode_to_vec(&value, config)?;
 
 // After (oxicode)
-use oxicode::config::Config;
-let config = Config::standard();
-// Config will be supported in encode/decode functions in future versions
-let encoded = oxicode::encode(&value)?;
+let config = oxicode::config::standard();
+let encoded = oxicode::encode_to_vec_with_config(&value, config)?;
 ```
 
 ### Legacy/Bincode-Compatible Configuration
@@ -75,8 +73,7 @@ let encoded = oxicode::encode(&value)?;
 If you need exact bincode compatibility:
 
 ```rust
-use oxicode::config::Config;
-let config = Config::legacy();  // Bincode-compatible settings
+let config = oxicode::config::legacy();  // Wire-format compatible with bincode 1.x default
 ```
 
 ## Feature Flags
@@ -85,10 +82,10 @@ OxiCode maintains similar feature flags to bincode:
 
 ```toml
 [dependencies]
-oxicode = { version = "0.1", features = ["derive"] }
+oxicode = { version = "0.2", features = ["derive"] }
 
 # For no_std environments
-oxicode = { version = "0.1", default-features = false, features = ["alloc"] }
+oxicode = { version = "0.2", default-features = false, features = ["alloc"] }
 ```
 
 ## Using Serde Integration
@@ -99,7 +96,7 @@ OxiCode's serde support is optional. If you're using serde types:
 
 ```toml
 [dependencies]
-oxicode = { version = "0.1", features = ["serde"] }
+oxicode = { version = "0.2", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -155,8 +152,8 @@ OxiCode provides a compatibility crate for gradual migration:
 
 ```toml
 [dependencies]
-oxicode = "0.1"
-oxicode_compatibility = "0.1"
+oxicode = "0.2"
+oxicode_compatibility = "0.2"
 ```
 
 This allows you to:
@@ -173,7 +170,7 @@ This allows you to:
 let bytes = bincode::serialize(&data)?;
 
 // After
-let bytes = oxicode::encode(&data)?;
+let bytes = oxicode::encode_to_vec_with_config(&data, oxicode::config::standard())?;
 ```
 
 ### Decoding from &[u8]
@@ -183,7 +180,7 @@ let bytes = oxicode::encode(&data)?;
 let data: MyStruct = bincode::deserialize(&bytes)?;
 
 // After
-let data: MyStruct = oxicode::decode(&bytes)?;
+let (data, _len): (MyStruct, usize) = oxicode::decode_from_slice_with_config(&bytes, oxicode::config::standard())?;
 ```
 
 ### Derive Macros
@@ -211,14 +208,13 @@ struct MyStruct {
 By default, OxiCode uses a slightly different encoding format optimized for modern use cases. For exact bincode compatibility, use:
 
 ```rust
-use oxicode::config::Config;
-let config = Config::legacy();
+let config = oxicode::config::legacy();
 ```
 
 This ensures:
-- Same varint encoding
-- Same byte ordering
-- Compatible with bincode 2.0 format
+- Same fixed-int encoding
+- Same byte ordering (little-endian)
+- Wire-format compatible with bincode 1.x default (equivalent to bincode 2.0's `config::legacy()` preset)
 
 ## Testing Your Migration
 
@@ -227,7 +223,7 @@ This ensures:
 ```toml
 [dev-dependencies]
 bincode = "2.0"
-oxicode = "0.1"
+oxicode = "0.2"
 ```
 
 2. Write compatibility tests:
@@ -237,11 +233,14 @@ oxicode = "0.1"
 fn test_bincode_compatibility() {
     let data = MyStruct { field: "test".into() };
 
-    // Encode with bincode
-    let bincode_bytes = bincode::serialize(&data).unwrap();
+    // Encode with bincode (legacy mode = bincode 1.x wire format)
+    let bincode_bytes = bincode::encode_to_vec(&data, bincode::config::legacy())
+        .expect("bincode encode");
 
-    // Decode with oxicode (legacy mode)
-    let decoded: MyStruct = oxicode::decode(&bincode_bytes).unwrap();
+    // Decode with oxicode using matching legacy config
+    let (decoded, _len): (MyStruct, usize) =
+        oxicode::decode_from_slice_with_config(&bincode_bytes, oxicode::config::legacy())
+            .expect("oxicode decode");
 
     assert_eq!(data, decoded);
 }

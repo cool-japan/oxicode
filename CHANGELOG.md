@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-05-03
+
+### Added
+- Shared domain types for `nested_structs_advanced17` test suite
+- `deny.toml` configuration file for dependency policy enforcement (banning unsafe or incompatible crates)
+
+### Changed
+- Pinned `bincode` dev-dependency to `=2.0.1` to prevent incompatible API changes from 3.x
+- Bumped `oxiarc` dependencies to version 0.2.7 (pure Rust compression upgrade)
+- Updated CI configuration
+
+### Fixed
+- Improved temp file uniqueness in `file_io_advanced13` tests using process ID suffix
+- Format issues across benchmark and test files (`cargo fmt --all`)
+
 ## [0.2.1] - 2026-03-16
 
 ### Changed
@@ -289,6 +304,7 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 ---
 
+[0.2.2]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.2
 [0.2.1]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.1
 [0.2.0]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cool-japan/oxicode/releases/tag/v0.1.0

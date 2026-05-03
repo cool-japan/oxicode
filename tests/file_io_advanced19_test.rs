@@ -78,7 +78,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 enum NucleotideBase {
@@ -117,7 +120,7 @@ struct AlignmentRecord {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_sequence_read_basic_roundtrip() {
-    let path = temp_dir().join("oxicode_genomics_001.bin");
+    let path = tmp("oxicode_genomics_001.bin");
     let read = SequenceRead {
         read_id: 1,
         sequence: vec![
@@ -154,7 +157,7 @@ fn test_sequence_read_basic_roundtrip() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_alignment_record_basic_roundtrip() {
-    let path = temp_dir().join("oxicode_genomics_002.bin");
+    let path = tmp("oxicode_genomics_002.bin");
     let record = AlignmentRecord {
         read_id: 42,
         chromosome: "chr1".to_string(),
@@ -176,7 +179,7 @@ fn test_alignment_record_basic_roundtrip() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_nucleotide_base_variant_a() {
-    let path = temp_dir().join("oxicode_genomics_003.bin");
+    let path = tmp("oxicode_genomics_003.bin");
     let base = NucleotideBase::A;
     encode_to_file(&base, &path).expect("encode NucleotideBase::A failed");
     let decoded: NucleotideBase = decode_from_file(&path).expect("decode NucleotideBase::A failed");
@@ -191,7 +194,7 @@ fn test_nucleotide_base_variant_a() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_nucleotide_base_variant_t() {
-    let path = temp_dir().join("oxicode_genomics_004.bin");
+    let path = tmp("oxicode_genomics_004.bin");
     let base = NucleotideBase::T;
     encode_to_file(&base, &path).expect("encode NucleotideBase::T failed");
     let decoded: NucleotideBase = decode_from_file(&path).expect("decode NucleotideBase::T failed");
@@ -206,7 +209,7 @@ fn test_nucleotide_base_variant_t() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_nucleotide_base_variant_c() {
-    let path = temp_dir().join("oxicode_genomics_005.bin");
+    let path = tmp("oxicode_genomics_005.bin");
     let base = NucleotideBase::C;
     encode_to_file(&base, &path).expect("encode NucleotideBase::C failed");
     let decoded: NucleotideBase = decode_from_file(&path).expect("decode NucleotideBase::C failed");
@@ -221,7 +224,7 @@ fn test_nucleotide_base_variant_c() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_nucleotide_base_variant_g() {
-    let path = temp_dir().join("oxicode_genomics_006.bin");
+    let path = tmp("oxicode_genomics_006.bin");
     let base = NucleotideBase::G;
     encode_to_file(&base, &path).expect("encode NucleotideBase::G failed");
     let decoded: NucleotideBase = decode_from_file(&path).expect("decode NucleotideBase::G failed");
@@ -236,7 +239,7 @@ fn test_nucleotide_base_variant_g() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_nucleotide_base_variant_n() {
-    let path = temp_dir().join("oxicode_genomics_007.bin");
+    let path = tmp("oxicode_genomics_007.bin");
     let base = NucleotideBase::N;
     encode_to_file(&base, &path).expect("encode NucleotideBase::N failed");
     let decoded: NucleotideBase = decode_from_file(&path).expect("decode NucleotideBase::N failed");
@@ -251,7 +254,7 @@ fn test_nucleotide_base_variant_n() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_sequence_read_large_1000_bases() {
-    let path = temp_dir().join("oxicode_genomics_008.bin");
+    let path = tmp("oxicode_genomics_008.bin");
     let bases = [
         NucleotideBase::A,
         NucleotideBase::T,
@@ -287,7 +290,7 @@ fn test_sequence_read_large_1000_bases() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_sequence_read_file_bytes_match_encode_to_vec() {
-    let path = temp_dir().join("oxicode_genomics_009.bin");
+    let path = tmp("oxicode_genomics_009.bin");
     let read = SequenceRead {
         read_id: 99,
         sequence: vec![
@@ -317,7 +320,7 @@ fn test_sequence_read_file_bytes_match_encode_to_vec() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_alignment_record_file_bytes_match_encode_to_vec() {
-    let path = temp_dir().join("oxicode_genomics_010.bin");
+    let path = tmp("oxicode_genomics_010.bin");
     let record = AlignmentRecord {
         read_id: 77,
         chromosome: "chrX".to_string(),
@@ -339,7 +342,7 @@ fn test_alignment_record_file_bytes_match_encode_to_vec() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_sequence_read_overwrite() {
-    let path = temp_dir().join("oxicode_genomics_011.bin");
+    let path = tmp("oxicode_genomics_011.bin");
     let first = SequenceRead {
         read_id: 1,
         sequence: vec![QualityScore {
@@ -380,7 +383,7 @@ fn test_sequence_read_overwrite() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_alignment_record_overwrite() {
-    let path = temp_dir().join("oxicode_genomics_012.bin");
+    let path = tmp("oxicode_genomics_012.bin");
     let first = AlignmentRecord {
         read_id: 1,
         chromosome: "chr1".to_string(),
@@ -411,7 +414,7 @@ fn test_alignment_record_overwrite() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_error_on_missing_file_sequence_read() {
-    let path = temp_dir().join("oxicode_genomics_013_missing_xyz.bin");
+    let path = tmp("oxicode_genomics_013_missing_xyz.bin");
     // Ensure it does not exist
     if path.exists() {
         std::fs::remove_file(&path).ok();
@@ -428,7 +431,7 @@ fn test_error_on_missing_file_sequence_read() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_error_on_missing_file_alignment_record() {
-    let path = temp_dir().join("oxicode_genomics_014_missing_xyz.bin");
+    let path = tmp("oxicode_genomics_014_missing_xyz.bin");
     if path.exists() {
         std::fs::remove_file(&path).ok();
     }
@@ -490,7 +493,7 @@ fn test_multiple_sequence_read_files() {
         },
     ];
     let paths: Vec<_> = (0..3)
-        .map(|n| temp_dir().join(format!("oxicode_genomics_015_{n}.bin")))
+        .map(|n| tmp(&format!("oxicode_genomics_015_{n}.bin")))
         .collect();
 
     for (read, path) in reads.iter().zip(paths.iter()) {
@@ -535,7 +538,7 @@ fn test_multiple_alignment_record_files() {
         },
     ];
     let paths: Vec<_> = (0..3)
-        .map(|n| temp_dir().join(format!("oxicode_genomics_016_{n}.bin")))
+        .map(|n| tmp(&format!("oxicode_genomics_016_{n}.bin")))
         .collect();
 
     for (record, path) in records.iter().zip(paths.iter()) {
@@ -556,7 +559,7 @@ fn test_multiple_alignment_record_files() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_quality_score_boundary_values() {
-    let path = temp_dir().join("oxicode_genomics_017.bin");
+    let path = tmp("oxicode_genomics_017.bin");
     let sequence = vec![
         QualityScore {
             base: NucleotideBase::A,
@@ -595,7 +598,7 @@ fn test_quality_score_boundary_values() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_sequence_read_empty_sequence() {
-    let path = temp_dir().join("oxicode_genomics_018.bin");
+    let path = tmp("oxicode_genomics_018.bin");
     let read = SequenceRead {
         read_id: 0,
         sequence: vec![],
@@ -617,7 +620,7 @@ fn test_sequence_read_empty_sequence() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_decode_from_slice_matches_file_sequence_read() {
-    let path = temp_dir().join("oxicode_genomics_019.bin");
+    let path = tmp("oxicode_genomics_019.bin");
     let read = SequenceRead {
         read_id: 512,
         sequence: vec![
@@ -655,7 +658,7 @@ fn test_decode_from_slice_matches_file_sequence_read() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_decode_from_slice_matches_file_alignment_record() {
-    let path = temp_dir().join("oxicode_genomics_020.bin");
+    let path = tmp("oxicode_genomics_020.bin");
     let record = AlignmentRecord {
         read_id: 256,
         chromosome: "chr22".to_string(),
@@ -682,8 +685,8 @@ fn test_decode_from_slice_matches_file_alignment_record() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_sequence_read_paired_end_flag() {
-    let path_paired = temp_dir().join("oxicode_genomics_021a.bin");
-    let path_unpaired = temp_dir().join("oxicode_genomics_021b.bin");
+    let path_paired = tmp("oxicode_genomics_021a.bin");
+    let path_unpaired = tmp("oxicode_genomics_021b.bin");
 
     let paired = SequenceRead {
         read_id: 1001,
@@ -730,7 +733,7 @@ fn test_sequence_read_paired_end_flag() {
 // ──────────────────────────────────────────────────────────────────────────────
 #[test]
 fn test_large_alignment_batch_file_and_vec_consistency() {
-    let path = temp_dir().join("oxicode_genomics_022.bin");
+    let path = tmp("oxicode_genomics_022.bin");
     let chromosomes = ["chr1", "chr2", "chr3", "chrX", "chrY", "chrM"];
     let records: Vec<AlignmentRecord> = (0u64..400)
         .map(|i| AlignmentRecord {

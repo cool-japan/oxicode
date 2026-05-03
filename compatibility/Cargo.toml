@@ -14,9 +14,9 @@ categories = ["encoding", "development-tools::testing"]
 publish = false
 
 [dependencies]
-oxicode = { path = "..", version = "0.2.1" }
+oxicode = { path = "..", version = "0.2.2" }
 serde = { workspace = true, features = ["derive"] }
 
 
 [dev-dependencies]
-bincode = "2.0"
+bincode = "=2.0.1" # Never upgrade to 3.0 (3.x has incompatible API)

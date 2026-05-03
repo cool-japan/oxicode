@@ -79,6 +79,10 @@
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
+
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum IncidentType {
     Earthquake,
@@ -139,7 +143,7 @@ struct ResponsePlan {
 // Test 1: IncidentType::Earthquake to file
 #[test]
 fn test_incident_type_earthquake_file() {
-    let path = std::env::temp_dir().join("test_disaster_001.bin");
+    let path = tmp("test_disaster_001.bin");
     let value = IncidentType::Earthquake;
     encode_to_file(&value, &path).expect("Failed to encode Earthquake to file");
     let decoded: IncidentType =
@@ -151,7 +155,7 @@ fn test_incident_type_earthquake_file() {
 // Test 2: IncidentType::Flood to file
 #[test]
 fn test_incident_type_flood_file() {
-    let path = std::env::temp_dir().join("test_disaster_002.bin");
+    let path = tmp("test_disaster_002.bin");
     let value = IncidentType::Flood;
     encode_to_file(&value, &path).expect("Failed to encode Flood to file");
     let decoded: IncidentType = decode_from_file(&path).expect("Failed to decode Flood from file");
@@ -162,7 +166,7 @@ fn test_incident_type_flood_file() {
 // Test 3: IncidentType::Wildfire to file
 #[test]
 fn test_incident_type_wildfire_file() {
-    let path = std::env::temp_dir().join("test_disaster_003.bin");
+    let path = tmp("test_disaster_003.bin");
     let value = IncidentType::Wildfire;
     encode_to_file(&value, &path).expect("Failed to encode Wildfire to file");
     let decoded: IncidentType =
@@ -174,7 +178,7 @@ fn test_incident_type_wildfire_file() {
 // Test 4: IncidentType::HurricaneTypoon to file
 #[test]
 fn test_incident_type_hurricane_typoon_file() {
-    let path = std::env::temp_dir().join("test_disaster_004.bin");
+    let path = tmp("test_disaster_004.bin");
     let value = IncidentType::HurricaneTypoon;
     encode_to_file(&value, &path).expect("Failed to encode HurricaneTypoon to file");
     let decoded: IncidentType =
@@ -186,7 +190,7 @@ fn test_incident_type_hurricane_typoon_file() {
 // Test 5: ResponseStatus::Monitoring to file
 #[test]
 fn test_response_status_monitoring_file() {
-    let path = std::env::temp_dir().join("test_disaster_005.bin");
+    let path = tmp("test_disaster_005.bin");
     let value = ResponseStatus::Monitoring;
     encode_to_file(&value, &path).expect("Failed to encode Monitoring to file");
     let decoded: ResponseStatus =
@@ -198,7 +202,7 @@ fn test_response_status_monitoring_file() {
 // Test 6: ResponseStatus::Responding to file
 #[test]
 fn test_response_status_responding_file() {
-    let path = std::env::temp_dir().join("test_disaster_006.bin");
+    let path = tmp("test_disaster_006.bin");
     let value = ResponseStatus::Responding;
     encode_to_file(&value, &path).expect("Failed to encode Responding to file");
     let decoded: ResponseStatus =
@@ -210,7 +214,7 @@ fn test_response_status_responding_file() {
 // Test 7: ResponseStatus::Contained to file
 #[test]
 fn test_response_status_contained_file() {
-    let path = std::env::temp_dir().join("test_disaster_007.bin");
+    let path = tmp("test_disaster_007.bin");
     let value = ResponseStatus::Contained;
     encode_to_file(&value, &path).expect("Failed to encode Contained to file");
     let decoded: ResponseStatus =
@@ -222,7 +226,7 @@ fn test_response_status_contained_file() {
 // Test 8: Location file roundtrip
 #[test]
 fn test_location_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_disaster_008.bin");
+    let path = tmp("test_disaster_008.bin");
     let value = Location {
         lat_micro: 37_774_929,
         lon_micro: -122_419_416,
@@ -238,7 +242,7 @@ fn test_location_file_roundtrip() {
 // Test 9: ResourceUnit file roundtrip - available unit
 #[test]
 fn test_resource_unit_available_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_disaster_009.bin");
+    let path = tmp("test_disaster_009.bin");
     let value = ResourceUnit {
         unit_id: 101,
         unit_type: String::from("Fire Engine"),
@@ -256,7 +260,7 @@ fn test_resource_unit_available_file_roundtrip() {
 // Test 10: ResourceUnit file roundtrip - unavailable unit
 #[test]
 fn test_resource_unit_unavailable_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_disaster_010.bin");
+    let path = tmp("test_disaster_010.bin");
     let value = ResourceUnit {
         unit_id: 202,
         unit_type: String::from("Hazmat Team"),
@@ -274,7 +278,7 @@ fn test_resource_unit_unavailable_file_roundtrip() {
 // Test 11: IncidentReport file roundtrip
 #[test]
 fn test_incident_report_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_disaster_011.bin");
+    let path = tmp("test_disaster_011.bin");
     let value = IncidentReport {
         incident_id: 9_001_u64,
         incident_type: IncidentType::ChemicalSpill,
@@ -299,7 +303,7 @@ fn test_incident_report_file_roundtrip() {
 // Test 12: ResponsePlan with empty resources
 #[test]
 fn test_response_plan_empty_resources_file() {
-    let path = std::env::temp_dir().join("test_disaster_012.bin");
+    let path = tmp("test_disaster_012.bin");
     let value = ResponsePlan {
         plan_id: 5001,
         incident_id: 9_001,
@@ -317,7 +321,7 @@ fn test_response_plan_empty_resources_file() {
 // Test 13: ResponsePlan with 5 resource units
 #[test]
 fn test_response_plan_five_resources_file() {
-    let path = std::env::temp_dir().join("test_disaster_013.bin");
+    let path = tmp("test_disaster_013.bin");
     let resources: Vec<ResourceUnit> = (1..=5)
         .map(|i| ResourceUnit {
             unit_id: i,
@@ -344,7 +348,7 @@ fn test_response_plan_five_resources_file() {
 // Test 14: ResponsePlan with 3 evacuation zones
 #[test]
 fn test_response_plan_three_evacuation_zones_file() {
-    let path = std::env::temp_dir().join("test_disaster_014.bin");
+    let path = tmp("test_disaster_014.bin");
     let evacuation_zones = vec![
         Location {
             lat_micro: 34_052_235,
@@ -382,7 +386,7 @@ fn test_response_plan_three_evacuation_zones_file() {
 // Test 15: Vec<IncidentReport> file roundtrip
 #[test]
 fn test_vec_incident_reports_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_disaster_015.bin");
+    let path = tmp("test_disaster_015.bin");
     let reports = vec![
         IncidentReport {
             incident_id: 1001,
@@ -437,7 +441,7 @@ fn test_vec_incident_reports_file_roundtrip() {
 // Test 16: Overwrite test - encode twice to same path, decode gets second
 #[test]
 fn test_overwrite_same_path_gets_second_value() {
-    let path = std::env::temp_dir().join("test_disaster_016.bin");
+    let path = tmp("test_disaster_016.bin");
     let first = IncidentReport {
         incident_id: 7001,
         incident_type: IncidentType::Infrastructure,
@@ -478,7 +482,7 @@ fn test_overwrite_same_path_gets_second_value() {
 // Test 17: Wildfire response plan
 #[test]
 fn test_wildfire_response_plan_file() {
-    let path = std::env::temp_dir().join("test_disaster_017.bin");
+    let path = tmp("test_disaster_017.bin");
     let value = ResponsePlan {
         plan_id: 8001,
         incident_id: 2001,
@@ -516,7 +520,7 @@ fn test_wildfire_response_plan_file() {
 // Test 18: Earthquake with high severity (10)
 #[test]
 fn test_earthquake_high_severity_file() {
-    let path = std::env::temp_dir().join("test_disaster_018.bin");
+    let path = tmp("test_disaster_018.bin");
     let value = IncidentReport {
         incident_id: 3001,
         incident_type: IncidentType::Earthquake,
@@ -542,7 +546,7 @@ fn test_earthquake_high_severity_file() {
 // Test 19: Flood with large affected count
 #[test]
 fn test_flood_large_affected_count_file() {
-    let path = std::env::temp_dir().join("test_disaster_019.bin");
+    let path = tmp("test_disaster_019.bin");
     let value = IncidentReport {
         incident_id: 4001,
         incident_type: IncidentType::Flood,
@@ -568,7 +572,7 @@ fn test_flood_large_affected_count_file() {
 // Test 20: Chemical spill containment
 #[test]
 fn test_chemical_spill_containment_file() {
-    let path = std::env::temp_dir().join("test_disaster_020.bin");
+    let path = tmp("test_disaster_020.bin");
     let value = IncidentReport {
         incident_id: 5001,
         incident_type: IncidentType::ChemicalSpill,
@@ -594,7 +598,7 @@ fn test_chemical_spill_containment_file() {
 // Test 21: Infrastructure failure recovery
 #[test]
 fn test_infrastructure_failure_recovery_file() {
-    let path = std::env::temp_dir().join("test_disaster_021.bin");
+    let path = tmp("test_disaster_021.bin");
     let value = IncidentReport {
         incident_id: 6001,
         incident_type: IncidentType::Infrastructure,
@@ -620,7 +624,7 @@ fn test_infrastructure_failure_recovery_file() {
 // Test 22: Mass event monitoring
 #[test]
 fn test_mass_event_monitoring_file() {
-    let path = std::env::temp_dir().join("test_disaster_022.bin");
+    let path = tmp("test_disaster_022.bin");
     let value = IncidentReport {
         incident_id: 7100,
         incident_type: IncidentType::MassEvent,
@@ -649,7 +653,7 @@ fn test_mass_event_monitoring_file() {
 // Test 23 (encode_to_vec / decode_from_slice companion): Coastal evacuation zone
 #[test]
 fn test_coastal_evacuation_zone_file() {
-    let path = std::env::temp_dir().join("test_disaster_023.bin");
+    let path = tmp("test_disaster_023.bin");
     let value = Location {
         lat_micro: 25_774_266,
         lon_micro: -80_193_659,
@@ -671,7 +675,7 @@ fn test_coastal_evacuation_zone_file() {
 // Test 24: Mountain rescue unit
 #[test]
 fn test_mountain_rescue_unit_file() {
-    let path = std::env::temp_dir().join("test_disaster_024.bin");
+    let path = tmp("test_disaster_024.bin");
     let value = ResourceUnit {
         unit_id: 999,
         unit_type: String::from("Mountain Search and Rescue"),
@@ -689,7 +693,7 @@ fn test_mountain_rescue_unit_file() {
 // Test 25: Zero personnel unit (equipment only)
 #[test]
 fn test_zero_personnel_equipment_only_unit_file() {
-    let path = std::env::temp_dir().join("test_disaster_025.bin");
+    let path = tmp("test_disaster_025.bin");
     let value = ResourceUnit {
         unit_id: 555,
         unit_type: String::from("Autonomous Drone Fleet"),
@@ -709,7 +713,7 @@ fn test_zero_personnel_equipment_only_unit_file() {
 // Test 26: 10-zone evacuation plan
 #[test]
 fn test_ten_zone_evacuation_plan_file() {
-    let path = std::env::temp_dir().join("test_disaster_026.bin");
+    let path = tmp("test_disaster_026.bin");
     let evacuation_zones: Vec<Location> = (0..10)
         .map(|i| Location {
             lat_micro: 35_000_000 + (i * 10_000),
@@ -736,7 +740,7 @@ fn test_ten_zone_evacuation_plan_file() {
 // Test 27: Multi-incident disaster scenario
 #[test]
 fn test_multi_incident_disaster_scenario_file() {
-    let path = std::env::temp_dir().join("test_disaster_027.bin");
+    let path = tmp("test_disaster_027.bin");
     // Compound disaster: hurricane triggers flooding and infrastructure failures
     let incidents = vec![
         IncidentReport {

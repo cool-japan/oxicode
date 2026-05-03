@@ -3,7 +3,7 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
 rust-version = "1.74.0"
@@ -26,7 +26,7 @@ crc32fast = { version = "1.5" }
 criterion = "0.8.2"
 tempfile = "3.27"
 serde_json = { version = "1.0", default-features = false }
-proptest = "1.10"
+proptest = "1.11"
 
 [package]
 name = "oxicode"
@@ -60,11 +60,11 @@ validation = []               # Enable validation trait implementations in tests
 versioning = []               # Enable versioning API tests
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.2.1", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.2", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
-oxiarc-lz4 = { version = "0.2.4", optional = true }
-oxiarc-zstd = { version = "0.2.4", optional = true }
-tokio = { version = "1.50", features = ["io-util"], optional = true }
+oxiarc-lz4 = { version = "0.2.7", optional = true }
+oxiarc-zstd = { version = "0.2.7", optional = true }
+tokio = { version = "1.52", features = ["io-util"], optional = true }
 crc32fast = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -72,8 +72,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
-bincode = "2.0" # Never upgrade to 3.0
-tokio = { version = "1.50", features = ["rt", "macros", "io-util", "fs", "time"] }
+bincode = { version = "=2.0.1", features = ["serde"] } # Never upgrade to 3.0 (3.x has incompatible API)
+tokio = { version = "1.52", features = ["rt", "macros", "io-util", "fs", "time"] }
 proptest = { workspace = true }
 
 [[bench]]
@@ -86,6 +86,19 @@ harness = false
 
 [[bench]]
 name = "comparison_bench"
+harness = false
+
+[[bench]]
+name = "config_matrix_bench"
+harness = false
+
+[[bench]]
+name = "serde_bench"
+harness = false
+required-features = ["serde"]
+
+[[bench]]
+name = "api_surface_bench"
 harness = false
 
 [package.metadata.docs.rs]

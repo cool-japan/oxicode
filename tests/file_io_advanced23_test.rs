@@ -79,6 +79,10 @@
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
+
 // ── Domain types ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, PartialEq, Encode, Decode)]
@@ -197,7 +201,7 @@ fn make_player(id: u64) -> PlayerState {
 
 #[test]
 fn test_object_type_static_mesh_file() {
-    let path = std::env::temp_dir().join("vr_obj_static_mesh.bin");
+    let path = tmp("vr_obj_static_mesh.bin");
     let val = ObjectType::StaticMesh;
     encode_to_file(&val, &path).expect("encode ObjectType::StaticMesh");
     let decoded: ObjectType = decode_from_file(&path).expect("decode ObjectType::StaticMesh");
@@ -209,7 +213,7 @@ fn test_object_type_static_mesh_file() {
 
 #[test]
 fn test_object_type_dynamic_rigid_body_file() {
-    let path = std::env::temp_dir().join("vr_obj_dynamic_rigid_body.bin");
+    let path = tmp("vr_obj_dynamic_rigid_body.bin");
     let val = ObjectType::DynamicRigidBody;
     encode_to_file(&val, &path).expect("encode ObjectType::DynamicRigidBody");
     let decoded: ObjectType = decode_from_file(&path).expect("decode ObjectType::DynamicRigidBody");
@@ -221,7 +225,7 @@ fn test_object_type_dynamic_rigid_body_file() {
 
 #[test]
 fn test_object_type_trigger_file() {
-    let path = std::env::temp_dir().join("vr_obj_trigger.bin");
+    let path = tmp("vr_obj_trigger.bin");
     let val = ObjectType::Trigger;
     encode_to_file(&val, &path).expect("encode ObjectType::Trigger");
     let decoded: ObjectType = decode_from_file(&path).expect("decode ObjectType::Trigger");
@@ -233,7 +237,7 @@ fn test_object_type_trigger_file() {
 
 #[test]
 fn test_object_type_light_file() {
-    let path = std::env::temp_dir().join("vr_obj_light.bin");
+    let path = tmp("vr_obj_light.bin");
     let val = ObjectType::Light;
     encode_to_file(&val, &path).expect("encode ObjectType::Light");
     let decoded: ObjectType = decode_from_file(&path).expect("decode ObjectType::Light");
@@ -245,7 +249,7 @@ fn test_object_type_light_file() {
 
 #[test]
 fn test_object_type_camera_file() {
-    let path = std::env::temp_dir().join("vr_obj_camera.bin");
+    let path = tmp("vr_obj_camera.bin");
     let val = ObjectType::Camera;
     encode_to_file(&val, &path).expect("encode ObjectType::Camera");
     let decoded: ObjectType = decode_from_file(&path).expect("decode ObjectType::Camera");
@@ -265,7 +269,7 @@ fn test_render_layer_variants_file() {
         (RenderLayer::Debug, "vr_rl_debug.bin"),
     ];
     for (layer, filename) in layers {
-        let path = std::env::temp_dir().join(filename);
+        let path = tmp(filename);
         encode_to_file(&layer, &path).expect("encode RenderLayer variant");
         let decoded: RenderLayer = decode_from_file(&path).expect("decode RenderLayer variant");
         assert_eq!(layer, decoded);
@@ -277,7 +281,7 @@ fn test_render_layer_variants_file() {
 
 #[test]
 fn test_vec3fixed_file_roundtrip() {
-    let path = std::env::temp_dir().join("vr_vec3fixed.bin");
+    let path = tmp("vr_vec3fixed.bin");
     let val = Vec3Fixed {
         x_um: 1_234_567_890,
         y_um: -987_654_321,
@@ -293,7 +297,7 @@ fn test_vec3fixed_file_roundtrip() {
 
 #[test]
 fn test_quatfixed_file_roundtrip() {
-    let path = std::env::temp_dir().join("vr_quatfixed.bin");
+    let path = tmp("vr_quatfixed.bin");
     // 45-degree rotation around Y axis (approx): w=cos(π/8), y=sin(π/8) scaled to micro
     let val = QuatFixed {
         w_micro: 923_880,
@@ -311,7 +315,7 @@ fn test_quatfixed_file_roundtrip() {
 
 #[test]
 fn test_scene_object_file_roundtrip() {
-    let path = std::env::temp_dir().join("vr_scene_object.bin");
+    let path = tmp("vr_scene_object.bin");
     let obj = SceneObject {
         object_id: 99_001,
         name: "portal_gate".to_string(),
@@ -335,7 +339,7 @@ fn test_scene_object_file_roundtrip() {
 
 #[test]
 fn test_player_state_file_roundtrip() {
-    let path = std::env::temp_dir().join("vr_player_state.bin");
+    let path = tmp("vr_player_state.bin");
     let player = PlayerState {
         player_id: 7,
         position: Vec3Fixed {
@@ -357,7 +361,7 @@ fn test_player_state_file_roundtrip() {
 
 #[test]
 fn test_vr_scene_empty_file() {
-    let path = std::env::temp_dir().join("vr_scene_empty.bin");
+    let path = tmp("vr_scene_empty.bin");
     let scene = VrScene {
         scene_id: 1,
         name: "empty_lobby".to_string(),
@@ -376,7 +380,7 @@ fn test_vr_scene_empty_file() {
 
 #[test]
 fn test_vr_scene_5_objects_2_players_file() {
-    let path = std::env::temp_dir().join("vr_scene_5obj_2pl.bin");
+    let path = tmp("vr_scene_5obj_2pl.bin");
     let objects: Vec<SceneObject> = (0..5)
         .map(|i| make_object(i, ObjectType::StaticMesh, RenderLayer::World))
         .collect();
@@ -399,7 +403,7 @@ fn test_vr_scene_5_objects_2_players_file() {
 
 #[test]
 fn test_vr_scene_30_objects_file() {
-    let path = std::env::temp_dir().join("vr_scene_30obj.bin");
+    let path = tmp("vr_scene_30obj.bin");
     let objects: Vec<SceneObject> = (0..30)
         .map(|i| make_object(i, ObjectType::StaticMesh, RenderLayer::World))
         .collect();
@@ -420,7 +424,7 @@ fn test_vr_scene_30_objects_file() {
 
 #[test]
 fn test_overwrite_scene_file() {
-    let path = std::env::temp_dir().join("vr_scene_overwrite.bin");
+    let path = tmp("vr_scene_overwrite.bin");
 
     let first_scene = VrScene {
         scene_id: 1,
@@ -451,7 +455,7 @@ fn test_overwrite_scene_file() {
 
 #[test]
 fn test_vec_scene_objects_file_roundtrip() {
-    let path = std::env::temp_dir().join("vr_vec_scene_objects.bin");
+    let path = tmp("vr_vec_scene_objects.bin");
     let objects: Vec<SceneObject> = vec![
         make_object(1, ObjectType::StaticMesh, RenderLayer::Background),
         make_object(2, ObjectType::Light, RenderLayer::World),
@@ -467,7 +471,7 @@ fn test_vec_scene_objects_file_roundtrip() {
 
 #[test]
 fn test_vec_player_states_file_roundtrip() {
-    let path = std::env::temp_dir().join("vr_vec_players.bin");
+    let path = tmp("vr_vec_players.bin");
     let players: Vec<PlayerState> = (1..=4).map(make_player).collect();
     encode_to_file(&players, &path).expect("encode Vec<PlayerState>");
     let decoded: Vec<PlayerState> = decode_from_file(&path).expect("decode Vec<PlayerState>");
@@ -479,7 +483,7 @@ fn test_vec_player_states_file_roundtrip() {
 
 #[test]
 fn test_player_at_origin_file() {
-    let path = std::env::temp_dir().join("vr_player_origin.bin");
+    let path = tmp("vr_player_origin.bin");
     let player = PlayerState {
         player_id: 0,
         position: origin(),
@@ -500,7 +504,7 @@ fn test_player_at_origin_file() {
 
 #[test]
 fn test_player_at_max_coordinates_file() {
-    let path = std::env::temp_dir().join("vr_player_max_coords.bin");
+    let path = tmp("vr_player_max_coords.bin");
     let player = PlayerState {
         player_id: u64::MAX,
         position: Vec3Fixed {
@@ -529,7 +533,7 @@ fn test_player_at_max_coordinates_file() {
 
 #[test]
 fn test_scene_with_all_object_types_file() {
-    let path = std::env::temp_dir().join("vr_scene_all_obj_types.bin");
+    let path = tmp("vr_scene_all_obj_types.bin");
     let objects = vec![
         make_object(1, ObjectType::StaticMesh, RenderLayer::World),
         make_object(2, ObjectType::DynamicRigidBody, RenderLayer::World),
@@ -558,7 +562,7 @@ fn test_scene_with_all_object_types_file() {
 
 #[test]
 fn test_score_accumulation_file() {
-    let path = std::env::temp_dir().join("vr_score_accumulation.bin");
+    let path = tmp("vr_score_accumulation.bin");
     let mut player = PlayerState {
         player_id: 5,
         position: origin(),
@@ -582,8 +586,8 @@ fn test_score_accumulation_file() {
 
 #[test]
 fn test_health_boundary_file() {
-    let path_dead = std::env::temp_dir().join("vr_health_zero.bin");
-    let path_full = std::env::temp_dir().join("vr_health_max.bin");
+    let path_dead = tmp("vr_health_zero.bin");
+    let path_full = tmp("vr_health_max.bin");
 
     let dead_player = PlayerState {
         player_id: 1,
@@ -617,7 +621,7 @@ fn test_health_boundary_file() {
 
 #[test]
 fn test_scene_name_unicode_file() {
-    let path = std::env::temp_dir().join("vr_scene_unicode.bin");
+    let path = tmp("vr_scene_unicode.bin");
     let scene = VrScene {
         scene_id: 9999,
         name: "仮想現実ステージ — Виртуальный мир 🌐".to_string(),
@@ -636,7 +640,7 @@ fn test_scene_name_unicode_file() {
 
 #[test]
 fn test_spatial_anchor_fixed_position_file() {
-    let path = std::env::temp_dir().join("vr_spatial_anchor.bin");
+    let path = tmp("vr_spatial_anchor.bin");
     // A spatial anchor is represented as a static trigger with a known world position
     let anchor = SceneObject {
         object_id: 0xDEAD_BEEF,
@@ -668,7 +672,7 @@ fn test_spatial_anchor_fixed_position_file() {
 
 #[test]
 fn test_dynamic_rigid_body_physics_file() {
-    let path = std::env::temp_dir().join("vr_dynamic_rb.bin");
+    let path = tmp("vr_dynamic_rb.bin");
     // Simulate a physics object at a position with a non-trivial rotation
     let rb = SceneObject {
         object_id: 4_200,
@@ -699,7 +703,7 @@ fn test_dynamic_rigid_body_physics_file() {
 
 #[test]
 fn test_particle_system_custom_scale_file() {
-    let path = std::env::temp_dir().join("vr_particle_system.bin");
+    let path = tmp("vr_particle_system.bin");
     let particle_sys = SceneObject {
         object_id: 7_777,
         name: "vfx_explosion_large".to_string(),
@@ -724,7 +728,7 @@ fn test_particle_system_custom_scale_file() {
 
 #[test]
 fn test_temp_file_cleanup_after_test() {
-    let path = std::env::temp_dir().join("vr_cleanup_check.bin");
+    let path = tmp("vr_cleanup_check.bin");
 
     // File must not exist before the test (clean environment)
     let _ = std::fs::remove_file(&path); // idempotent pre-cleanup

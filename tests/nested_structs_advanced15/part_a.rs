@@ -1,581 +1,7 @@
-//! Advanced nested struct encoding tests for OxiCode (set 15)
-//! Theme: Theme park operations and ride management systems
+// Tests for nested_structs_advanced15 — part A (all tests)
+use super::types::*;
+use oxicode::{decode_from_slice, encode_to_vec};
 
-#![allow(
-    clippy::approx_constant,
-    clippy::useless_vec,
-    clippy::len_zero,
-    clippy::unnecessary_cast,
-    clippy::redundant_closure,
-    clippy::too_many_arguments,
-    clippy::type_complexity,
-    clippy::needless_borrow,
-    clippy::enum_variant_names,
-    clippy::upper_case_acronyms,
-    clippy::inconsistent_digit_grouping,
-    clippy::unit_cmp,
-    clippy::assertions_on_constants,
-    clippy::iter_on_single_items,
-    clippy::expect_fun_call,
-    clippy::redundant_pattern_matching,
-    variant_size_differences,
-    clippy::absurd_extreme_comparisons,
-    clippy::nonminimal_bool,
-    clippy::for_kv_map,
-    clippy::needless_range_loop,
-    clippy::single_match,
-    clippy::collapsible_if,
-    clippy::needless_return,
-    clippy::redundant_clone,
-    clippy::map_entry,
-    clippy::match_single_binding,
-    clippy::bool_comparison,
-    clippy::derivable_impls,
-    clippy::manual_range_contains,
-    clippy::needless_borrows_for_generic_args,
-    clippy::manual_map,
-    clippy::vec_init_then_push,
-    clippy::identity_op,
-    clippy::manual_flatten,
-    clippy::single_char_pattern,
-    clippy::search_is_some,
-    clippy::option_map_unit_fn,
-    clippy::while_let_on_iterator,
-    clippy::clone_on_copy,
-    clippy::box_collection,
-    clippy::redundant_field_names,
-    clippy::ptr_arg,
-    clippy::large_enum_variant,
-    clippy::match_ref_pats,
-    clippy::needless_pass_by_value,
-    clippy::unused_unit,
-    clippy::let_and_return,
-    clippy::suspicious_else_formatting,
-    clippy::manual_strip,
-    clippy::match_like_matches_macro,
-    clippy::from_over_into,
-    clippy::wrong_self_convention,
-    clippy::inherent_to_string,
-    clippy::new_without_default,
-    clippy::unnecessary_wraps,
-    clippy::field_reassign_with_default,
-    clippy::manual_find,
-    clippy::unnecessary_lazy_evaluations,
-    clippy::should_implement_trait,
-    clippy::missing_safety_doc,
-    clippy::unusual_byte_groupings,
-    clippy::bool_assert_comparison,
-    clippy::zero_prefixed_literal,
-    clippy::await_holding_lock,
-    clippy::manual_saturating_arithmetic,
-    clippy::explicit_counter_loop,
-    clippy::needless_lifetimes,
-    clippy::single_component_path_imports,
-    clippy::uninlined_format_args,
-    clippy::iter_cloned_collect,
-    clippy::manual_str_repeat,
-    clippy::excessive_precision,
-    clippy::precedence,
-    clippy::unnecessary_literal_unwrap
-)]
-use oxicode::{decode_from_slice, encode_to_vec, Decode, Encode};
-
-// ─── Ride configuration with vehicle specs and track segments ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct TrackSegment {
-    segment_id: u32,
-    segment_type: String,
-    length_meters: f64,
-    incline_degrees: f32,
-    max_speed_kmh: f32,
-    has_inversion: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct RideVehicle {
-    vehicle_id: u32,
-    name: String,
-    capacity: u16,
-    weight_kg: f64,
-    safety_harness_type: String,
-    last_inspection_epoch: u64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct RideConfiguration {
-    ride_id: u64,
-    ride_name: String,
-    category: String,
-    height_requirement_cm: u16,
-    vehicles: Vec<RideVehicle>,
-    track: Vec<TrackSegment>,
-    total_track_length_meters: f64,
-    max_g_force: f32,
-    ride_duration_seconds: u32,
-    opened_year: u16,
-}
-
-// ─── Queue management with virtual queue slots ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct VirtualQueueSlot {
-    slot_id: u64,
-    guest_id: u64,
-    estimated_wait_minutes: u16,
-    window_start_epoch: u64,
-    window_end_epoch: u64,
-    redeemed: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct QueueLane {
-    lane_id: u32,
-    lane_type: String,
-    current_wait_minutes: u16,
-    capacity: u32,
-    slots: Vec<VirtualQueueSlot>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct QueueManagement {
-    ride_id: u64,
-    ride_name: String,
-    lanes: Vec<QueueLane>,
-    total_guests_in_queue: u32,
-    is_operational: bool,
-}
-
-// ─── Show schedule hierarchies ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct Performer {
-    performer_id: u32,
-    name: String,
-    role: String,
-    is_understudy: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct Performance {
-    performance_id: u64,
-    start_epoch: u64,
-    duration_minutes: u16,
-    venue: String,
-    performers: Vec<Performer>,
-    sold_out: bool,
-    attendance: u32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DaySchedule {
-    date_str: String,
-    performances: Vec<Performance>,
-    park_open_epoch: u64,
-    park_close_epoch: u64,
-    weather_forecast: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct SeasonSchedule {
-    season_name: String,
-    start_date: String,
-    end_date: String,
-    days: Vec<DaySchedule>,
-    total_performances: u32,
-}
-
-// ─── Food & beverage outlet menus with allergen data ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct Allergen {
-    code: String,
-    name: String,
-    severity: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct NutritionInfo {
-    calories: u32,
-    protein_grams: f32,
-    carbs_grams: f32,
-    fat_grams: f32,
-    sodium_mg: u32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MenuItem {
-    item_id: u32,
-    name: String,
-    description: String,
-    price_cents: u32,
-    allergens: Vec<Allergen>,
-    nutrition: NutritionInfo,
-    available: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MenuCategory {
-    category_name: String,
-    items: Vec<MenuItem>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FoodOutlet {
-    outlet_id: u32,
-    name: String,
-    location_zone: String,
-    categories: Vec<MenuCategory>,
-    open_epoch: u64,
-    close_epoch: u64,
-}
-
-// ─── Hotel room inventories with rate calendars ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct NightlyRate {
-    date_str: String,
-    base_rate_cents: u32,
-    tax_cents: u32,
-    resort_fee_cents: u32,
-    available_rooms: u16,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct RoomAmenity {
-    amenity_name: String,
-    included: bool,
-    surcharge_cents: u32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct RoomType {
-    type_id: u32,
-    name: String,
-    max_occupancy: u8,
-    bed_config: String,
-    square_meters: f32,
-    amenities: Vec<RoomAmenity>,
-    rate_calendar: Vec<NightlyRate>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct HotelInventory {
-    hotel_id: u32,
-    hotel_name: String,
-    star_rating: u8,
-    room_types: Vec<RoomType>,
-    total_rooms: u16,
-}
-
-// ─── Guest experience scores with ride-by-ride breakdowns ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct RideScore {
-    ride_id: u64,
-    ride_name: String,
-    overall_score: f32,
-    thrill_score: f32,
-    queue_experience_score: f32,
-    cleanliness_score: f32,
-    staff_friendliness_score: f32,
-    comment: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DiningScore {
-    outlet_id: u32,
-    outlet_name: String,
-    food_quality_score: f32,
-    service_score: f32,
-    value_score: f32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct GuestExperienceReport {
-    guest_id: u64,
-    visit_date: String,
-    overall_satisfaction: f32,
-    ride_scores: Vec<RideScore>,
-    dining_scores: Vec<DiningScore>,
-    would_recommend: bool,
-    net_promoter_score: i8,
-}
-
-// ─── Maintenance work orders with parts lists ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct SparePart {
-    part_number: String,
-    description: String,
-    quantity_needed: u16,
-    unit_cost_cents: u32,
-    lead_time_days: u16,
-    in_stock: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MaintenanceTask {
-    task_id: u32,
-    description: String,
-    estimated_hours: f32,
-    priority: u8,
-    parts: Vec<SparePart>,
-    requires_ride_shutdown: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct WorkOrder {
-    order_id: u64,
-    ride_id: u64,
-    ride_name: String,
-    created_epoch: u64,
-    due_epoch: u64,
-    tasks: Vec<MaintenanceTask>,
-    assigned_technician: String,
-    status: String,
-    total_estimated_cost_cents: u64,
-}
-
-// ─── Fireworks choreography sequences ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct PyroEffect {
-    effect_type: String,
-    color_primary: String,
-    color_secondary: Option<String>,
-    altitude_meters: f32,
-    spread_degrees: f32,
-    duration_ms: u32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct LaunchCue {
-    cue_id: u32,
-    timestamp_ms: u64,
-    launcher_id: u16,
-    angle_degrees: f32,
-    effects: Vec<PyroEffect>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MusicSync {
-    track_name: String,
-    bpm: f32,
-    beat_markers_ms: Vec<u64>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FireworksShow {
-    show_id: u64,
-    show_name: String,
-    total_duration_ms: u64,
-    cues: Vec<LaunchCue>,
-    music: MusicSync,
-    total_shells: u32,
-    safety_radius_meters: f32,
-}
-
-// ─── Character meet-and-greet schedules ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct CharacterCostume {
-    costume_id: u32,
-    variant: String,
-    seasonal: bool,
-    condition_rating: u8,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MeetGreetSession {
-    session_id: u64,
-    start_epoch: u64,
-    end_epoch: u64,
-    max_guests: u16,
-    photo_pass_available: bool,
-    autograph_available: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct CharacterSchedule {
-    character_name: String,
-    zone: String,
-    costumes: Vec<CharacterCostume>,
-    sessions: Vec<MeetGreetSession>,
-    popularity_rank: u16,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MeetGreetPlan {
-    date_str: String,
-    park_section: String,
-    characters: Vec<CharacterSchedule>,
-    total_sessions: u32,
-}
-
-// ─── Ticket pricing tiers with date-based dynamic pricing ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DatePricePoint {
-    date_str: String,
-    demand_tier: String,
-    adult_price_cents: u32,
-    child_price_cents: u32,
-    senior_price_cents: u32,
-    capacity_percentage: f32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct AddOn {
-    addon_id: u32,
-    name: String,
-    price_cents: u32,
-    description: String,
-    limited_quantity: Option<u32>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct TicketTier {
-    tier_id: u32,
-    tier_name: String,
-    includes_parks: Vec<String>,
-    date_prices: Vec<DatePricePoint>,
-    available_addons: Vec<AddOn>,
-    max_days: u8,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct PricingPlan {
-    plan_id: u64,
-    season: String,
-    tiers: Vec<TicketTier>,
-    currency: String,
-    tax_rate_percent: f32,
-}
-
-// ─── Parade float configurations ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FloatLighting {
-    zone_name: String,
-    led_count: u32,
-    color_sequence: Vec<String>,
-    animation_pattern: String,
-    power_watts: f32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FloatAudio {
-    speaker_count: u8,
-    track_name: String,
-    volume_db: f32,
-    sync_offset_ms: i32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ParadeFloat {
-    float_id: u32,
-    theme: String,
-    length_meters: f32,
-    weight_kg: f64,
-    performer_count: u8,
-    lighting: Vec<FloatLighting>,
-    audio: FloatAudio,
-    max_speed_kmh: f32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ParadeConfiguration {
-    parade_id: u64,
-    parade_name: String,
-    route_name: String,
-    floats: Vec<ParadeFloat>,
-    total_duration_minutes: u16,
-    start_epoch: u64,
-}
-
-// ─── Water ride splash zone modeling ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct SplashZone {
-    zone_id: u32,
-    distance_from_ride_meters: f32,
-    splash_probability: f32,
-    avg_water_volume_liters: f32,
-    spectator_area: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct WaterChannel {
-    channel_id: u32,
-    width_meters: f32,
-    depth_meters: f32,
-    flow_rate_lps: f32,
-    temperature_celsius: f32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DropProfile {
-    drop_id: u32,
-    height_meters: f32,
-    angle_degrees: f32,
-    entry_speed_kmh: f32,
-    splash_height_meters: f32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct WaterRide {
-    ride_id: u64,
-    ride_name: String,
-    channels: Vec<WaterChannel>,
-    drops: Vec<DropProfile>,
-    splash_zones: Vec<SplashZone>,
-    total_water_volume_liters: f64,
-    recirculation_rate_percent: f32,
-}
-
-// ─── Park-wide energy management ───
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct PowerConsumer {
-    asset_id: u64,
-    asset_name: String,
-    asset_type: String,
-    peak_watts: f64,
-    avg_watts: f64,
-    zone: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct EnergyReading {
-    timestamp_epoch: u64,
-    kwh_consumed: f64,
-    peak_demand_kw: f64,
-    solar_generated_kwh: f64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct EnergyZone {
-    zone_name: String,
-    consumers: Vec<PowerConsumer>,
-    readings: Vec<EnergyReading>,
-    transformer_capacity_kva: f64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ParkEnergyPlan {
-    plan_id: u64,
-    date_str: String,
-    zones: Vec<EnergyZone>,
-    total_budget_kwh: f64,
-    renewable_target_percent: f32,
-}
-
-// ═══════════════════════════════════════════════════════
-// Tests
-// ═══════════════════════════════════════════════════════
-
-// Test 1: Ride configuration with track segments and vehicles
 #[test]
 fn test_ride_configuration_full_coaster() {
     let config = RideConfiguration {
@@ -639,7 +65,6 @@ fn test_ride_configuration_full_coaster() {
     assert_eq!(config, decoded);
 }
 
-// Test 2: Virtual queue management with multiple lanes
 #[test]
 fn test_queue_management_virtual_slots() {
     let queue = QueueManagement {
@@ -702,7 +127,6 @@ fn test_queue_management_virtual_slots() {
     assert_eq!(queue, decoded);
 }
 
-// Test 3: Season → day → performance show schedule
 #[test]
 fn test_show_schedule_season_hierarchy() {
     let season = SeasonSchedule {
@@ -792,7 +216,6 @@ fn test_show_schedule_season_hierarchy() {
     assert_eq!(season, decoded);
 }
 
-// Test 4: Food outlet menu with allergens and nutrition
 #[test]
 fn test_food_outlet_full_menu() {
     let outlet = FoodOutlet {
@@ -901,7 +324,6 @@ fn test_food_outlet_full_menu() {
     assert_eq!(outlet, decoded);
 }
 
-// Test 5: Hotel room inventory with rate calendar
 #[test]
 fn test_hotel_inventory_rate_calendar() {
     let hotel = HotelInventory {
@@ -985,7 +407,6 @@ fn test_hotel_inventory_rate_calendar() {
     assert_eq!(hotel, decoded);
 }
 
-// Test 6: Guest experience report with ride-by-ride scores
 #[test]
 fn test_guest_experience_report_detailed() {
     let report = GuestExperienceReport {
@@ -1050,7 +471,6 @@ fn test_guest_experience_report_detailed() {
     assert_eq!(report, decoded);
 }
 
-// Test 7: Maintenance work order with parts lists
 #[test]
 fn test_maintenance_work_order_complex() {
     let order = WorkOrder {
@@ -1119,7 +539,6 @@ fn test_maintenance_work_order_complex() {
     assert_eq!(order, decoded);
 }
 
-// Test 8: Fireworks choreography with music sync
 #[test]
 fn test_fireworks_choreography_full_show() {
     let show = FireworksShow {
@@ -1213,7 +632,6 @@ fn test_fireworks_choreography_full_show() {
     assert_eq!(show, decoded);
 }
 
-// Test 9: Character meet-and-greet daily plan
 #[test]
 fn test_character_meet_greet_plan() {
     let plan = MeetGreetPlan {
@@ -1286,7 +704,6 @@ fn test_character_meet_greet_plan() {
     assert_eq!(plan, decoded);
 }
 
-// Test 10: Dynamic ticket pricing plan
 #[test]
 fn test_ticket_pricing_dynamic_plan() {
     let pricing = PricingPlan {
@@ -1369,7 +786,6 @@ fn test_ticket_pricing_dynamic_plan() {
     assert_eq!(pricing, decoded);
 }
 
-// Test 11: Parade float configuration with lighting and audio
 #[test]
 fn test_parade_float_configuration() {
     let parade = ParadeConfiguration {
@@ -1448,7 +864,6 @@ fn test_parade_float_configuration() {
     assert_eq!(parade, decoded);
 }
 
-// Test 12: Water ride with splash zones and drop profiles
 #[test]
 fn test_water_ride_splash_modeling() {
     let ride = WaterRide {
@@ -1518,7 +933,6 @@ fn test_water_ride_splash_modeling() {
     assert_eq!(ride, decoded);
 }
 
-// Test 13: Park energy management zones
 #[test]
 fn test_park_energy_management_plan() {
     let plan = ParkEnergyPlan {
@@ -1590,7 +1004,6 @@ fn test_park_energy_management_plan() {
     assert_eq!(plan, decoded);
 }
 
-// Test 14: Empty ride configuration (no vehicles, no track)
 #[test]
 fn test_ride_configuration_empty_under_construction() {
     let config = RideConfiguration {
@@ -1612,7 +1025,6 @@ fn test_ride_configuration_empty_under_construction() {
     assert_eq!(config, decoded);
 }
 
-// Test 15: Queue management with all lanes empty
 #[test]
 fn test_queue_management_early_morning_empty() {
     let queue = QueueManagement {
@@ -1644,7 +1056,6 @@ fn test_queue_management_early_morning_empty() {
     assert_eq!(queue, decoded);
 }
 
-// Test 16: Multi-outlet food court with allergen-heavy menus
 #[test]
 fn test_food_court_multiple_outlets() {
     let outlets = vec![
@@ -1764,7 +1175,6 @@ fn test_food_court_multiple_outlets() {
     }
 }
 
-// Test 17: Fireworks show with single cue (minimal)
 #[test]
 fn test_fireworks_minimal_single_cue() {
     let show = FireworksShow {
@@ -1800,7 +1210,6 @@ fn test_fireworks_minimal_single_cue() {
     assert_eq!(show, decoded);
 }
 
-// Test 18: Hotel inventory with no availability (sold out)
 #[test]
 fn test_hotel_fully_booked_new_years() {
     let hotel = HotelInventory {
@@ -1889,7 +1298,6 @@ fn test_hotel_fully_booked_new_years() {
     assert_eq!(hotel, decoded);
 }
 
-// Test 19: Guest with only dining scores, no rides
 #[test]
 fn test_guest_experience_dining_only() {
     let report = GuestExperienceReport {
@@ -1930,7 +1338,6 @@ fn test_guest_experience_dining_only() {
     assert_eq!(report, decoded);
 }
 
-// Test 20: Work order with zero-parts inspection-only tasks
 #[test]
 fn test_maintenance_inspection_only_order() {
     let order = WorkOrder {
@@ -1984,7 +1391,6 @@ fn test_maintenance_inspection_only_order() {
     assert_eq!(order, decoded);
 }
 
-// Test 21: Massive character meet-greet plan for holiday event
 #[test]
 fn test_character_meet_greet_holiday_extravaganza() {
     let plan = MeetGreetPlan {
@@ -2102,7 +1508,6 @@ fn test_character_meet_greet_holiday_extravaganza() {
     assert_eq!(plan, decoded);
 }
 
-// Test 22: Ride configuration with extreme track (many inversions, long track)
 #[test]
 fn test_ride_configuration_extreme_coaster() {
     let config = RideConfiguration {

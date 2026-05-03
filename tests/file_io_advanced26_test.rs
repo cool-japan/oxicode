@@ -82,7 +82,10 @@
 )]
 use oxicode::{config, decode_from_slice_with_config, encode_to_vec_with_config};
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 // ============================================================
 // Domain types
@@ -297,7 +300,7 @@ fn test_coolant_phase_enum_roundtrip() {
 #[test]
 fn test_reactor_core_file_io_roundtrip() {
     let original = sample_reactor_core();
-    let path = temp_dir().join("oxicode_nuclear_reactor_core_26.bin");
+    let path = tmp("oxicode_nuclear_reactor_core_26.bin");
     encode_to_file(&original, &path).expect("encode_to_file ReactorCore");
     let decoded: ReactorCore = decode_from_file(&path).expect("decode_from_file ReactorCore");
     assert_eq!(original, decoded);
@@ -307,7 +310,7 @@ fn test_reactor_core_file_io_roundtrip() {
 #[test]
 fn test_neutron_flux_file_io_roundtrip() {
     let original = sample_neutron_flux();
-    let path = temp_dir().join("oxicode_nuclear_neutron_flux_26.bin");
+    let path = tmp("oxicode_nuclear_neutron_flux_26.bin");
     encode_to_file(&original, &path).expect("encode_to_file NeutronFluxReading");
     let decoded: NeutronFluxReading =
         decode_from_file(&path).expect("decode_from_file NeutronFluxReading");
@@ -318,7 +321,7 @@ fn test_neutron_flux_file_io_roundtrip() {
 #[test]
 fn test_file_io_matches_encode_to_vec() {
     let original = sample_reactor_core();
-    let path = temp_dir().join("oxicode_nuclear_file_vs_vec_26.bin");
+    let path = tmp("oxicode_nuclear_file_vs_vec_26.bin");
     encode_to_file(&original, &path).expect("encode_to_file");
     let file_bytes = std::fs::read(&path).expect("read file bytes");
     let vec_bytes = encode_to_vec(&original).expect("encode_to_vec");
@@ -437,7 +440,7 @@ fn test_large_collection_fuel_rods_roundtrip() {
 #[test]
 fn test_large_collection_file_io_roundtrip() {
     let rods: Vec<FuelRod> = (0..200).map(sample_fuel_rod).collect();
-    let path = temp_dir().join("oxicode_nuclear_large_rods_26.bin");
+    let path = tmp("oxicode_nuclear_large_rods_26.bin");
     encode_to_file(&rods, &path).expect("encode_to_file large Vec<FuelRod>");
     let decoded: Vec<FuelRod> =
         decode_from_file(&path).expect("decode_from_file large Vec<FuelRod>");

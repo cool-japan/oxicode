@@ -81,7 +81,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -159,7 +162,7 @@ fn make_ohlcv(symbol: &str, open: f64, close: f64) -> OHLCV {
 #[test]
 fn test_quote_equity_roundtrip() {
     let quote = make_quote("AAPL", AssetClass::Equity, 189.50, 189.55);
-    let path = temp_dir().join("oxicode_trading_001.bin");
+    let path = tmp("oxicode_trading_001.bin");
 
     encode_to_file(&quote, &path).expect("encode equity quote");
     let decoded: Quote = decode_from_file(&path).expect("decode equity quote");
@@ -174,7 +177,7 @@ fn test_quote_equity_roundtrip() {
 #[test]
 fn test_ohlcv_roundtrip() {
     let bar = make_ohlcv("SPY", 445.10, 448.30);
-    let path = temp_dir().join("oxicode_trading_002.bin");
+    let path = tmp("oxicode_trading_002.bin");
 
     encode_to_file(&bar, &path).expect("encode OHLCV bar");
     let decoded: OHLCV = decode_from_file(&path).expect("decode OHLCV bar");
@@ -189,7 +192,7 @@ fn test_ohlcv_roundtrip() {
 #[test]
 fn test_asset_class_bond() {
     let quote = make_quote("US10Y", AssetClass::Bond, 4.255, 4.260);
-    let path = temp_dir().join("oxicode_trading_003.bin");
+    let path = tmp("oxicode_trading_003.bin");
 
     encode_to_file(&quote, &path).expect("encode bond quote");
     let decoded: Quote = decode_from_file(&path).expect("decode bond quote");
@@ -205,7 +208,7 @@ fn test_asset_class_bond() {
 #[test]
 fn test_asset_class_commodity() {
     let quote = make_quote("GOLD", AssetClass::Commodity, 1975.00, 1975.50);
-    let path = temp_dir().join("oxicode_trading_004.bin");
+    let path = tmp("oxicode_trading_004.bin");
 
     encode_to_file(&quote, &path).expect("encode commodity quote");
     let decoded: Quote = decode_from_file(&path).expect("decode commodity quote");
@@ -221,7 +224,7 @@ fn test_asset_class_commodity() {
 #[test]
 fn test_asset_class_forex() {
     let quote = make_quote("EURUSD", AssetClass::Forex, 1.08540, 1.08545);
-    let path = temp_dir().join("oxicode_trading_005.bin");
+    let path = tmp("oxicode_trading_005.bin");
 
     encode_to_file(&quote, &path).expect("encode forex quote");
     let decoded: Quote = decode_from_file(&path).expect("decode forex quote");
@@ -237,7 +240,7 @@ fn test_asset_class_forex() {
 #[test]
 fn test_asset_class_crypto() {
     let quote = make_quote("BTCUSD", AssetClass::Crypto, 43_200.00, 43_205.00);
-    let path = temp_dir().join("oxicode_trading_006.bin");
+    let path = tmp("oxicode_trading_006.bin");
 
     encode_to_file(&quote, &path).expect("encode crypto quote");
     let decoded: Quote = decode_from_file(&path).expect("decode crypto quote");
@@ -253,7 +256,7 @@ fn test_asset_class_crypto() {
 #[test]
 fn test_asset_class_derivative() {
     let quote = make_quote("ES_FUT", AssetClass::Derivative, 4725.25, 4725.50);
-    let path = temp_dir().join("oxicode_trading_007.bin");
+    let path = tmp("oxicode_trading_007.bin");
 
     encode_to_file(&quote, &path).expect("encode derivative quote");
     let decoded: Quote = decode_from_file(&path).expect("decode derivative quote");
@@ -281,7 +284,7 @@ fn test_market_summary_roundtrip() {
         ],
         session_time: 1_700_010_000,
     };
-    let path = temp_dir().join("oxicode_trading_008.bin");
+    let path = tmp("oxicode_trading_008.bin");
 
     encode_to_file(&summary, &path).expect("encode market summary");
     let decoded: MarketSummary = decode_from_file(&path).expect("decode market summary");
@@ -298,7 +301,7 @@ fn test_market_summary_roundtrip() {
 #[test]
 fn test_quote_file_bytes_match_vec() {
     let quote = make_quote("NVDA", AssetClass::Equity, 620.10, 620.20);
-    let path = temp_dir().join("oxicode_trading_009.bin");
+    let path = tmp("oxicode_trading_009.bin");
 
     encode_to_file(&quote, &path).expect("encode to file");
     let file_bytes = std::fs::read(&path).expect("read file bytes");
@@ -319,7 +322,7 @@ fn test_market_summary_file_bytes_match_vec() {
         ohlcv_bars: vec![make_ohlcv("GS", 378.0, 381.0)],
         session_time: 1_700_020_000,
     };
-    let path = temp_dir().join("oxicode_trading_010.bin");
+    let path = tmp("oxicode_trading_010.bin");
 
     encode_to_file(&summary, &path).expect("encode to file");
     let file_bytes = std::fs::read(&path).expect("read file bytes");
@@ -334,7 +337,7 @@ fn test_market_summary_file_bytes_match_vec() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_overwrite_quote_file() {
-    let path = temp_dir().join("oxicode_trading_011.bin");
+    let path = tmp("oxicode_trading_011.bin");
 
     let first = make_quote("IBM", AssetClass::Equity, 160.00, 160.05);
     encode_to_file(&first, &path).expect("first encode");
@@ -353,7 +356,7 @@ fn test_overwrite_quote_file() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_error_on_missing_file() {
-    let path = temp_dir().join("oxicode_trading_012_nonexistent.bin");
+    let path = tmp("oxicode_trading_012_nonexistent.bin");
     // ensure it does not exist
     std::fs::remove_file(&path).ok();
 
@@ -366,9 +369,9 @@ fn test_error_on_missing_file() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_multiple_independent_files() {
-    let equity_path = temp_dir().join("oxicode_trading_013a.bin");
-    let bond_path = temp_dir().join("oxicode_trading_013b.bin");
-    let forex_path = temp_dir().join("oxicode_trading_013c.bin");
+    let equity_path = tmp("oxicode_trading_013a.bin");
+    let bond_path = tmp("oxicode_trading_013b.bin");
+    let forex_path = tmp("oxicode_trading_013c.bin");
 
     let equity = make_quote("TSLA", AssetClass::Equity, 240.00, 240.10);
     let bond = make_quote("TLT", AssetClass::Bond, 95.00, 95.05);
@@ -408,7 +411,7 @@ fn test_negative_price_handling() {
         volume: 5_000,
         timestamp: 1_588_291_200, // Apr 30, 2020 (historic negative event)
     };
-    let path = temp_dir().join("oxicode_trading_014.bin");
+    let path = tmp("oxicode_trading_014.bin");
 
     encode_to_file(&quote, &path).expect("encode negative-price quote");
     let decoded: Quote = decode_from_file(&path).expect("decode negative-price quote");
@@ -448,7 +451,7 @@ fn test_large_quotes_vec_500() {
         ohlcv_bars: vec![],
         session_time: 1_700_000_000,
     };
-    let path = temp_dir().join("oxicode_trading_015.bin");
+    let path = tmp("oxicode_trading_015.bin");
 
     encode_to_file(&summary, &path).expect("encode large quotes");
     let decoded: MarketSummary = decode_from_file(&path).expect("decode large quotes");
@@ -474,7 +477,7 @@ fn test_ohlcv_extreme_values() {
         volume: u64::MAX,
         period_start: u64::MAX,
     };
-    let path = temp_dir().join("oxicode_trading_016.bin");
+    let path = tmp("oxicode_trading_016.bin");
 
     encode_to_file(&bar, &path).expect("encode extreme OHLCV");
     let decoded: OHLCV = decode_from_file(&path).expect("decode extreme OHLCV");
@@ -513,7 +516,7 @@ fn test_market_summary_empty_collections() {
         ohlcv_bars: vec![],
         session_time: 0,
     };
-    let path = temp_dir().join("oxicode_trading_018.bin");
+    let path = tmp("oxicode_trading_018.bin");
 
     encode_to_file(&summary, &path).expect("encode empty summary");
     let decoded: MarketSummary = decode_from_file(&path).expect("decode empty summary");
@@ -538,7 +541,7 @@ fn test_all_asset_class_variants_in_vec() {
         make_quote("SPX_OPT", AssetClass::Derivative, 50.0, 50.5),
     ];
 
-    let path = temp_dir().join("oxicode_trading_019.bin");
+    let path = tmp("oxicode_trading_019.bin");
     encode_to_file(&quotes, &path).expect("encode all asset classes");
     let decoded: Vec<Quote> = decode_from_file(&path).expect("decode all asset classes");
 
@@ -558,7 +561,7 @@ fn test_all_asset_class_variants_in_vec() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_sequential_overwrites_final_state() {
-    let path = temp_dir().join("oxicode_trading_020.bin");
+    let path = tmp("oxicode_trading_020.bin");
 
     let symbols = ["AMZN", "GOOG", "NFLX", "NVDA", "AMD"];
     let mut last_quote = make_quote(symbols[0], AssetClass::Equity, 100.0, 100.5);
@@ -588,7 +591,7 @@ fn test_quote_unicode_symbol() {
         volume: 2_000_000,
         timestamp: 1_700_050_000,
     };
-    let path = temp_dir().join("oxicode_trading_021.bin");
+    let path = tmp("oxicode_trading_021.bin");
 
     encode_to_file(&quote, &path).expect("encode unicode symbol");
     let decoded: Quote = decode_from_file(&path).expect("decode unicode symbol");
@@ -621,7 +624,7 @@ fn test_market_summary_large_ohlcv_history() {
         ohlcv_bars: ohlcv_bars.clone(),
         session_time: 1_700_100_000,
     };
-    let path = temp_dir().join("oxicode_trading_022.bin");
+    let path = tmp("oxicode_trading_022.bin");
 
     encode_to_file(&summary, &path).expect("encode large OHLCV history");
     let decoded: MarketSummary = decode_from_file(&path).expect("decode large OHLCV history");

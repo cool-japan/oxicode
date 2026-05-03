@@ -82,6 +82,10 @@
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
+
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
@@ -158,7 +162,7 @@ fn stereo_frame(frame_number: u64, sample_count: usize) -> AudioFrame {
 #[test]
 fn test_audio_config_pcm16_stereo_roundtrip() {
     let cfg = default_config();
-    let path = std::env::temp_dir().join("oxi_dsp16_cfg_pcm16_stereo.bin");
+    let path = tmp("oxi_dsp16_cfg_pcm16_stereo.bin");
     encode_to_file(&cfg, &path).expect("encode AudioConfig PCM16 stereo");
     let decoded: AudioConfig = decode_from_file(&path).expect("decode AudioConfig PCM16 stereo");
     assert_eq!(cfg, decoded);
@@ -173,7 +177,7 @@ fn test_audio_config_float32_mono_roundtrip() {
         channels: ChannelLayout::Mono,
         bit_depth: 32,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_cfg_float32_mono.bin");
+    let path = tmp("oxi_dsp16_cfg_float32_mono.bin");
     encode_to_file(&cfg, &path).expect("encode AudioConfig Float32 mono");
     let decoded: AudioConfig = decode_from_file(&path).expect("decode AudioConfig Float32 mono");
     assert_eq!(cfg, decoded);
@@ -188,7 +192,7 @@ fn test_audio_config_float64_surround51_roundtrip() {
         channels: ChannelLayout::Surround51,
         bit_depth: 64,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_cfg_float64_51.bin");
+    let path = tmp("oxi_dsp16_cfg_float64_51.bin");
     encode_to_file(&cfg, &path).expect("encode AudioConfig Float64 5.1");
     let decoded: AudioConfig = decode_from_file(&path).expect("decode AudioConfig Float64 5.1");
     assert_eq!(cfg, decoded);
@@ -203,7 +207,7 @@ fn test_audio_config_pcm24_surround71_roundtrip() {
         channels: ChannelLayout::Surround71,
         bit_depth: 24,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_cfg_pcm24_71.bin");
+    let path = tmp("oxi_dsp16_cfg_pcm24_71.bin");
     encode_to_file(&cfg, &path).expect("encode AudioConfig PCM24 7.1");
     let decoded: AudioConfig = decode_from_file(&path).expect("decode AudioConfig PCM24 7.1");
     assert_eq!(cfg, decoded);
@@ -213,7 +217,7 @@ fn test_audio_config_pcm24_surround71_roundtrip() {
 #[test]
 fn test_sample_format_pcm8_roundtrip() {
     let fmt = SampleFormat::PCM8;
-    let path = std::env::temp_dir().join("oxi_dsp16_sample_fmt_pcm8.bin");
+    let path = tmp("oxi_dsp16_sample_fmt_pcm8.bin");
     encode_to_file(&fmt, &path).expect("encode SampleFormat::PCM8");
     let decoded: SampleFormat = decode_from_file(&path).expect("decode SampleFormat::PCM8");
     assert_eq!(fmt, decoded);
@@ -223,7 +227,7 @@ fn test_sample_format_pcm8_roundtrip() {
 #[test]
 fn test_sample_format_pcm32_roundtrip() {
     let fmt = SampleFormat::PCM32;
-    let path = std::env::temp_dir().join("oxi_dsp16_sample_fmt_pcm32.bin");
+    let path = tmp("oxi_dsp16_sample_fmt_pcm32.bin");
     encode_to_file(&fmt, &path).expect("encode SampleFormat::PCM32");
     let decoded: SampleFormat = decode_from_file(&path).expect("decode SampleFormat::PCM32");
     assert_eq!(fmt, decoded);
@@ -233,7 +237,7 @@ fn test_sample_format_pcm32_roundtrip() {
 #[test]
 fn test_channel_layout_surround71_roundtrip() {
     let layout = ChannelLayout::Surround71;
-    let path = std::env::temp_dir().join("oxi_dsp16_layout_71.bin");
+    let path = tmp("oxi_dsp16_layout_71.bin");
     encode_to_file(&layout, &path).expect("encode ChannelLayout::Surround71");
     let decoded: ChannelLayout = decode_from_file(&path).expect("decode ChannelLayout::Surround71");
     assert_eq!(layout, decoded);
@@ -247,7 +251,7 @@ fn test_audio_frame_small_roundtrip() {
         frame_number: 0,
         timestamp_ms: 0.0,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_frame_small.bin");
+    let path = tmp("oxi_dsp16_frame_small.bin");
     encode_to_file(&frame, &path).expect("encode AudioFrame small");
     let decoded: AudioFrame = decode_from_file(&path).expect("decode AudioFrame small");
     assert_eq!(frame, decoded);
@@ -257,7 +261,7 @@ fn test_audio_frame_small_roundtrip() {
 #[test]
 fn test_audio_frame_large_500_samples_roundtrip() {
     let frame = stereo_frame(42, 500);
-    let path = std::env::temp_dir().join("oxi_dsp16_frame_500samples.bin");
+    let path = tmp("oxi_dsp16_frame_500samples.bin");
     encode_to_file(&frame, &path).expect("encode AudioFrame 500 samples");
     let decoded: AudioFrame = decode_from_file(&path).expect("decode AudioFrame 500 samples");
     assert_eq!(frame.frame_number, decoded.frame_number);
@@ -271,7 +275,7 @@ fn test_audio_frame_large_500_samples_roundtrip() {
 #[test]
 fn test_audio_frame_1024_samples_roundtrip() {
     let frame = stereo_frame(7, 1024);
-    let path = std::env::temp_dir().join("oxi_dsp16_frame_1024samples.bin");
+    let path = tmp("oxi_dsp16_frame_1024samples.bin");
     encode_to_file(&frame, &path).expect("encode AudioFrame 1024 samples");
     let decoded: AudioFrame = decode_from_file(&path).expect("decode AudioFrame 1024 samples");
     assert_eq!(frame, decoded);
@@ -290,7 +294,7 @@ fn test_audio_clip_simple_stereo_roundtrip() {
         ],
         duration_ms: 34.83,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_clip_simple_stereo.bin");
+    let path = tmp("oxi_dsp16_clip_simple_stereo.bin");
     encode_to_file(&clip, &path).expect("encode AudioClip simple stereo");
     let decoded: AudioClip = decode_from_file(&path).expect("decode AudioClip simple stereo");
     assert_eq!(clip.name, decoded.name);
@@ -314,7 +318,7 @@ fn test_audio_clip_surround51_roundtrip() {
         frames,
         duration_ms: 32.0,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_clip_51surround.bin");
+    let path = tmp("oxi_dsp16_clip_51surround.bin");
     encode_to_file(&clip, &path).expect("encode AudioClip 5.1 surround");
     let decoded: AudioClip = decode_from_file(&path).expect("decode AudioClip 5.1 surround");
     assert_eq!(clip, decoded);
@@ -334,7 +338,7 @@ fn test_audio_clip_empty_frames_roundtrip() {
         frames: vec![],
         duration_ms: 0.0,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_clip_empty.bin");
+    let path = tmp("oxi_dsp16_clip_empty.bin");
     encode_to_file(&clip, &path).expect("encode empty AudioClip");
     let decoded: AudioClip = decode_from_file(&path).expect("decode empty AudioClip");
     assert_eq!(clip, decoded);
@@ -343,7 +347,8 @@ fn test_audio_clip_empty_frames_roundtrip() {
 }
 
 #[test]
-fn test_audio_clip_large_many_frames_roundtrip() -> std::result::Result<(), Box<dyn std::error::Error>> {
+fn test_audio_clip_large_many_frames_roundtrip(
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let frames: Vec<AudioFrame> = (0..20).map(|i| stereo_frame(i, 512)).collect();
     let clip = AudioClip {
         config: AudioConfig {
@@ -356,9 +361,7 @@ fn test_audio_clip_large_many_frames_roundtrip() -> std::result::Result<(), Box<
         duration_ms: frames.len() as f64 * (512.0 / 44100.0) * 1000.0,
         frames,
     };
-    let tmp = std::env::temp_dir();
-    std::fs::create_dir_all(&tmp)?;
-    let path = tmp.join("oxi_dsp16_clip_large_many_frames.bin");
+    let path = tmp("oxi_dsp16_clip_large_many_frames.bin");
     encode_to_file(&clip, &path)?;
     let decoded: AudioClip = decode_from_file(&path)?;
     assert_eq!(clip.frames.len(), decoded.frames.len());
@@ -371,7 +374,7 @@ fn test_audio_clip_large_many_frames_roundtrip() -> std::result::Result<(), Box<
 #[test]
 fn test_file_bytes_match_encode_to_vec() {
     let cfg = default_config();
-    let path = std::env::temp_dir().join("oxi_dsp16_bytes_match.bin");
+    let path = tmp("oxi_dsp16_bytes_match.bin");
     encode_to_file(&cfg, &path).expect("encode for bytes_match test");
     let file_bytes = std::fs::read(&path).expect("read file for bytes_match test");
     let vec_bytes = encode_to_vec(&cfg).expect("encode_to_vec for bytes_match test");
@@ -381,14 +384,14 @@ fn test_file_bytes_match_encode_to_vec() {
 
 #[test]
 fn test_decode_missing_file_returns_error() {
-    let path = std::env::temp_dir().join("oxi_dsp16_nonexistent_xyz_file.bin");
+    let path = tmp("oxi_dsp16_nonexistent_xyz_file.bin");
     let result = decode_from_file::<AudioConfig>(&path);
     assert!(result.is_err(), "expected error decoding missing file");
 }
 
 #[test]
 fn test_multiple_writes_same_path_last_wins() {
-    let path = std::env::temp_dir().join("oxi_dsp16_overwrite_same_path.bin");
+    let path = tmp("oxi_dsp16_overwrite_same_path.bin");
 
     let cfg1 = AudioConfig {
         sample_rate: 8000,
@@ -436,7 +439,7 @@ fn test_audio_clip_surround71_high_resolution_roundtrip() {
         frames,
         duration_ms: 21.33,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_clip_71hires.bin");
+    let path = tmp("oxi_dsp16_clip_71hires.bin");
     encode_to_file(&clip, &path).expect("encode AudioClip 7.1 hi-res");
     let decoded: AudioClip = decode_from_file(&path).expect("decode AudioClip 7.1 hi-res");
     assert_eq!(clip, decoded);
@@ -445,7 +448,7 @@ fn test_audio_clip_surround71_high_resolution_roundtrip() {
 
 #[test]
 fn test_temp_file_cleanup_verified() {
-    let path = std::env::temp_dir().join("oxi_dsp16_cleanup_check.bin");
+    let path = tmp("oxi_dsp16_cleanup_check.bin");
     let frame = stereo_frame(0, 256);
     encode_to_file(&frame, &path).expect("encode for cleanup check");
     assert!(path.exists(), "file should exist before removal");
@@ -470,7 +473,7 @@ fn test_audio_config_all_sample_formats_sequential() {
             channels: ChannelLayout::Stereo,
             bit_depth: 16,
         };
-        let path = std::env::temp_dir().join(format!("oxi_dsp16_all_formats_{idx}.bin"));
+        let path = tmp(&format!("oxi_dsp16_all_formats_{idx}.bin"));
         encode_to_file(&cfg, &path).expect("encode AudioConfig all formats");
         let decoded: AudioConfig = decode_from_file(&path).expect("decode AudioConfig all formats");
         assert_eq!(cfg, decoded);
@@ -486,7 +489,7 @@ fn test_audio_clip_name_unicode_roundtrip() {
         frames: vec![stereo_frame(0, 128)],
         duration_ms: 2.9,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_clip_unicode_name.bin");
+    let path = tmp("oxi_dsp16_clip_unicode_name.bin");
     encode_to_file(&clip, &path).expect("encode AudioClip unicode name");
     let decoded: AudioClip = decode_from_file(&path).expect("decode AudioClip unicode name");
     assert_eq!(clip.name, decoded.name);
@@ -501,7 +504,7 @@ fn test_audio_frame_timestamp_precision_roundtrip() {
         frame_number: u64::MAX,
         timestamp_ms: precise_ts,
     };
-    let path = std::env::temp_dir().join("oxi_dsp16_frame_timestamp_precision.bin");
+    let path = tmp("oxi_dsp16_frame_timestamp_precision.bin");
     encode_to_file(&frame, &path).expect("encode AudioFrame timestamp precision");
     let decoded: AudioFrame =
         decode_from_file(&path).expect("decode AudioFrame timestamp precision");

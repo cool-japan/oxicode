@@ -123,7 +123,7 @@ fn minimal_config(env: Environment) -> AppConfig {
 }
 
 fn tmp(name: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(name)
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
 }
 
 // ── test 1: basic AppConfig file roundtrip ───────────────────────────────────

@@ -79,6 +79,10 @@
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
+
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum Species {
     Wolf,
@@ -148,7 +152,7 @@ struct PopulationSurvey {
 
 #[test]
 fn test_species_wolf_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_species_wolf.bin");
+    let path = tmp("wildlife_species_wolf.bin");
     let value = Species::Wolf;
     encode_to_file(&value, &path).expect("encode Species::Wolf failed");
     let decoded: Species = decode_from_file(&path).expect("decode Species::Wolf failed");
@@ -158,7 +162,7 @@ fn test_species_wolf_file_roundtrip() {
 
 #[test]
 fn test_species_bear_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_species_bear.bin");
+    let path = tmp("wildlife_species_bear.bin");
     let value = Species::Bear;
     encode_to_file(&value, &path).expect("encode Species::Bear failed");
     let decoded: Species = decode_from_file(&path).expect("decode Species::Bear failed");
@@ -168,7 +172,7 @@ fn test_species_bear_file_roundtrip() {
 
 #[test]
 fn test_species_eagle_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_species_eagle.bin");
+    let path = tmp("wildlife_species_eagle.bin");
     let value = Species::Eagle;
     encode_to_file(&value, &path).expect("encode Species::Eagle failed");
     let decoded: Species = decode_from_file(&path).expect("decode Species::Eagle failed");
@@ -178,7 +182,7 @@ fn test_species_eagle_file_roundtrip() {
 
 #[test]
 fn test_species_salmon_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_species_salmon.bin");
+    let path = tmp("wildlife_species_salmon.bin");
     let value = Species::Salmon;
     encode_to_file(&value, &path).expect("encode Species::Salmon failed");
     let decoded: Species = decode_from_file(&path).expect("decode Species::Salmon failed");
@@ -190,7 +194,7 @@ fn test_species_salmon_file_roundtrip() {
 
 #[test]
 fn test_habitat_forest_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_habitat_forest.bin");
+    let path = tmp("wildlife_habitat_forest.bin");
     let value = HabitatType::Forest;
     encode_to_file(&value, &path).expect("encode HabitatType::Forest failed");
     let decoded: HabitatType = decode_from_file(&path).expect("decode HabitatType::Forest failed");
@@ -200,7 +204,7 @@ fn test_habitat_forest_file_roundtrip() {
 
 #[test]
 fn test_habitat_tundra_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_habitat_tundra.bin");
+    let path = tmp("wildlife_habitat_tundra.bin");
     let value = HabitatType::Tundra;
     encode_to_file(&value, &path).expect("encode HabitatType::Tundra failed");
     let decoded: HabitatType = decode_from_file(&path).expect("decode HabitatType::Tundra failed");
@@ -210,7 +214,7 @@ fn test_habitat_tundra_file_roundtrip() {
 
 #[test]
 fn test_habitat_wetland_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_habitat_wetland.bin");
+    let path = tmp("wildlife_habitat_wetland.bin");
     let value = HabitatType::Wetland;
     encode_to_file(&value, &path).expect("encode HabitatType::Wetland failed");
     let decoded: HabitatType = decode_from_file(&path).expect("decode HabitatType::Wetland failed");
@@ -222,7 +226,7 @@ fn test_habitat_wetland_file_roundtrip() {
 
 #[test]
 fn test_gps_location_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_gps_location.bin");
+    let path = tmp("wildlife_gps_location.bin");
     let loc = GpsLocation {
         lat_micro: 47_123_456,
         lon_micro: -122_456_789,
@@ -239,7 +243,7 @@ fn test_gps_location_file_roundtrip() {
 
 #[test]
 fn test_animal_tag_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_animal_tag.bin");
+    let path = tmp("wildlife_animal_tag.bin");
     let tag = AnimalTag {
         tag_id: 100_001,
         species: Species::Elk,
@@ -257,7 +261,7 @@ fn test_animal_tag_file_roundtrip() {
 
 #[test]
 fn test_tracking_record_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_tracking_record.bin");
+    let path = tmp("wildlife_tracking_record.bin");
     let record = TrackingRecord {
         record_id: 9_999_000_001,
         tag: AnimalTag {
@@ -286,7 +290,7 @@ fn test_tracking_record_file_roundtrip() {
 
 #[test]
 fn test_migration_route_empty_waypoints() {
-    let path = std::env::temp_dir().join("wildlife_migration_empty.bin");
+    let path = tmp("wildlife_migration_empty.bin");
     let route = MigrationRoute {
         route_id: 1,
         species: Species::Crane,
@@ -305,7 +309,7 @@ fn test_migration_route_empty_waypoints() {
 
 #[test]
 fn test_migration_route_ten_waypoints() {
-    let path = std::env::temp_dir().join("wildlife_migration_ten.bin");
+    let path = tmp("wildlife_migration_ten.bin");
     let waypoints: Vec<GpsLocation> = (0..10)
         .map(|i| GpsLocation {
             lat_micro: 40_000_000 + i * 500_000,
@@ -332,7 +336,7 @@ fn test_migration_route_ten_waypoints() {
 
 #[test]
 fn test_population_survey_all_species() {
-    let path = std::env::temp_dir().join("wildlife_survey_all_species.bin");
+    let path = tmp("wildlife_survey_all_species.bin");
     // species_counts: (species variant index as u8, count)
     let species_counts: Vec<(u8, u32)> = vec![
         (0, 45),   // Wolf
@@ -362,7 +366,7 @@ fn test_population_survey_all_species() {
 
 #[test]
 fn test_vec_tracking_records_file_roundtrip() {
-    let path = std::env::temp_dir().join("wildlife_vec_tracking_records.bin");
+    let path = tmp("wildlife_vec_tracking_records.bin");
     let records: Vec<TrackingRecord> = (0..5)
         .map(|i| TrackingRecord {
             record_id: 1000 + i,
@@ -395,7 +399,7 @@ fn test_vec_tracking_records_file_roundtrip() {
 
 #[test]
 fn test_overwrite_tracking_record() {
-    let path = std::env::temp_dir().join("wildlife_overwrite_test.bin");
+    let path = tmp("wildlife_overwrite_test.bin");
     let first = TrackingRecord {
         record_id: 1,
         tag: AnimalTag {
@@ -444,7 +448,7 @@ fn test_overwrite_tracking_record() {
 
 #[test]
 fn test_wolf_pack_three_wolves() {
-    let path = std::env::temp_dir().join("wildlife_wolf_pack.bin");
+    let path = tmp("wildlife_wolf_pack.bin");
     let pack: Vec<AnimalTag> = vec![
         AnimalTag {
             tag_id: 400_001,
@@ -480,7 +484,7 @@ fn test_wolf_pack_three_wolves() {
 
 #[test]
 fn test_eagle_migration_twenty_waypoints() {
-    let path = std::env::temp_dir().join("wildlife_eagle_migration20.bin");
+    let path = tmp("wildlife_eagle_migration20.bin");
     let waypoints: Vec<GpsLocation> = (0..20)
         .map(|i| GpsLocation {
             lat_micro: 65_000_000 - i * 1_000_000,
@@ -506,7 +510,7 @@ fn test_eagle_migration_twenty_waypoints() {
 
 #[test]
 fn test_salmon_spawning_route() {
-    let path = std::env::temp_dir().join("wildlife_salmon_spawning.bin");
+    let path = tmp("wildlife_salmon_spawning.bin");
     let waypoints: Vec<GpsLocation> = vec![
         GpsLocation {
             lat_micro: 58_500_000,
@@ -545,7 +549,7 @@ fn test_salmon_spawning_route() {
 
 #[test]
 fn test_bear_extreme_weight() {
-    let path = std::env::temp_dir().join("wildlife_bear_extreme_weight.bin");
+    let path = tmp("wildlife_bear_extreme_weight.bin");
     let tag = AnimalTag {
         tag_id: 500_001,
         species: Species::Bear,
@@ -564,7 +568,7 @@ fn test_bear_extreme_weight() {
 
 #[test]
 fn test_juvenile_animal_age_zero() {
-    let path = std::env::temp_dir().join("wildlife_juvenile_age_zero.bin");
+    let path = tmp("wildlife_juvenile_age_zero.bin");
     let tag = AnimalTag {
         tag_id: 600_001,
         species: Species::Elk,
@@ -629,7 +633,7 @@ fn test_tundra_vs_forest_habitat_distinct_bytes() {
 
 #[test]
 fn test_long_migration_route_1000km() {
-    let path = std::env::temp_dir().join("wildlife_long_migration_1000km.bin");
+    let path = tmp("wildlife_long_migration_1000km.bin");
     let waypoints: Vec<GpsLocation> = (0..50)
         .map(|i| GpsLocation {
             lat_micro: 30_000_000 + i * 400_000,
@@ -657,7 +661,7 @@ fn test_long_migration_route_1000km() {
 
 #[test]
 fn test_rare_species_survey() {
-    let path = std::env::temp_dir().join("wildlife_rare_species_survey.bin");
+    let path = tmp("wildlife_rare_species_survey.bin");
     let survey = PopulationSurvey {
         survey_id: 2024_9999,
         region: "Remote Boreal Wilderness".to_string(),
@@ -680,7 +684,7 @@ fn test_rare_species_survey() {
 
 #[test]
 fn test_file_exists_after_encode() {
-    let path = std::env::temp_dir().join("wildlife_file_existence_check.bin");
+    let path = tmp("wildlife_file_existence_check.bin");
     let loc = GpsLocation {
         lat_micro: 51_500_000,
         lon_micro: -0_127_000,
@@ -699,7 +703,7 @@ fn test_file_exists_after_encode() {
 
 #[test]
 fn test_large_survey_all_eight_species() {
-    let path = std::env::temp_dir().join("wildlife_large_survey_all8.bin");
+    let path = tmp("wildlife_large_survey_all8.bin");
     let species_counts: Vec<(u8, u32)> = vec![
         (0, 120),    // Wolf
         (1, 55),     // Bear

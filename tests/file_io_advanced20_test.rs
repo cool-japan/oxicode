@@ -78,7 +78,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 struct JointAngle {
@@ -106,7 +109,7 @@ struct TrajectoryPoint {
 // --- Test 1: JointAngle basic write and read ---
 #[test]
 fn test_joint_angle_write_read_roundtrip() {
-    let path = temp_dir().join("oxicode_robot_001.bin");
+    let path = tmp("oxicode_robot_001");
     let joint = JointAngle {
         joint_id: 1,
         angle_deg: 45.0,
@@ -124,7 +127,7 @@ fn test_joint_angle_write_read_roundtrip() {
 // --- Test 2: JointAngle zero values ---
 #[test]
 fn test_joint_angle_zero_values() {
-    let path = temp_dir().join("oxicode_robot_002.bin");
+    let path = tmp("oxicode_robot_002");
     let joint = JointAngle {
         joint_id: 0,
         angle_deg: 0.0,
@@ -142,7 +145,7 @@ fn test_joint_angle_zero_values() {
 // --- Test 3: JointAngle negative angle and torque ---
 #[test]
 fn test_joint_angle_negative_values() {
-    let path = temp_dir().join("oxicode_robot_003.bin");
+    let path = tmp("oxicode_robot_003");
     let joint = JointAngle {
         joint_id: 5,
         angle_deg: -135.75,
@@ -162,7 +165,7 @@ fn test_joint_angle_negative_values() {
 // --- Test 4: RobotPose basic write and read ---
 #[test]
 fn test_robot_pose_write_read_roundtrip() {
-    let path = temp_dir().join("oxicode_robot_004.bin");
+    let path = tmp("oxicode_robot_004");
     let pose = RobotPose {
         pose_id: 100,
         joints: vec![
@@ -193,7 +196,7 @@ fn test_robot_pose_write_read_roundtrip() {
 // --- Test 5: RobotPose is_calibrated = false ---
 #[test]
 fn test_robot_pose_not_calibrated() {
-    let path = temp_dir().join("oxicode_robot_005.bin");
+    let path = tmp("oxicode_robot_005");
     let pose = RobotPose {
         pose_id: 200,
         joints: vec![JointAngle {
@@ -217,7 +220,7 @@ fn test_robot_pose_not_calibrated() {
 // --- Test 6: RobotPose is_calibrated = true ---
 #[test]
 fn test_robot_pose_is_calibrated_true() {
-    let path = temp_dir().join("oxicode_robot_006.bin");
+    let path = tmp("oxicode_robot_006");
     let pose = RobotPose {
         pose_id: 300,
         joints: vec![JointAngle {
@@ -241,7 +244,7 @@ fn test_robot_pose_is_calibrated_true() {
 // --- Test 7: TrajectoryPoint basic write and read ---
 #[test]
 fn test_trajectory_point_write_read_roundtrip() {
-    let path = temp_dir().join("oxicode_robot_007.bin");
+    let path = tmp("oxicode_robot_007");
     let tp = TrajectoryPoint {
         sequence: 1,
         pose: RobotPose {
@@ -268,7 +271,7 @@ fn test_trajectory_point_write_read_roundtrip() {
 // --- Test 8: TrajectoryPoint with sequence=0 and duration=0 ---
 #[test]
 fn test_trajectory_point_zero_sequence_duration() {
-    let path = temp_dir().join("oxicode_robot_008.bin");
+    let path = tmp("oxicode_robot_008");
     let tp = TrajectoryPoint {
         sequence: 0,
         pose: RobotPose {
@@ -292,7 +295,7 @@ fn test_trajectory_point_zero_sequence_duration() {
 // --- Test 9: Large RobotPose with 20 joints ---
 #[test]
 fn test_robot_pose_twenty_joints() {
-    let path = temp_dir().join("oxicode_robot_009.bin");
+    let path = tmp("oxicode_robot_009");
     let joints: Vec<JointAngle> = (0u8..20)
         .map(|i| JointAngle {
             joint_id: i,
@@ -319,7 +322,7 @@ fn test_robot_pose_twenty_joints() {
 // --- Test 10: File bytes match encode_to_vec for JointAngle ---
 #[test]
 fn test_file_bytes_match_encode_to_vec_joint_angle() {
-    let path = temp_dir().join("oxicode_robot_010.bin");
+    let path = tmp("oxicode_robot_010");
     let joint = JointAngle {
         joint_id: 7,
         angle_deg: 123.456,
@@ -341,7 +344,7 @@ fn test_file_bytes_match_encode_to_vec_joint_angle() {
 // --- Test 11: File bytes match encode_to_vec for RobotPose ---
 #[test]
 fn test_file_bytes_match_encode_to_vec_robot_pose() {
-    let path = temp_dir().join("oxicode_robot_011.bin");
+    let path = tmp("oxicode_robot_011");
     let pose = RobotPose {
         pose_id: 42,
         joints: vec![
@@ -376,7 +379,7 @@ fn test_file_bytes_match_encode_to_vec_robot_pose() {
 // --- Test 12: File bytes match encode_to_vec for TrajectoryPoint ---
 #[test]
 fn test_file_bytes_match_encode_to_vec_trajectory_point() {
-    let path = temp_dir().join("oxicode_robot_012.bin");
+    let path = tmp("oxicode_robot_012");
     let tp = TrajectoryPoint {
         sequence: 7,
         pose: RobotPose {
@@ -407,7 +410,7 @@ fn test_file_bytes_match_encode_to_vec_trajectory_point() {
 // --- Test 13: decode_from_slice matches decode_from_file ---
 #[test]
 fn test_decode_from_slice_matches_decode_from_file() {
-    let path = temp_dir().join("oxicode_robot_013.bin");
+    let path = tmp("oxicode_robot_013");
     let joint = JointAngle {
         joint_id: 3,
         angle_deg: -180.0,
@@ -431,7 +434,7 @@ fn test_decode_from_slice_matches_decode_from_file() {
 // --- Test 14: Overwrite existing file with different JointAngle ---
 #[test]
 fn test_overwrite_existing_file_joint_angle() {
-    let path = temp_dir().join("oxicode_robot_014.bin");
+    let path = tmp("oxicode_robot_014");
     let first = JointAngle {
         joint_id: 0,
         angle_deg: 10.0,
@@ -456,7 +459,7 @@ fn test_overwrite_existing_file_joint_angle() {
 // --- Test 15: Overwrite existing file with different RobotPose ---
 #[test]
 fn test_overwrite_existing_file_robot_pose() {
-    let path = temp_dir().join("oxicode_robot_015.bin");
+    let path = tmp("oxicode_robot_015");
     let first_pose = RobotPose {
         pose_id: 1,
         joints: vec![JointAngle {
@@ -502,7 +505,7 @@ fn test_overwrite_existing_file_robot_pose() {
 // --- Test 16: Error on missing file ---
 #[test]
 fn test_error_on_missing_file() {
-    let path = temp_dir().join("oxicode_robot_016_nonexistent.bin");
+    let path = tmp("oxicode_robot_016_nonexistent");
     // Ensure file does not exist
     if path.exists() {
         std::fs::remove_file(&path).ok();
@@ -526,7 +529,7 @@ fn test_multiple_files_different_joints() {
         })
         .collect();
     let paths: Vec<_> = (0u8..5)
-        .map(|i| temp_dir().join(format!("oxicode_robot_017_{i}.bin")))
+        .map(|i| tmp(&format!("oxicode_robot_017_{i}")))
         .collect();
     for (joint, path) in joints.iter().zip(paths.iter()) {
         encode_to_file(joint, path).expect("encode joint to separate file");
@@ -564,7 +567,7 @@ fn test_multiple_trajectory_points_separate_files() {
         })
         .collect();
     let paths: Vec<_> = (0u32..4)
-        .map(|i| temp_dir().join(format!("oxicode_robot_018_{i}.bin")))
+        .map(|i| tmp(&format!("oxicode_robot_018_{i}")))
         .collect();
     for (tp, path) in tps.iter().zip(paths.iter()) {
         encode_to_file(tp, path).expect("encode trajectory point");
@@ -582,7 +585,7 @@ fn test_multiple_trajectory_points_separate_files() {
 // --- Test 19: Max angle values (JointAngle at ±360 degrees) ---
 #[test]
 fn test_joint_angle_max_range_values() {
-    let path = temp_dir().join("oxicode_robot_019.bin");
+    let path = tmp("oxicode_robot_019");
     let joint = JointAngle {
         joint_id: 255,
         angle_deg: 360.0,
@@ -602,7 +605,7 @@ fn test_joint_angle_max_range_values() {
 // --- Test 20: RobotPose empty joints list ---
 #[test]
 fn test_robot_pose_empty_joints() {
-    let path = temp_dir().join("oxicode_robot_020.bin");
+    let path = tmp("oxicode_robot_020");
     let pose = RobotPose {
         pose_id: 555,
         joints: vec![],
@@ -624,7 +627,7 @@ fn test_robot_pose_empty_joints() {
 // --- Test 21: TrajectoryPoint with maximum sequence and duration values ---
 #[test]
 fn test_trajectory_point_max_sequence_duration() {
-    let path = temp_dir().join("oxicode_robot_021.bin");
+    let path = tmp("oxicode_robot_021");
     let tp = TrajectoryPoint {
         sequence: u32::MAX,
         pose: RobotPose {
@@ -654,7 +657,7 @@ fn test_trajectory_point_max_sequence_duration() {
 // --- Test 22: Sequential overwrite of TrajectoryPoint, final state verified ---
 #[test]
 fn test_trajectory_point_sequential_overwrite() {
-    let path = temp_dir().join("oxicode_robot_022.bin");
+    let path = tmp("oxicode_robot_022");
     let make_tp = |seq: u32| TrajectoryPoint {
         sequence: seq,
         pose: RobotPose {

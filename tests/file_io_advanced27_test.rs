@@ -82,7 +82,10 @@
 )]
 use oxicode::{config, decode_from_slice_with_config, encode_to_vec_with_config};
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 // ============================================================
 // Domain types
@@ -320,7 +323,7 @@ fn test_dicom_image_basic_roundtrip() {
 #[test]
 fn test_image_series_file_io_roundtrip() {
     let original = sample_image_series();
-    let path = temp_dir().join("oxicode_dicom_image_series_27.bin");
+    let path = tmp("oxicode_dicom_image_series_27.bin");
     encode_to_file(&original, &path).expect("encode_to_file ImageSeries");
     let decoded: ImageSeries = decode_from_file(&path).expect("decode_from_file ImageSeries");
     assert_eq!(original, decoded);
@@ -330,7 +333,7 @@ fn test_image_series_file_io_roundtrip() {
 #[test]
 fn test_dicom_image_file_io_roundtrip() {
     let original = sample_dicom_image(7);
-    let path = temp_dir().join("oxicode_dicom_image_instance7_27.bin");
+    let path = tmp("oxicode_dicom_image_instance7_27.bin");
     encode_to_file(&original, &path).expect("encode_to_file DicomImage");
     let decoded: DicomImage = decode_from_file(&path).expect("decode_from_file DicomImage");
     assert_eq!(original, decoded);
@@ -537,7 +540,7 @@ fn test_bytes_consumed_matches_encoded_length() {
 
 #[test]
 fn test_overwrite_file_io_roundtrip() {
-    let path = temp_dir().join("oxicode_dicom_overwrite_27.bin");
+    let path = tmp("oxicode_dicom_overwrite_27.bin");
 
     // First write: small image
     let first = sample_dicom_image(1);
@@ -556,7 +559,7 @@ fn test_overwrite_file_io_roundtrip() {
 
 #[test]
 fn test_missing_file_returns_error() {
-    let path = temp_dir().join("oxicode_dicom_nonexistent_27_should_not_exist.bin");
+    let path = tmp("oxicode_dicom_nonexistent_27_should_not_exist.bin");
     // Ensure it is gone if it somehow exists
     let _ = std::fs::remove_file(&path);
     let result = decode_from_file::<DicomImage>(&path);
@@ -569,7 +572,7 @@ fn test_missing_file_returns_error() {
 #[test]
 fn test_file_io_bytes_match_encode_to_vec() {
     let original = sample_dicom_image(5);
-    let path = temp_dir().join("oxicode_dicom_file_vs_vec_27.bin");
+    let path = tmp("oxicode_dicom_file_vs_vec_27.bin");
     encode_to_file(&original, &path).expect("encode_to_file");
     let file_bytes = std::fs::read(&path).expect("read file bytes");
     let vec_bytes = encode_to_vec(&original).expect("encode_to_vec");

@@ -80,6 +80,10 @@
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
+
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum CrystalSystem {
     Cubic,
@@ -147,7 +151,7 @@ struct DiffractionPattern {
 // ── test 1: CrystalSystem::Cubic ────────────────────────────────────────────
 #[test]
 fn test_crystal_system_cubic_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_cubic_1.bin");
+    let path = tmp("test_crystal_system_cubic_1.bin");
     let value = CrystalSystem::Cubic;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Cubic failed");
     let decoded: CrystalSystem =
@@ -159,7 +163,7 @@ fn test_crystal_system_cubic_file_roundtrip() {
 // ── test 2: CrystalSystem::Tetragonal ────────────────────────────────────────
 #[test]
 fn test_crystal_system_tetragonal_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_tetragonal_2.bin");
+    let path = tmp("test_crystal_system_tetragonal_2.bin");
     let value = CrystalSystem::Tetragonal;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Tetragonal failed");
     let decoded: CrystalSystem =
@@ -171,7 +175,7 @@ fn test_crystal_system_tetragonal_file_roundtrip() {
 // ── test 3: CrystalSystem::Orthorhombic ──────────────────────────────────────
 #[test]
 fn test_crystal_system_orthorhombic_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_orthorhombic_3.bin");
+    let path = tmp("test_crystal_system_orthorhombic_3.bin");
     let value = CrystalSystem::Orthorhombic;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Orthorhombic failed");
     let decoded: CrystalSystem =
@@ -183,7 +187,7 @@ fn test_crystal_system_orthorhombic_file_roundtrip() {
 // ── test 4: CrystalSystem::Hexagonal ─────────────────────────────────────────
 #[test]
 fn test_crystal_system_hexagonal_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_hexagonal_4.bin");
+    let path = tmp("test_crystal_system_hexagonal_4.bin");
     let value = CrystalSystem::Hexagonal;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Hexagonal failed");
     let decoded: CrystalSystem =
@@ -195,7 +199,7 @@ fn test_crystal_system_hexagonal_file_roundtrip() {
 // ── test 5: CrystalSystem::Trigonal ──────────────────────────────────────────
 #[test]
 fn test_crystal_system_trigonal_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_trigonal_5.bin");
+    let path = tmp("test_crystal_system_trigonal_5.bin");
     let value = CrystalSystem::Trigonal;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Trigonal failed");
     let decoded: CrystalSystem =
@@ -207,7 +211,7 @@ fn test_crystal_system_trigonal_file_roundtrip() {
 // ── test 6: CrystalSystem::Monoclinic ────────────────────────────────────────
 #[test]
 fn test_crystal_system_monoclinic_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_monoclinic_6.bin");
+    let path = tmp("test_crystal_system_monoclinic_6.bin");
     let value = CrystalSystem::Monoclinic;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Monoclinic failed");
     let decoded: CrystalSystem =
@@ -219,7 +223,7 @@ fn test_crystal_system_monoclinic_file_roundtrip() {
 // ── test 7: CrystalSystem::Triclinic ─────────────────────────────────────────
 #[test]
 fn test_crystal_system_triclinic_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_system_triclinic_7.bin");
+    let path = tmp("test_crystal_system_triclinic_7.bin");
     let value = CrystalSystem::Triclinic;
     encode_to_file(&value, &path).expect("encode CrystalSystem::Triclinic failed");
     let decoded: CrystalSystem =
@@ -239,7 +243,7 @@ fn test_bond_types_all_variants_file_roundtrip() {
         (BondType::Hydrogen, "hydrogen"),
     ];
     for (variant, label) in &variants {
-        let path = std::env::temp_dir().join(format!("test_bond_type_{}_8.bin", label));
+        let path = tmp(&format!("test_bond_type_{}_8.bin", label));
         encode_to_file(variant, &path).expect("encode BondType variant failed");
         let decoded: BondType = decode_from_file(&path).expect("decode BondType variant failed");
         assert_eq!(variant, &decoded);
@@ -250,7 +254,7 @@ fn test_bond_types_all_variants_file_roundtrip() {
 // ── test 9: LatticeParams file roundtrip ─────────────────────────────────────
 #[test]
 fn test_lattice_params_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_lattice_params_9.bin");
+    let path = tmp("test_lattice_params_9.bin");
     // NaCl (rock-salt): a = b = c = 564 pm, all angles 90 000 mdeg
     let lattice = LatticeParams {
         a_pm: 564,
@@ -269,7 +273,7 @@ fn test_lattice_params_file_roundtrip() {
 // ── test 10: AtomicSite file roundtrip ───────────────────────────────────────
 #[test]
 fn test_atomic_site_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_atomic_site_10.bin");
+    let path = tmp("test_atomic_site_10.bin");
     // Silicon at (0.125, 0.125, 0.125) fractional, full occupancy
     let site = AtomicSite {
         element_z: 14,
@@ -287,7 +291,7 @@ fn test_atomic_site_file_roundtrip() {
 // ── test 11: CrystalStructure with empty atoms list ──────────────────────────
 #[test]
 fn test_crystal_structure_empty_atoms_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_struct_empty_11.bin");
+    let path = tmp("test_crystal_struct_empty_11.bin");
     let structure = CrystalStructure {
         name: String::from("EmptyStruct"),
         system: CrystalSystem::Cubic,
@@ -313,7 +317,7 @@ fn test_crystal_structure_empty_atoms_file_roundtrip() {
 // ── test 12: CrystalStructure with 5 atoms ───────────────────────────────────
 #[test]
 fn test_crystal_structure_five_atoms_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_struct_5atoms_12.bin");
+    let path = tmp("test_crystal_struct_5atoms_12.bin");
     // Simplified perovskite BaTiO3 (tetragonal) with 5 atoms per unit cell
     let atoms = vec![
         AtomicSite {
@@ -377,7 +381,7 @@ fn test_crystal_structure_five_atoms_file_roundtrip() {
 // ── test 13: DiffractionPeak file roundtrip ───────────────────────────────────
 #[test]
 fn test_diffraction_peak_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_diffraction_peak_13.bin");
+    let path = tmp("test_diffraction_peak_13.bin");
     // Copper (111) reflection, Cu Kα wavelength 154 pm
     let peak = DiffractionPeak {
         h: 1,
@@ -395,7 +399,7 @@ fn test_diffraction_peak_file_roundtrip() {
 // ── test 14: DiffractionPattern with 10 peaks ────────────────────────────────
 #[test]
 fn test_diffraction_pattern_ten_peaks_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_diffraction_pattern_10peaks_14.bin");
+    let path = tmp("test_diffraction_pattern_10peaks_14.bin");
     // Aluminium FCC powder diffraction (selected reflections)
     let peaks = vec![
         DiffractionPeak {
@@ -485,7 +489,7 @@ fn test_diffraction_pattern_ten_peaks_file_roundtrip() {
 // ── test 15: large CrystalStructure (50 atoms) ───────────────────────────────
 #[test]
 fn test_large_crystal_structure_50_atoms_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_crystal_struct_50atoms_15.bin");
+    let path = tmp("test_crystal_struct_50atoms_15.bin");
     // Simulate a 50-atom supercell; element_z cycles through common elements
     let elements: [u8; 5] = [26, 28, 29, 22, 8]; // Fe, Ni, Cu, Ti, O
     let atoms: Vec<AtomicSite> = (0u32..50)
@@ -522,7 +526,7 @@ fn test_large_crystal_structure_50_atoms_file_roundtrip() {
 // ── test 16: large DiffractionPattern (100 peaks) ────────────────────────────
 #[test]
 fn test_large_diffraction_pattern_100_peaks_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_diffraction_pattern_100peaks_16.bin");
+    let path = tmp("test_diffraction_pattern_100peaks_16.bin");
     let peaks: Vec<DiffractionPeak> = (0i32..100)
         .map(|i| DiffractionPeak {
             h: (i % 10 - 5) as i8,
@@ -548,7 +552,7 @@ fn test_large_diffraction_pattern_100_peaks_file_roundtrip() {
 // ── test 17: Vec<CrystalStructure> file roundtrip ────────────────────────────
 #[test]
 fn test_vec_crystal_structure_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_vec_crystal_struct_17.bin");
+    let path = tmp("test_vec_crystal_struct_17.bin");
     let structures = vec![
         CrystalStructure {
             name: String::from("Diamond"),
@@ -634,7 +638,7 @@ fn test_vec_crystal_structure_file_roundtrip() {
 // ── test 18: overwrite file — encode twice, decode returns second value ───────
 #[test]
 fn test_overwrite_file_decode_returns_second_value() {
-    let path = std::env::temp_dir().join("test_overwrite_18.bin");
+    let path = tmp("test_overwrite_18.bin");
     let first = CrystalStructure {
         name: String::from("FirstWrite"),
         system: CrystalSystem::Cubic,
@@ -691,7 +695,7 @@ fn test_unique_file_paths_no_collision() {
     ];
     let paths: Vec<std::path::PathBuf> = systems
         .iter()
-        .map(|(_, label)| std::env::temp_dir().join(format!("test_unique_path_{}_19.bin", label)))
+        .map(|(_, label)| tmp(&format!("test_unique_path_{}_19.bin", label)))
         .collect();
     // Write each system to its own unique path
     for ((system, _), path) in systems.iter().zip(paths.iter()) {
@@ -712,8 +716,8 @@ fn test_unique_file_paths_no_collision() {
 // ── test 20: space_group boundary values (1 and 230) ─────────────────────────
 #[test]
 fn test_space_group_boundary_values_file_roundtrip() {
-    let path_low = std::env::temp_dir().join("test_sg_boundary_low_20.bin");
-    let path_high = std::env::temp_dir().join("test_sg_boundary_high_20.bin");
+    let path_low = tmp("test_sg_boundary_low_20.bin");
+    let path_high = tmp("test_sg_boundary_high_20.bin");
 
     let sg_1 = CrystalStructure {
         name: String::from("SpaceGroup1-Triclinic"),
@@ -775,7 +779,7 @@ fn test_space_group_boundary_values_file_roundtrip() {
 // ── test 21: occupancy edge cases (0 and 1_000_000) ──────────────────────────
 #[test]
 fn test_occupancy_edge_cases_file_roundtrip() {
-    let path = std::env::temp_dir().join("test_occupancy_edge_21.bin");
+    let path = tmp("test_occupancy_edge_21.bin");
     // Partial occupancy model: one fully occupied site and one vacancy
     let atoms = vec![
         AtomicSite {
@@ -827,7 +831,7 @@ fn test_occupancy_edge_cases_file_roundtrip() {
 // ── test 22: encode_to_vec / decode_from_slice consistency with file data ─────
 #[test]
 fn test_encode_to_vec_matches_file_bytes_and_decode_from_slice() {
-    let path = std::env::temp_dir().join("test_vec_slice_file_consistency_22.bin");
+    let path = tmp("test_vec_slice_file_consistency_22.bin");
     // Graphite (hexagonal): two carbon atoms per unit cell
     let structure = CrystalStructure {
         name: String::from("Graphite-2H"),

@@ -76,7 +76,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct GeoPoint {
@@ -196,7 +199,7 @@ fn test_bounding_box_file_io() {
         max_lat: 51.6,
         max_lon: 0.1,
     };
-    let path = temp_dir().join("oxicode_bbox_28.bin");
+    let path = tmp("oxicode_bbox_28.bin");
     encode_to_file(&bbox, &path).expect("encode BoundingBox to file");
     let decoded: BoundingBox = decode_from_file(&path).expect("decode BoundingBox from file");
     assert_eq!(bbox, decoded);
@@ -388,7 +391,7 @@ fn test_maptile_file_io_large_data() {
         zoom: 14,
         data: tile_data,
     };
-    let path = temp_dir().join("oxicode_maptile_28.bin");
+    let path = tmp("oxicode_maptile_28.bin");
     encode_to_file(&tile, &path).expect("encode MapTile to file");
     let decoded: MapTile = decode_from_file(&path).expect("decode MapTile from file");
     assert_eq!(tile, decoded);
@@ -463,7 +466,7 @@ fn test_geofeature_file_io() {
             elevation: 332.9,
         }],
     };
-    let path = temp_dir().join("oxicode_geofeature_28.bin");
+    let path = tmp("oxicode_geofeature_28.bin");
     encode_to_file(&feature, &path).expect("encode GeoFeature to file");
     let decoded: GeoFeature = decode_from_file(&path).expect("decode GeoFeature from file");
     assert_eq!(feature, decoded);
@@ -555,7 +558,7 @@ fn test_spatial_index_file_io() {
         cell_id: 0xDEAD_BEEF_CAFE_F00D,
         feature_ids: (1000..1050).collect(),
     };
-    let path = temp_dir().join("oxicode_spatialindex_28.bin");
+    let path = tmp("oxicode_spatialindex_28.bin");
     encode_to_file(&index, &path).expect("encode SpatialIndex to file");
     let decoded: SpatialIndex = decode_from_file(&path).expect("decode SpatialIndex from file");
     assert_eq!(index, decoded);
@@ -644,7 +647,7 @@ fn test_bounding_box_intersection_file_io() {
             max_lon: 22.0,
         },
     ];
-    let path = temp_dir().join("oxicode_bbox_intersect_28.bin");
+    let path = tmp("oxicode_bbox_intersect_28.bin");
     encode_to_file(&boxes, &path).expect("encode bounding boxes to file");
     let decoded: Vec<BoundingBox> =
         decode_from_file(&path).expect("decode bounding boxes from file");
@@ -676,7 +679,7 @@ fn test_linestring_file_io_unicode_name() {
             },
         ],
     };
-    let path = temp_dir().join("oxicode_linestring_28.bin");
+    let path = tmp("oxicode_linestring_28.bin");
     encode_to_file(&line, &path).expect("encode LineString to file");
     let decoded: LineString = decode_from_file(&path).expect("decode LineString from file");
     assert_eq!(line, decoded);
@@ -761,7 +764,7 @@ fn test_mixed_geospatial_dataset_roundtrip() {
         ],
     };
 
-    let path = temp_dir().join("oxicode_geodataset_28.bin");
+    let path = tmp("oxicode_geodataset_28.bin");
     encode_to_file(&dataset, &path).expect("encode GeoDataset to file");
     let decoded: GeoDataset = decode_from_file(&path).expect("decode GeoDataset from file");
     assert_eq!(dataset, decoded);

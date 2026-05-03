@@ -81,7 +81,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 // ── shared helper types ──────────────────────────────────────────────────────
 
@@ -111,7 +114,7 @@ enum Color {
 
 #[test]
 fn test_adv_file_roundtrip_u32() {
-    let path = temp_dir().join("oxicode_adv2_u32.bin");
+    let path = tmp("oxicode_adv2_u32");
     let value: u32 = 0xDEAD_BEEF;
 
     oxicode::encode_to_file(&value, &path).expect("encode u32 to file");
@@ -125,7 +128,7 @@ fn test_adv_file_roundtrip_u32() {
 
 #[test]
 fn test_adv_file_roundtrip_string() {
-    let path = temp_dir().join("oxicode_adv2_string.bin");
+    let path = tmp("oxicode_adv2_string");
     let value = String::from("Hello, OxiCode file I/O — advanced!");
 
     oxicode::encode_to_file(&value, &path).expect("encode String to file");
@@ -139,7 +142,7 @@ fn test_adv_file_roundtrip_string() {
 
 #[test]
 fn test_adv_file_roundtrip_vec_u8() {
-    let path = temp_dir().join("oxicode_adv2_vec_u8.bin");
+    let path = tmp("oxicode_adv2_vec_u8");
     let value: Vec<u8> = (0u8..=127).collect();
 
     oxicode::encode_to_file(&value, &path).expect("encode Vec<u8> to file");
@@ -153,7 +156,7 @@ fn test_adv_file_roundtrip_vec_u8() {
 
 #[test]
 fn test_adv_file_roundtrip_struct() {
-    let path = temp_dir().join("oxicode_adv2_struct.bin");
+    let path = tmp("oxicode_adv2_struct");
     let value = SimpleStruct {
         id: 42,
         label: String::from("struct_test"),
@@ -170,7 +173,7 @@ fn test_adv_file_roundtrip_struct() {
 
 #[test]
 fn test_adv_file_roundtrip_enum() {
-    let path = temp_dir().join("oxicode_adv2_enum.bin");
+    let path = tmp("oxicode_adv2_enum");
     let value = Color::Custom(200, 100, 50);
 
     oxicode::encode_to_file(&value, &path).expect("encode enum to file");
@@ -186,7 +189,7 @@ fn test_adv_file_roundtrip_enum() {
 fn test_adv_file_roundtrip_fixed_int_config() {
     use oxicode::config;
 
-    let path = temp_dir().join("oxicode_adv2_fixedint.bin");
+    let path = tmp("oxicode_adv2_fixedint");
     let cfg = config::standard().with_fixed_int_encoding();
     let value: u64 = 123_456_789_u64;
 
@@ -205,7 +208,7 @@ fn test_adv_file_roundtrip_fixed_int_config() {
 fn test_adv_file_roundtrip_big_endian_config() {
     use oxicode::config;
 
-    let path = temp_dir().join("oxicode_adv2_bigendian.bin");
+    let path = tmp("oxicode_adv2_bigendian");
     let cfg = config::standard()
         .with_big_endian()
         .with_fixed_int_encoding();
@@ -229,7 +232,7 @@ fn test_adv_file_roundtrip_big_endian_config() {
 
 #[test]
 fn test_adv_file_roundtrip_large_vec() {
-    let path = temp_dir().join(format!("oxicode_adv2_large_{}.bin", std::process::id()));
+    let path = tmp("oxicode_adv2_large");
     let value: Vec<u8> = (0u8..=255).cycle().take(10_000).collect();
 
     oxicode::encode_to_file(&value, &path).expect("encode large Vec<u8> to file");
@@ -246,7 +249,7 @@ fn test_adv_file_roundtrip_large_vec() {
 fn test_adv_file_sequential_write_and_first_read() {
     use std::io::BufReader;
 
-    let path = temp_dir().join("oxicode_adv2_seq.bin");
+    let path = tmp("oxicode_adv2_seq");
     std::fs::remove_file(&path).ok();
 
     let cfg = oxicode::config::standard();
@@ -279,7 +282,7 @@ fn test_adv_file_sequential_write_and_first_read() {
 
 #[test]
 fn test_adv_file_roundtrip_empty_vec() {
-    let path = temp_dir().join("oxicode_adv2_empty_vec.bin");
+    let path = tmp("oxicode_adv2_empty_vec");
     let value: Vec<u8> = Vec::new();
 
     oxicode::encode_to_file(&value, &path).expect("encode empty Vec<u8> to file");
@@ -295,7 +298,7 @@ fn test_adv_file_roundtrip_empty_vec() {
 
 #[test]
 fn test_adv_file_roundtrip_option_some() {
-    let path = temp_dir().join("oxicode_adv2_opt_some.bin");
+    let path = tmp("oxicode_adv2_opt_some");
     let value: Option<String> = Some(String::from("optional_value"));
 
     oxicode::encode_to_file(&value, &path).expect("encode Option Some to file");
@@ -310,7 +313,7 @@ fn test_adv_file_roundtrip_option_some() {
 
 #[test]
 fn test_adv_file_roundtrip_option_none() {
-    let path = temp_dir().join("oxicode_adv2_opt_none.bin");
+    let path = tmp("oxicode_adv2_opt_none");
     let value: Option<String> = None;
 
     oxicode::encode_to_file(&value, &path).expect("encode Option None to file");
@@ -326,8 +329,8 @@ fn test_adv_file_roundtrip_option_none() {
 
 #[test]
 fn test_adv_file_roundtrip_bool_true_and_false() {
-    let path_true = temp_dir().join("oxicode_adv2_bool_true.bin");
-    let path_false = temp_dir().join("oxicode_adv2_bool_false.bin");
+    let path_true = tmp("oxicode_adv2_bool_true");
+    let path_false = tmp("oxicode_adv2_bool_false");
 
     oxicode::encode_to_file(&true, &path_true).expect("encode bool true to file");
     oxicode::encode_to_file(&false, &path_false).expect("encode bool false to file");
@@ -348,7 +351,7 @@ fn test_adv_file_roundtrip_bool_true_and_false() {
 
 #[test]
 fn test_adv_file_roundtrip_u64_max() {
-    let path = temp_dir().join("oxicode_adv2_u64max.bin");
+    let path = tmp("oxicode_adv2_u64max");
     let value: u64 = u64::MAX;
 
     oxicode::encode_to_file(&value, &path).expect("encode u64::MAX to file");
@@ -362,7 +365,7 @@ fn test_adv_file_roundtrip_u64_max() {
 
 #[test]
 fn test_adv_file_roundtrip_i64_min() {
-    let path = temp_dir().join("oxicode_adv2_i64min.bin");
+    let path = tmp("oxicode_adv2_i64min");
     let value: i64 = i64::MIN;
 
     oxicode::encode_to_file(&value, &path).expect("encode i64::MIN to file");
@@ -376,7 +379,7 @@ fn test_adv_file_roundtrip_i64_min() {
 
 #[test]
 fn test_adv_file_roundtrip_vec_string() {
-    let path = temp_dir().join("oxicode_adv2_vec_string.bin");
+    let path = tmp("oxicode_adv2_vec_string");
     let value: Vec<String> = vec![
         String::from("alpha"),
         String::from("beta"),
@@ -396,7 +399,7 @@ fn test_adv_file_roundtrip_vec_string() {
 
 #[test]
 fn test_adv_file_overwrite_replaces_content() {
-    let path = temp_dir().join("oxicode_adv2_overwrite.bin");
+    let path = tmp("oxicode_adv2_overwrite");
 
     let first: u32 = 111;
     let second: u32 = 999;
@@ -414,7 +417,7 @@ fn test_adv_file_overwrite_replaces_content() {
 
 #[test]
 fn test_adv_file_decode_nonexistent_returns_error() {
-    let path = temp_dir().join("oxicode_adv2_nonexistent_xyzzy_99.bin");
+    let path = tmp("oxicode_adv2_nonexistent_xyzzy_99");
     // Ensure it really does not exist
     let _ = std::fs::remove_file(&path);
 
@@ -429,7 +432,7 @@ fn test_adv_file_decode_nonexistent_returns_error() {
 
 #[test]
 fn test_adv_file_roundtrip_f64_pi() {
-    let path = temp_dir().join("oxicode_adv2_f64_pi.bin");
+    let path = tmp("oxicode_adv2_f64_pi");
     let value: f64 = std::f64::consts::PI;
 
     oxicode::encode_to_file(&value, &path).expect("encode f64 PI to file");
@@ -448,7 +451,7 @@ fn test_adv_file_roundtrip_f64_pi() {
 
 #[test]
 fn test_adv_file_roundtrip_u128() {
-    let path = temp_dir().join("oxicode_adv2_u128.bin");
+    let path = tmp("oxicode_adv2_u128");
     let value: u128 = u128::MAX / 3;
 
     oxicode::encode_to_file(&value, &path).expect("encode u128 to file");
@@ -462,7 +465,7 @@ fn test_adv_file_roundtrip_u128() {
 
 #[test]
 fn test_adv_file_roundtrip_nested_struct() {
-    let path = temp_dir().join("oxicode_adv2_nested.bin");
+    let path = tmp("oxicode_adv2_nested");
     let value = NestedStruct {
         header: SimpleStruct {
             id: 7,
@@ -489,7 +492,7 @@ fn test_adv_file_roundtrip_nested_struct() {
 
 #[test]
 fn test_adv_file_size_matches_encode_to_vec_length() {
-    let path = temp_dir().join("oxicode_adv2_size_check.bin");
+    let path = tmp("oxicode_adv2_size_check");
     let value = NestedStruct {
         header: SimpleStruct {
             id: 100,

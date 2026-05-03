@@ -1,682 +1,6 @@
-//! Advanced nested structs test #17 — commercial bakery production & recipe management, 22 tests.
-
-#![allow(
-    clippy::approx_constant,
-    clippy::useless_vec,
-    clippy::len_zero,
-    clippy::unnecessary_cast,
-    clippy::redundant_closure,
-    clippy::too_many_arguments,
-    clippy::type_complexity,
-    clippy::needless_borrow,
-    clippy::enum_variant_names,
-    clippy::upper_case_acronyms,
-    clippy::inconsistent_digit_grouping,
-    clippy::unit_cmp,
-    clippy::assertions_on_constants,
-    clippy::iter_on_single_items,
-    clippy::expect_fun_call,
-    clippy::redundant_pattern_matching,
-    variant_size_differences,
-    clippy::absurd_extreme_comparisons,
-    clippy::nonminimal_bool,
-    clippy::for_kv_map,
-    clippy::needless_range_loop,
-    clippy::single_match,
-    clippy::collapsible_if,
-    clippy::needless_return,
-    clippy::redundant_clone,
-    clippy::map_entry,
-    clippy::match_single_binding,
-    clippy::bool_comparison,
-    clippy::derivable_impls,
-    clippy::manual_range_contains,
-    clippy::needless_borrows_for_generic_args,
-    clippy::manual_map,
-    clippy::vec_init_then_push,
-    clippy::identity_op,
-    clippy::manual_flatten,
-    clippy::single_char_pattern,
-    clippy::search_is_some,
-    clippy::option_map_unit_fn,
-    clippy::while_let_on_iterator,
-    clippy::clone_on_copy,
-    clippy::box_collection,
-    clippy::redundant_field_names,
-    clippy::ptr_arg,
-    clippy::large_enum_variant,
-    clippy::match_ref_pats,
-    clippy::needless_pass_by_value,
-    clippy::unused_unit,
-    clippy::let_and_return,
-    clippy::suspicious_else_formatting,
-    clippy::manual_strip,
-    clippy::match_like_matches_macro,
-    clippy::from_over_into,
-    clippy::wrong_self_convention,
-    clippy::inherent_to_string,
-    clippy::new_without_default,
-    clippy::unnecessary_wraps,
-    clippy::field_reassign_with_default,
-    clippy::manual_find,
-    clippy::unnecessary_lazy_evaluations,
-    clippy::should_implement_trait,
-    clippy::missing_safety_doc,
-    clippy::unusual_byte_groupings,
-    clippy::bool_assert_comparison,
-    clippy::zero_prefixed_literal,
-    clippy::await_holding_lock,
-    clippy::manual_saturating_arithmetic,
-    clippy::explicit_counter_loop,
-    clippy::needless_lifetimes,
-    clippy::single_component_path_imports,
-    clippy::uninlined_format_args,
-    clippy::iter_cloned_collect,
-    clippy::manual_str_repeat,
-    clippy::excessive_precision,
-    clippy::precedence,
-    clippy::unnecessary_literal_unwrap
-)]
+// Tests for nested_structs_advanced17 — part A (all tests)
+use super::types::*;
 use oxicode::{decode_from_slice, encode_to_vec, Decode, Encode};
-
-// ---------------------------------------------------------------------------
-// Domain types — Ingredients & Baker's Percentages
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum FlourType {
-    BreadFlour,
-    AllPurpose,
-    WholeWheat,
-    Rye,
-    Spelt,
-    Semolina,
-    Einkorn,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum IngredientCategory {
-    Flour,
-    Liquid,
-    Fat,
-    Sweetener,
-    Leavening,
-    Dairy,
-    Egg,
-    Flavoring,
-    Inclusion,
-    Stabilizer,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct BakersPercentage {
-    ingredient_name: String,
-    category: IngredientCategory,
-    percentage: u32, // basis-points (12.5% => 1250)
-    is_preferment: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct RecipeFormulation {
-    recipe_id: u64,
-    name: String,
-    flour_type: FlourType,
-    total_flour_grams: u32,
-    percentages: Vec<BakersPercentage>,
-    target_dough_temp_c: u16,
-    notes: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Fermentation & Production
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum FermentationMethod {
-    BulkAmbient,
-    ColdRetard,
-    PoolishOvernight,
-    BigaMethod,
-    SourdoughLevain,
-    Autolyse,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FermentationStage {
-    stage_name: String,
-    method: FermentationMethod,
-    duration_minutes: u32,
-    temperature_c: i16,
-    humidity_pct: u8,
-    fold_count: u8,
-    notes: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ProductionBatch {
-    batch_id: u64,
-    recipe: RecipeFormulation,
-    stages: Vec<FermentationStage>,
-    operator_name: String,
-    total_yield_kg: u32,
-    date_epoch_secs: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Oven Profiles
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum SteamMode {
-    Off,
-    Low,
-    Medium,
-    High,
-    Burst,
-    Pulsed,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct OvenPhase {
-    phase_name: String,
-    duration_seconds: u32,
-    temp_top_c: u16,
-    temp_bottom_c: u16,
-    steam: SteamMode,
-    damper_open: bool,
-    fan_speed_pct: u8,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct OvenProfile {
-    profile_id: u64,
-    name: String,
-    oven_model: String,
-    phases: Vec<OvenPhase>,
-    preheat_minutes: u16,
-    total_bake_seconds: u32,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Ingredient Inventory & Suppliers
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct SupplierContact {
-    name: String,
-    phone: String,
-    email: String,
-    account_number: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct SupplierDetails {
-    supplier_id: u64,
-    company_name: String,
-    contact: SupplierContact,
-    lead_time_days: u16,
-    minimum_order_kg: u32,
-    certifications: Vec<String>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct InventoryItem {
-    item_id: u64,
-    ingredient_name: String,
-    category: IngredientCategory,
-    current_stock_grams: u64,
-    reorder_threshold_grams: u64,
-    supplier: SupplierDetails,
-    lot_number: String,
-    expiry_epoch_secs: u64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct IngredientInventory {
-    warehouse_id: u32,
-    items: Vec<InventoryItem>,
-    last_audit_epoch: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Cake Decorations
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum IcingType {
-    Buttercream,
-    Fondant,
-    RoyalIcing,
-    Ganache,
-    CreamCheese,
-    MirrorGlaze,
-    Naked,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ColorSpec {
-    name: String,
-    red: u8,
-    green: u8,
-    blue: u8,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DecorationElement {
-    element_name: String,
-    color: ColorSpec,
-    quantity: u16,
-    is_edible: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct TierConfig {
-    tier_number: u8,
-    diameter_cm: u16,
-    height_cm: u16,
-    flavor: String,
-    icing: IcingType,
-    decorations: Vec<DecorationElement>,
-    serves: u16,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct CakeSpecification {
-    order_id: u64,
-    customer_name: String,
-    tiers: Vec<TierConfig>,
-    delivery_date_epoch: u64,
-    special_instructions: Option<String>,
-    allergen_notes: Vec<String>,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Bread Scoring
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum ScoreShape {
-    SingleSlash,
-    Cross,
-    Leaf,
-    Wheat,
-    Spiral,
-    Diamond,
-    Custom,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ScoreCut {
-    cut_index: u8,
-    shape: ScoreShape,
-    depth_mm: u8,
-    angle_degrees: u16,
-    length_cm: u8,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ScoringPattern {
-    pattern_name: String,
-    cuts: Vec<ScoreCut>,
-    lame_type: String,
-    flour_dusting: bool,
-    stencil: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Laminated Dough
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum FoldType {
-    SingleFold,
-    DoubleFold,
-    BookFold,
-    LetterFold,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FoldStep {
-    step_number: u8,
-    fold: FoldType,
-    rest_minutes: u16,
-    rest_temp_c: i16,
-    thickness_mm: u16,
-    notes: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct LaminationSchedule {
-    product_name: String,
-    butter_block_grams: u32,
-    dough_grams: u32,
-    fold_steps: Vec<FoldStep>,
-    total_layers: u32,
-    final_proof_minutes: u16,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Sourdough Starter
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FeedingRecord {
-    timestamp_epoch: u64,
-    flour_grams: u32,
-    water_grams: u32,
-    flour_type: FlourType,
-    ambient_temp_c: i16,
-    rise_factor: u8, // 1x=10, 2x=20, etc.
-    notes: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct StarterMaintenanceLog {
-    starter_name: String,
-    origin_year: u16,
-    feedings: Vec<FeedingRecord>,
-    current_hydration_pct: u16,
-    is_active: bool,
-    backup_location: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Allergen Matrix
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum Allergen {
-    Wheat,
-    Milk,
-    Eggs,
-    TreeNuts,
-    Peanuts,
-    Soy,
-    Sesame,
-    Fish,
-    Shellfish,
-    Sulfites,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum ContaminationRisk {
-    None,
-    LowTrace,
-    MayContain,
-    Contains,
-    PrimaryIngredient,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct AllergenEntry {
-    allergen: Allergen,
-    risk: ContaminationRisk,
-    source_ingredient: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ProductAllergenProfile {
-    product_name: String,
-    entries: Vec<AllergenEntry>,
-    shared_line: bool,
-    cleaning_protocol: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct AllergenMatrix {
-    facility_name: String,
-    profiles: Vec<ProductAllergenProfile>,
-    last_review_epoch: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Nutritional Labels
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MacroNutrients {
-    calories_kcal: u32,
-    total_fat_mg: u32,
-    saturated_fat_mg: u32,
-    trans_fat_mg: u32,
-    cholesterol_mg: u32,
-    sodium_mg: u32,
-    total_carbs_mg: u32,
-    dietary_fiber_mg: u32,
-    total_sugars_mg: u32,
-    added_sugars_mg: u32,
-    protein_mg: u32,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MicroNutrient {
-    name: String,
-    amount_mcg: u32,
-    daily_value_pct: u8,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct NutritionalLabel {
-    product_name: String,
-    serving_size_grams: u32,
-    servings_per_package: u16,
-    macros: MacroNutrients,
-    micros: Vec<MicroNutrient>,
-    ingredients_list: String,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Wholesale Orders & Delivery
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DeliveryStop {
-    stop_index: u8,
-    client_name: String,
-    address: String,
-    arrival_epoch: u64,
-    cases_count: u16,
-    requires_signature: bool,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DeliveryRoute {
-    route_id: u64,
-    driver_name: String,
-    vehicle_plate: String,
-    stops: Vec<DeliveryStop>,
-    total_distance_km: u32,
-    departure_epoch: u64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct OrderLine {
-    product_name: String,
-    quantity: u32,
-    unit_price_cents: u64,
-    batch_id: u64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct WholesaleOrder {
-    order_id: u64,
-    client_name: String,
-    lines: Vec<OrderLine>,
-    delivery_route: DeliveryRoute,
-    total_cents: u64,
-    paid: bool,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Quality Control & Equipment
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum QcResult {
-    Pass,
-    MinorDeviation,
-    MajorDeviation,
-    Fail,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct QcCheck {
-    check_name: String,
-    result: QcResult,
-    measured_value: Option<String>,
-    target_range: String,
-    inspector: String,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct QcReport {
-    report_id: u64,
-    batch_id: u64,
-    product_name: String,
-    checks: Vec<QcCheck>,
-    overall: QcResult,
-    timestamp_epoch: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Equipment Maintenance
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum MaintenanceType {
-    Scheduled,
-    Emergency,
-    Calibration,
-    Cleaning,
-    PartReplacement,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct MaintenanceRecord {
-    record_id: u64,
-    maintenance_type: MaintenanceType,
-    description: String,
-    technician: String,
-    cost_cents: u64,
-    downtime_minutes: u32,
-    date_epoch: u64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct Equipment {
-    equipment_id: u64,
-    name: String,
-    model: String,
-    serial_number: String,
-    install_date_epoch: u64,
-    maintenance_history: Vec<MaintenanceRecord>,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Staff Scheduling
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-enum ShiftType {
-    EarlyMorning,
-    Morning,
-    Afternoon,
-    Night,
-    Split,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct ShiftAssignment {
-    employee_name: String,
-    shift: ShiftType,
-    station: String,
-    start_epoch: u64,
-    end_epoch: u64,
-}
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct DailySchedule {
-    date_epoch: u64,
-    assignments: Vec<ShiftAssignment>,
-    production_targets: Vec<String>,
-    notes: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// Domain types — Composite facility
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct BakeryFacility {
-    facility_id: u64,
-    name: String,
-    address: String,
-    equipment: Vec<Equipment>,
-    allergen_matrix: AllergenMatrix,
-    active_orders: Vec<WholesaleOrder>,
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn roundtrip<T: Encode + Decode + PartialEq + std::fmt::Debug>(val: &T, ctx: &str) {
-    let bytes = encode_to_vec(val).unwrap_or_else(|_| panic!("encode {}", ctx));
-    let (decoded, consumed): (T, usize) =
-        decode_from_slice(&bytes).unwrap_or_else(|_| panic!("decode {}", ctx));
-    assert_eq!(val, &decoded, "roundtrip mismatch for {}", ctx);
-    assert!(consumed > 0, "consumed zero bytes for {}", ctx);
-}
-
-fn make_supplier(id: u64, name: &str) -> SupplierDetails {
-    SupplierDetails {
-        supplier_id: id,
-        company_name: name.to_string(),
-        contact: SupplierContact {
-            name: format!("{} Rep", name),
-            phone: "+1-555-0100".to_string(),
-            email: format!("orders@{}.com", name.to_lowercase().replace(' ', "")),
-            account_number: format!("ACCT-{:04}", id),
-        },
-        lead_time_days: 3,
-        minimum_order_kg: 25,
-        certifications: vec!["Organic".to_string(), "FSSC 22000".to_string()],
-    }
-}
-
-fn make_oven_profile(id: u64, name: &str) -> OvenProfile {
-    OvenProfile {
-        profile_id: id,
-        name: name.to_string(),
-        oven_model: "Miwe Ideal T".to_string(),
-        phases: vec![
-            OvenPhase {
-                phase_name: "Steam Blast".to_string(),
-                duration_seconds: 120,
-                temp_top_c: 250,
-                temp_bottom_c: 230,
-                steam: SteamMode::Burst,
-                damper_open: false,
-                fan_speed_pct: 0,
-            },
-            OvenPhase {
-                phase_name: "Bake".to_string(),
-                duration_seconds: 1200,
-                temp_top_c: 220,
-                temp_bottom_c: 210,
-                steam: SteamMode::Off,
-                damper_open: true,
-                fan_speed_pct: 40,
-            },
-        ],
-        preheat_minutes: 45,
-        total_bake_seconds: 1320,
-    }
-}
-
-// ===========================================================================
-// Test  1: Recipe formulation with baker's percentages
-// ===========================================================================
 
 #[test]
 fn test_recipe_formulation_roundtrip() {
@@ -722,10 +46,6 @@ fn test_recipe_formulation_roundtrip() {
     };
     roundtrip(&recipe, "country sourdough recipe");
 }
-
-// ===========================================================================
-// Test  2: Production batch with fermentation stages
-// ===========================================================================
 
 #[test]
 fn test_production_batch_roundtrip() {
@@ -789,10 +109,6 @@ fn test_production_batch_roundtrip() {
     roundtrip(&batch, "production batch");
 }
 
-// ===========================================================================
-// Test  3: Oven profile with multi-phase baking
-// ===========================================================================
-
 #[test]
 fn test_oven_profile_roundtrip() {
     let profile = OvenProfile {
@@ -843,10 +159,6 @@ fn test_oven_profile_roundtrip() {
     roundtrip(&profile, "artisan oven profile");
 }
 
-// ===========================================================================
-// Test  4: Ingredient inventory with supplier details
-// ===========================================================================
-
 #[test]
 fn test_ingredient_inventory_roundtrip() {
     let inventory = IngredientInventory {
@@ -877,10 +189,6 @@ fn test_ingredient_inventory_roundtrip() {
     };
     roundtrip(&inventory, "ingredient inventory");
 }
-
-// ===========================================================================
-// Test  5: Tiered cake specification with decorations
-// ===========================================================================
 
 #[test]
 fn test_cake_specification_roundtrip() {
@@ -960,10 +268,6 @@ fn test_cake_specification_roundtrip() {
     roundtrip(&cake, "wedding cake specification");
 }
 
-// ===========================================================================
-// Test  6: Bread scoring patterns
-// ===========================================================================
-
 #[test]
 fn test_scoring_pattern_roundtrip() {
     let pattern = ScoringPattern {
@@ -1012,10 +316,6 @@ fn test_scoring_pattern_roundtrip() {
     roundtrip(&pattern, "batard leaf scoring");
 }
 
-// ===========================================================================
-// Test  7: Laminated dough fold schedule (croissant)
-// ===========================================================================
-
 #[test]
 fn test_lamination_schedule_roundtrip() {
     let schedule = LaminationSchedule {
@@ -1062,10 +362,6 @@ fn test_lamination_schedule_roundtrip() {
     roundtrip(&schedule, "croissant lamination");
 }
 
-// ===========================================================================
-// Test  8: Sourdough starter maintenance log
-// ===========================================================================
-
 #[test]
 fn test_starter_maintenance_roundtrip() {
     let log = StarterMaintenanceLog {
@@ -1106,10 +402,6 @@ fn test_starter_maintenance_roundtrip() {
     };
     roundtrip(&log, "sourdough starter log");
 }
-
-// ===========================================================================
-// Test  9: Allergen cross-contamination matrix
-// ===========================================================================
 
 #[test]
 fn test_allergen_matrix_roundtrip() {
@@ -1171,10 +463,6 @@ fn test_allergen_matrix_roundtrip() {
     roundtrip(&matrix, "allergen matrix");
 }
 
-// ===========================================================================
-// Test 10: Nutritional label calculations
-// ===========================================================================
-
 #[test]
 fn test_nutritional_label_roundtrip() {
     let label = NutritionalLabel {
@@ -1222,10 +510,6 @@ fn test_nutritional_label_roundtrip() {
     };
     roundtrip(&label, "nutritional label");
 }
-
-// ===========================================================================
-// Test 11: Wholesale order with delivery route
-// ===========================================================================
 
 #[test]
 fn test_wholesale_order_roundtrip() {
@@ -1283,10 +567,6 @@ fn test_wholesale_order_roundtrip() {
     roundtrip(&order, "wholesale order");
 }
 
-// ===========================================================================
-// Test 12: Quality control report with nested checks
-// ===========================================================================
-
 #[test]
 fn test_qc_report_roundtrip() {
     let report = QcReport {
@@ -1336,10 +616,6 @@ fn test_qc_report_roundtrip() {
     roundtrip(&report, "qc report");
 }
 
-// ===========================================================================
-// Test 13: Equipment maintenance history
-// ===========================================================================
-
 #[test]
 fn test_equipment_maintenance_roundtrip() {
     let equipment = Equipment {
@@ -1380,10 +656,6 @@ fn test_equipment_maintenance_roundtrip() {
     };
     roundtrip(&equipment, "equipment maintenance");
 }
-
-// ===========================================================================
-// Test 14: Staff daily schedule with shift assignments
-// ===========================================================================
 
 #[test]
 fn test_daily_schedule_roundtrip() {
@@ -1436,10 +708,6 @@ fn test_daily_schedule_roundtrip() {
     };
     roundtrip(&schedule, "daily schedule");
 }
-
-// ===========================================================================
-// Test 15: Full bakery facility composite
-// ===========================================================================
 
 #[test]
 fn test_bakery_facility_roundtrip() {
@@ -1514,10 +782,6 @@ fn test_bakery_facility_roundtrip() {
     };
     roundtrip(&facility, "full bakery facility");
 }
-
-// ===========================================================================
-// Test 16: Rye bread recipe with poolish preferment
-// ===========================================================================
 
 #[test]
 fn test_rye_poolish_recipe_roundtrip() {
@@ -1604,10 +868,6 @@ fn test_rye_poolish_recipe_roundtrip() {
     roundtrip(&batch, "rye poolish batch");
 }
 
-// ===========================================================================
-// Test 17: Danish pastry lamination (book folds)
-// ===========================================================================
-
 #[test]
 fn test_danish_lamination_roundtrip() {
     let schedule = LaminationSchedule {
@@ -1653,10 +913,6 @@ fn test_danish_lamination_roundtrip() {
     };
     roundtrip(&schedule, "danish lamination");
 }
-
-// ===========================================================================
-// Test 18: Multi-product nutritional comparison
-// ===========================================================================
 
 #[test]
 fn test_multi_product_nutrition_roundtrip() {
@@ -1725,10 +981,6 @@ fn test_multi_product_nutrition_roundtrip() {
     assert!(consumed > 0, "consumed zero bytes");
 }
 
-// ===========================================================================
-// Test 19: Scoring pattern with custom stencil
-// ===========================================================================
-
 #[test]
 fn test_scoring_stencil_custom_roundtrip() {
     let pattern = ScoringPattern {
@@ -1784,10 +1036,6 @@ fn test_scoring_stencil_custom_roundtrip() {
     roundtrip(&pattern, "stencil scoring");
 }
 
-// ===========================================================================
-// Test 20: Inactive sourdough starter with empty feedings
-// ===========================================================================
-
 #[test]
 fn test_inactive_starter_roundtrip() {
     let log = StarterMaintenanceLog {
@@ -1806,10 +1054,6 @@ fn test_inactive_starter_roundtrip() {
     assert!(decoded.feedings.is_empty());
     assert!(decoded.backup_location.is_none());
 }
-
-// ===========================================================================
-// Test 21: Large delivery route with many stops
-// ===========================================================================
 
 #[test]
 fn test_large_delivery_route_roundtrip() {
@@ -1878,10 +1122,6 @@ fn test_large_delivery_route_roundtrip() {
     assert_eq!(decoded.delivery_route.stops.len(), 15);
     assert_eq!(decoded.lines.len(), 5);
 }
-
-// ===========================================================================
-// Test 22: Full production pipeline (recipe -> batch -> oven -> QC -> delivery)
-// ===========================================================================
 
 #[test]
 fn test_full_production_pipeline_roundtrip() {

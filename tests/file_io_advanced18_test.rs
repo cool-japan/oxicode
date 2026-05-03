@@ -78,7 +78,10 @@
     clippy::unnecessary_literal_unwrap
 )]
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
-use std::env::temp_dir;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 struct TelemetryFrame {
@@ -107,7 +110,7 @@ struct CommandPacket {
 
 #[test]
 fn test_telemetry_frame_basic_roundtrip() {
-    let path = temp_dir().join("oxicode_sat_test_001.bin");
+    let path = tmp("oxicode_sat_test_001.bin");
     let frame = TelemetryFrame {
         frame_id: 1001,
         satellite_id: 42,
@@ -125,7 +128,7 @@ fn test_telemetry_frame_basic_roundtrip() {
 
 #[test]
 fn test_orbit_data_basic_roundtrip() {
-    let path = temp_dir().join("oxicode_sat_test_002.bin");
+    let path = tmp("oxicode_sat_test_002.bin");
     let orbit = OrbitData {
         epoch: 1_700_100_000,
         semi_major_axis: 6_778_137.0,
@@ -142,7 +145,7 @@ fn test_orbit_data_basic_roundtrip() {
 
 #[test]
 fn test_command_packet_basic_roundtrip() {
-    let path = temp_dir().join("oxicode_sat_test_003.bin");
+    let path = tmp("oxicode_sat_test_003.bin");
     let pkt = CommandPacket {
         sequence: 5001,
         satellite_id: 7,
@@ -159,7 +162,7 @@ fn test_command_packet_basic_roundtrip() {
 
 #[test]
 fn test_telemetry_frame_negative_signal_dbm() {
-    let path = temp_dir().join("oxicode_sat_test_004.bin");
+    let path = tmp("oxicode_sat_test_004.bin");
     let frame = TelemetryFrame {
         frame_id: 9999,
         satellite_id: 1,
@@ -179,7 +182,7 @@ fn test_telemetry_frame_negative_signal_dbm() {
 
 #[test]
 fn test_telemetry_frame_max_signal_dbm() {
-    let path = temp_dir().join("oxicode_sat_test_005.bin");
+    let path = tmp("oxicode_sat_test_005.bin");
     let frame = TelemetryFrame {
         frame_id: 2,
         satellite_id: 255,
@@ -197,7 +200,7 @@ fn test_telemetry_frame_max_signal_dbm() {
 
 #[test]
 fn test_telemetry_frame_min_signal_dbm() {
-    let path = temp_dir().join("oxicode_sat_test_006.bin");
+    let path = tmp("oxicode_sat_test_006.bin");
     let frame = TelemetryFrame {
         frame_id: 3,
         satellite_id: 0,
@@ -216,7 +219,7 @@ fn test_telemetry_frame_min_signal_dbm() {
 
 #[test]
 fn test_orbit_data_high_precision_f64() {
-    let path = temp_dir().join("oxicode_sat_test_007.bin");
+    let path = tmp("oxicode_sat_test_007.bin");
     let orbit = OrbitData {
         epoch: 1_700_300_000,
         semi_major_axis: 42_164_000.123_456_789,
@@ -239,7 +242,7 @@ fn test_orbit_data_high_precision_f64() {
 
 #[test]
 fn test_command_packet_empty_params() {
-    let path = temp_dir().join("oxicode_sat_test_008.bin");
+    let path = tmp("oxicode_sat_test_008.bin");
     let pkt = CommandPacket {
         sequence: 1,
         satellite_id: 10,
@@ -258,7 +261,7 @@ fn test_command_packet_empty_params() {
 
 #[test]
 fn test_command_packet_large_params_vec() {
-    let path = temp_dir().join("oxicode_sat_test_009.bin");
+    let path = tmp("oxicode_sat_test_009.bin");
     let pkt = CommandPacket {
         sequence: 8888,
         satellite_id: 33,
@@ -301,7 +304,7 @@ fn test_multiple_telemetry_files() {
         },
     ];
     let paths: Vec<_> = (10..13)
-        .map(|n| temp_dir().join(format!("oxicode_sat_test_010_{n}.bin")))
+        .map(|n| tmp(&format!("oxicode_sat_test_010_{n}.bin")))
         .collect();
 
     for (frame, path) in frames.iter().zip(paths.iter()) {
@@ -319,7 +322,7 @@ fn test_multiple_telemetry_files() {
 
 #[test]
 fn test_overwrite_telemetry_frame() {
-    let path = temp_dir().join("oxicode_sat_test_011.bin");
+    let path = tmp("oxicode_sat_test_011.bin");
     let first = TelemetryFrame {
         frame_id: 1,
         satellite_id: 1,
@@ -346,7 +349,7 @@ fn test_overwrite_telemetry_frame() {
 
 #[test]
 fn test_file_size_matches_encode_to_vec_telemetry() {
-    let path = temp_dir().join("oxicode_sat_test_012.bin");
+    let path = tmp("oxicode_sat_test_012.bin");
     let frame = TelemetryFrame {
         frame_id: 777,
         satellite_id: 21,
@@ -366,7 +369,7 @@ fn test_file_size_matches_encode_to_vec_telemetry() {
 
 #[test]
 fn test_file_size_matches_encode_to_vec_orbit() {
-    let path = temp_dir().join("oxicode_sat_test_013.bin");
+    let path = tmp("oxicode_sat_test_013.bin");
     let orbit = OrbitData {
         epoch: 1_700_600_000,
         semi_major_axis: 7_000_000.0,
@@ -385,7 +388,7 @@ fn test_file_size_matches_encode_to_vec_orbit() {
 
 #[test]
 fn test_file_size_matches_encode_to_vec_command() {
-    let path = temp_dir().join("oxicode_sat_test_014.bin");
+    let path = tmp("oxicode_sat_test_014.bin");
     let pkt = CommandPacket {
         sequence: 300,
         satellite_id: 15,
@@ -404,7 +407,7 @@ fn test_file_size_matches_encode_to_vec_command() {
 
 #[test]
 fn test_decode_from_slice_matches_file_telemetry() {
-    let path = temp_dir().join("oxicode_sat_test_015.bin");
+    let path = tmp("oxicode_sat_test_015.bin");
     let frame = TelemetryFrame {
         frame_id: 512,
         satellite_id: 7,
@@ -426,7 +429,7 @@ fn test_decode_from_slice_matches_file_telemetry() {
 
 #[test]
 fn test_orbit_data_zero_eccentricity_circular() {
-    let path = temp_dir().join("oxicode_sat_test_016.bin");
+    let path = tmp("oxicode_sat_test_016.bin");
     let orbit = OrbitData {
         epoch: 0,
         semi_major_axis: 6_371_000.0,
@@ -444,7 +447,7 @@ fn test_orbit_data_zero_eccentricity_circular() {
 
 #[test]
 fn test_telemetry_frame_zero_battery() {
-    let path = temp_dir().join("oxicode_sat_test_017.bin");
+    let path = tmp("oxicode_sat_test_017.bin");
     let frame = TelemetryFrame {
         frame_id: 404,
         satellite_id: 99,
@@ -464,7 +467,7 @@ fn test_telemetry_frame_zero_battery() {
 
 #[test]
 fn test_command_packet_long_command_string() {
-    let path = temp_dir().join("oxicode_sat_test_018.bin");
+    let path = tmp("oxicode_sat_test_018.bin");
     let pkt = CommandPacket {
         sequence: 7777,
         satellite_id: 5,
@@ -483,7 +486,7 @@ fn test_command_packet_long_command_string() {
 
 #[test]
 fn test_sequential_orbit_file_overwrites() {
-    let path = temp_dir().join("oxicode_sat_test_019.bin");
+    let path = tmp("oxicode_sat_test_019.bin");
     let orbits = [
         OrbitData {
             epoch: 1_000,
@@ -548,7 +551,7 @@ fn test_telemetry_positive_and_negative_signal_dbm_alternating() {
         },
     ];
     for (i, frame) in frames.iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_sat_test_020_{i}.bin"));
+        let path = tmp(&format!("oxicode_sat_test_020_{i}.bin"));
         encode_to_file(frame, &path).expect("encode alternating signal_dbm failed");
         let decoded: TelemetryFrame =
             decode_from_file(&path).expect("decode alternating signal_dbm failed");
@@ -561,7 +564,7 @@ fn test_telemetry_positive_and_negative_signal_dbm_alternating() {
 
 #[test]
 fn test_command_packet_params_all_byte_values() {
-    let path = temp_dir().join("oxicode_sat_test_021.bin");
+    let path = tmp("oxicode_sat_test_021.bin");
     let pkt = CommandPacket {
         sequence: 65535,
         satellite_id: 128,
@@ -583,7 +586,7 @@ fn test_command_packet_params_all_byte_values() {
 
 #[test]
 fn test_large_telemetry_batch_file_and_vec_consistency() {
-    let path = temp_dir().join("oxicode_sat_test_022.bin");
+    let path = tmp("oxicode_sat_test_022.bin");
     // Encode a Vec of TelemetryFrames representing a large telemetry batch
     let frames: Vec<TelemetryFrame> = (0u64..500)
         .map(|i| TelemetryFrame {

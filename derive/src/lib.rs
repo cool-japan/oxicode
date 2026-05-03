@@ -9,7 +9,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! oxicode = { version = "0.1", features = ["derive"] }
+//! oxicode = { version = "0.2", features = ["derive"] }
 //! ```
 //!
 //! Then derive `Encode`, `Decode`, and `BorrowDecode` on your types:

@@ -22,7 +22,7 @@ This project serves as the spiritual successor to [bincode](https://github.com/b
 - **Safe**: Strict no-unwrap policy, comprehensive error handling
 - **Modern**: Built with latest Rust practices and 2021 edition features
 - **no_std support**: Works in embedded and resource-constrained environments (with `alloc` feature)
-- **Bincode compatibility**: 100% binary format compatibility with bincode 2.0 (`config::legacy()`)
+- **Bincode compatibility**: Wire-format compatible with bincode 1.x default via `config::legacy()` (equivalent to bincode 2.0's `config::legacy()` preset)
 - **BorrowDecode**: Zero-copy decoding via the `BorrowDecode` trait — decode into borrowed slices without allocation
 - **encoded_size API**: Pre-calculate exact encoded byte length without allocating via `encoded_size` / `encoded_size_with_config`
 - **Fixed-array encoding**: `encode_to_fixed_array::<N>()` — encode directly into a stack-allocated `[u8; N]`
@@ -200,11 +200,11 @@ let decoded: T = oxicode::decode_from_file("data.bin")?;
 let size: usize = oxicode::encoded_size(&value)?;
 
 // Encode into a fixed-size stack array
-let arr: [u8; 32] = oxicode::encode_to_fixed_array::<32>(&value)?;
+let (arr, n): ([u8; 32], usize) = oxicode::encode_to_fixed_array::<32>(&value)?;
 
 // Sequence encoding — encode multiple items into one buffer
-let bytes = oxicode::encode_seq_to_vec(&[item1, item2, item3])?;
-let items: Vec<T> = oxicode::decode_iter_from_slice(&bytes)?.collect::<Result<_, _>>()?;
+let bytes = oxicode::encode_seq_to_vec([item1, item2, item3].into_iter())?;
+let items: Vec<T> = oxicode::decode_iter_from_slice::<T>(&bytes)?.collect::<Result<Vec<T>, _>>()?;
 
 // Hex display without allocating a String
 use oxicode::EncodedBytes;
@@ -413,10 +413,10 @@ use bincode::{Encode, Decode, config};
 let bytes = bincode::encode_to_vec(&value, config::standard())?;
 let (decoded, _) = bincode::decode_from_slice(&bytes, config::standard())?;
 
-// After (oxicode) - same API!
+// After (oxicode) — same shape; the 2-arg config form is *_with_config
 use oxicode::{Encode, Decode, config};
-let bytes = oxicode::encode_to_vec(&value, config::standard())?;
-let (decoded, _) = oxicode::decode_from_slice(&bytes, config::standard())?;
+let bytes = oxicode::encode_to_vec_with_config(&value, config::standard())?;
+let (decoded, _) = oxicode::decode_from_slice_with_config(&bytes, config::standard())?;
 ```
 
 **Binary data is 100% compatible** - you can mix libraries:
@@ -427,7 +427,7 @@ For detailed migration guide, see [MIGRATION.md](MIGRATION.md).
 
 ## Comparison with bincode
 
-OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::legacy()`), oxicode produces byte-for-byte identical output to bincode 2.0, making it a true drop-in replacement.
+OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::legacy()`), oxicode produces byte-for-byte identical output to the bincode 1.x default wire format (little-endian, fixed-int) — the same format targeted by bincode 2.0's `config::legacy()` preset — making it a true drop-in replacement.
 
 ### Wire Format Compatibility
 
@@ -471,16 +471,16 @@ OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::lega
 
 ## Project Status
 
-**Version 0.2.1 - Production Ready**
+**Version 0.2.2 - Production Ready**
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 
-**Statistics** (as of 2026-03-16):
-- **Lines of Code**: 513,128 (Rust source lines across 973 files)
-- **Files**: 973 Rust files
-- **Test Coverage**: 19,927 tests passing (100% pass rate, 0 skipped)
+**Statistics** (as of 2026-05-03):
+- **Lines of Code**: 514,298 (Rust source lines across 985 files)
+- **Files**: 985 Rust files
+- **Test Coverage**: 19,933 tests passing (100% pass rate, 0 skipped)
   - 18 binary compatibility tests (100% byte-for-byte identical to bincode)
-  - 19,911+ feature, integration, property-based, and stress tests
+  - 19,915+ feature, integration, property-based, and stress tests
 - **Type Coverage**: 120+ types with full Encode/Decode support
 - **Binary Compatibility**: 100% verified through cross-library testing
 - **Code Quality**: ✓ Zero unwrap(), ✓ Zero warnings, ✓ All files < 2000 lines
