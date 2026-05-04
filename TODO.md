@@ -4,7 +4,7 @@
 
 This TODO list tracks the development of oxicode, the successor to bincode.
 
-**Last Updated**: 2026-05-03 (version 0.2.2)
+**Last Updated**: 2026-05-04 (version 0.2.3)
 
 ---
 
@@ -23,6 +23,29 @@ This TODO list tracks the development of oxicode, the successor to bincode.
 - [x] **CI update**: Updated GitHub Actions CI configuration
 - [x] **Format pass**: `cargo fmt --all` applied across all benchmark and test files
 - [x] **Pure Rust**: All compression backends remain 100% pure Rust (COOLJAPAN Pure Rust Policy)
+
+---
+
+## Version 0.2.3 Accomplishments (2026-05-04) ✓
+
+### Quality
+- [x] **Clippy clean**: Eliminated 10 `needless_borrows_for_generic_args` lint errors in `compatibility/src/lib.rs` (redundant `&` on `bincode::encode_to_vec` calls). Restores `cargo clippy --all-features --workspace --all-targets -- -D warnings` to exit 0.
+- [x] **Test stability under parallelism**: PID-suffixed temp paths in `tests/async_advanced7_test.rs`, `tests/file_io_advanced15_test.rs`, `tests/file_io_advanced17_test.rs`, `tests/file_io_advanced29_test.rs`, `tests/file_io_advanced30_test.rs`, `tests/file_io_advanced31_test.rs`, `tests/file_io_advanced32_test.rs` — applies the canonical `std::env::temp_dir().join(format!("…_{}", std::process::id()))` helper first introduced for `file_io_advanced13` in 0.2.2.
+
+### Refactoring
+- [x] **`splitrs` of `compression_lz4_advanced31_test.rs`**: Pre-emptive split of the 1,960-line monolith into 5 focused files (`…_venue_test.rs` 370 / `…_stage_test.rs` 674 / `…_ops_test.rs` 521 / `…_sales_test.rs` 606 / `…_bundle_test.rs` 241), preserving all 22 test names. No test file now exceeds 1,881 lines.
+- [x] **`splitrs` of `tests/versioning_test.rs`**: Pre-emptive split of the 1,881-line file into 5 focused files (`versioning_basics_test.rs` 290 / `versioning_compat_test.rs` 360 / `versioning_encoding_test.rs` 479 / `versioning_evolution_test.rs` 551 / `versioning_advanced55_test.rs` 428), preserving all 99 test names. Largest descendant: 551 lines.
+
+### Versioning
+- [x] **Branch-name-driven bump**: Workspace and crate versions raised from `0.2.2` to `0.2.3`; `oxicode_derive` and `compatibility` dep pins updated to match.
+- [x] **CHANGELOG**: New `[0.2.3]` section added and linked to the release tag.
+- [x] **README**: Front-matter version line updated to 0.2.3.
+
+### Verification
+- [x] **19,951 / 19,951 tests pass** under `cargo nextest run --all-features --workspace`.
+- [x] **Zero warnings** from `cargo clippy --all-features --workspace --all-targets -- -D warnings`.
+- [x] **Zero `.unwrap()`** in production `src/` — audit confirmed all 20 occurrences are inside `///` doc-comment fenced code blocks.
+- [x] **All files < 2000 lines**: largest `src/` file is `src/lib.rs` (1,137); largest `tests/` file is `tests/versioning_test.rs` (1,881).
 
 ---
 
@@ -201,7 +224,7 @@ This TODO list tracks the development of oxicode, the successor to bincode.
 - [x] **SciRS2 ecosystem integration** ✓: Audited 2026-04-28 — zero production bincode deps across all 8 SciRS2-family projects (verified in their Cargo.toml/Cargo.lock).
 - [x] **cargo publish** ✓: 0.2.0 and 0.2.1 already published; future releases handled via the /bump workflow per CLAUDE.md (no manual publishes).
 
-## /ultra 2026-04-28 — Active
+## /ultra 2026-04-28 — Closed
 
 - [x] **MIGRATION.md & README accuracy fix** (planned 2026-04-28)
   - **Goal:** MIGRATION.md points users to non-existent functions and wrong types. Fix so users can follow the guide end-to-end and produce code that compiles against the published `oxicode = "0.2"` API.
@@ -228,13 +251,14 @@ This TODO list tracks the development of oxicode, the successor to bincode.
   - **Design:** Closed "SciRS2 ecosystem integration" (audit confirmed done) and "cargo publish" (CLAUDE.md forbids; releases already out).
   - **Files:** `TODO.md`
 
-- [~] **Comprehensive benchmark coverage vs bincode** (planned 2026-04-28)
+- [x] **Comprehensive benchmark coverage vs bincode** (planned 2026-04-28)
   - **Goal:** Every public API in `src/lib.rs` has at least one benchmark; the legacy/standard config matrix is exercised side-by-side oxicode vs bincode; the serde feature path is timed; criterion reports throughput in MB/s; a `BENCHMARKS.md` documents how to run, compare, and interpret. Existing benches stay untouched.
   - **Design:** (A) `config_matrix_bench.rs`: 5 config labels (oxi_std, oxi_legacy, oxi_be, bin_std, bin_legacy) × encode + decode + size groups, `Throughput::Bytes`. (B) `serde_bench.rs`: oxicode::serde vs bincode::serde for primitives, structs, collections, feature-gated. (C) `api_surface_bench.rs`: every unbenched public API — `encode_to_fixed_array`, `encode_seq_to_vec`, `decode_iter_from_slice`, file I/O, streaming, `encoded_size`, checked round-trip, container breadth. (D) `BENCHMARKS.md`: run guide, baseline comparison, interpreting results.
   - **Files:** `benches/config_matrix_bench.rs`, `benches/serde_bench.rs`, `benches/api_surface_bench.rs`, `BENCHMARKS.md`, `Cargo.toml`
   - **Tests:** `cargo bench --no-run --all-features` clean; `cargo clippy --all-features --all-targets -- -D warnings` zero warnings; smoke runs `--quick`; `cargo nextest run --all-features` green.
+  - **Verified (2026-05-04):** `cargo bench --no-run --all-features` exits 0; `config_matrix_bench`, `serde_bench`, and `api_surface_bench` all pass `--quick` smoke runs with 0 panics and 0 clippy warnings.
 
-- [~] **Persist benchmark plan block to TODO.md** (planned 2026-04-28)
+- [x] **Persist benchmark plan block to TODO.md** (planned 2026-04-28)
   - **Goal:** TODO.md audit trail for this run: `[~]` during implementation, `[x]` after test gate passes.
   - **Design:** Append plan blocks under existing `## /ultra 2026-04-28 — Active` section.
   - **Files:** `TODO.md`
