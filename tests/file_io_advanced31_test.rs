@@ -78,6 +78,10 @@
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 use std::env::temp_dir;
 
+fn tmp(name: impl AsRef<str>) -> std::path::PathBuf {
+    temp_dir().join(format!("{}_{}", name.as_ref(), std::process::id()))
+}
+
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 enum CropType {
     Wheat,
@@ -178,7 +182,7 @@ fn test_field_sensor_roundtrip_file() {
         lon_x1e6: 2_348_800,
         depth_cm: 30,
     };
-    let path = temp_dir().join("field_sensor_31.bin");
+    let path = tmp("field_sensor_31.bin");
     encode_to_file(&sensor, &path).expect("encode_to_file failed for FieldSensor");
     let decoded: FieldSensor =
         decode_from_file(&path).expect("decode_from_file failed for FieldSensor");
@@ -196,7 +200,7 @@ fn test_soil_reading_roundtrip_file() {
         ph_x100: 680,
         nitrogen_ppm: 120,
     };
-    let path = temp_dir().join("soil_reading_31.bin");
+    let path = tmp("soil_reading_31.bin");
     encode_to_file(&reading, &path).expect("encode_to_file failed for SoilReading");
     let decoded: SoilReading =
         decode_from_file(&path).expect("decode_from_file failed for SoilReading");
@@ -213,7 +217,7 @@ fn test_crop_field_wheat_loamy_roundtrip_file() {
         soil_type: SoilType::Loamy,
         planted_date: 1_680_000_000,
     };
-    let path = temp_dir().join("crop_field_wheat_31.bin");
+    let path = tmp("crop_field_wheat_31.bin");
     encode_to_file(&field, &path).expect("encode_to_file failed for CropField Wheat");
     let decoded: CropField =
         decode_from_file(&path).expect("decode_from_file failed for CropField Wheat");
@@ -230,7 +234,7 @@ fn test_crop_field_rice_clay_roundtrip_file() {
         soil_type: SoilType::Clay,
         planted_date: 1_685_000_000,
     };
-    let path = temp_dir().join("crop_field_rice_31.bin");
+    let path = tmp("crop_field_rice_31.bin");
     encode_to_file(&field, &path).expect("encode_to_file failed for CropField Rice");
     let decoded: CropField =
         decode_from_file(&path).expect("decode_from_file failed for CropField Rice");
@@ -247,7 +251,7 @@ fn test_irrigation_event_drip_roundtrip_file() {
         volume_liters: 15_000,
         method: IrrigationMethod::Drip,
     };
-    let path = temp_dir().join("irrigation_drip_31.bin");
+    let path = tmp("irrigation_drip_31.bin");
     encode_to_file(&event, &path).expect("encode_to_file failed for IrrigationEvent Drip");
     let decoded: IrrigationEvent =
         decode_from_file(&path).expect("decode_from_file failed for IrrigationEvent Drip");
@@ -264,7 +268,7 @@ fn test_irrigation_event_flood_roundtrip_file() {
         volume_liters: 80_000,
         method: IrrigationMethod::Flood,
     };
-    let path = temp_dir().join("irrigation_flood_31.bin");
+    let path = tmp("irrigation_flood_31.bin");
     encode_to_file(&event, &path).expect("encode_to_file failed for IrrigationEvent Flood");
     let decoded: IrrigationEvent =
         decode_from_file(&path).expect("decode_from_file failed for IrrigationEvent Flood");
@@ -281,7 +285,7 @@ fn test_pest_alert_with_treatment_roundtrip_file() {
         severity: 7,
         treatment: Some("Apply fungicide at 2L/ha".to_string()),
     };
-    let path = temp_dir().join("pest_alert_treatment_31.bin");
+    let path = tmp("pest_alert_treatment_31.bin");
     encode_to_file(&alert, &path).expect("encode_to_file failed for PestAlert with treatment");
     let decoded: PestAlert =
         decode_from_file(&path).expect("decode_from_file failed for PestAlert with treatment");
@@ -298,7 +302,7 @@ fn test_pest_alert_no_treatment_roundtrip_file() {
         severity: 3,
         treatment: None,
     };
-    let path = temp_dir().join("pest_alert_no_treatment_31.bin");
+    let path = tmp("pest_alert_no_treatment_31.bin");
     encode_to_file(&alert, &path).expect("encode_to_file failed for PestAlert no treatment");
     let decoded: PestAlert =
         decode_from_file(&path).expect("decode_from_file failed for PestAlert no treatment");
@@ -315,7 +319,7 @@ fn test_harvest_record_roundtrip_file() {
         moisture_content_pct: 14,
         quality_score: 92,
     };
-    let path = temp_dir().join("harvest_record_31.bin");
+    let path = tmp("harvest_record_31.bin");
     encode_to_file(&record, &path).expect("encode_to_file failed for HarvestRecord");
     let decoded: HarvestRecord =
         decode_from_file(&path).expect("decode_from_file failed for HarvestRecord");
@@ -335,7 +339,7 @@ fn test_large_soil_reading_set_roundtrip_file() {
             nitrogen_ppm: (80 + (i % 200)) as u16,
         })
         .collect();
-    let path = temp_dir().join("large_soil_readings_31.bin");
+    let path = tmp("large_soil_readings_31.bin");
     encode_to_file(&readings, &path).expect("encode_to_file failed for large soil readings");
     let decoded: Vec<SoilReading> =
         decode_from_file(&path).expect("decode_from_file failed for large soil readings");
@@ -376,7 +380,7 @@ fn test_vec_of_crop_fields_roundtrip_file() {
             planted_date: 1_685_000_000,
         },
     ];
-    let path = temp_dir().join("vec_crop_fields_31.bin");
+    let path = tmp("vec_crop_fields_31.bin");
     encode_to_file(&fields, &path).expect("encode_to_file failed for vec of CropFields");
     let decoded: Vec<CropField> =
         decode_from_file(&path).expect("decode_from_file failed for vec of CropFields");
@@ -400,8 +404,8 @@ fn test_option_treatment_none_vs_some_roundtrip() {
         severity: 9,
         treatment: Some("Soil fumigation required immediately".to_string()),
     };
-    let path_none = temp_dir().join("pest_none_option_31.bin");
-    let path_some = temp_dir().join("pest_some_option_31.bin");
+    let path_none = tmp("pest_none_option_31.bin");
+    let path_some = tmp("pest_some_option_31.bin");
 
     encode_to_file(&alert_none, &path_none)
         .expect("encode_to_file failed for PestAlert None option");
@@ -424,7 +428,7 @@ fn test_option_treatment_none_vs_some_roundtrip() {
 
 #[test]
 fn test_overwrite_existing_file() {
-    let path = temp_dir().join("overwrite_field_31.bin");
+    let path = tmp("overwrite_field_31.bin");
 
     let field_v1 = CropField {
         field_id: 801,
@@ -454,7 +458,7 @@ fn test_overwrite_existing_file() {
 
 #[test]
 fn test_error_on_missing_file() {
-    let path = temp_dir().join("nonexistent_agriculture_31.bin");
+    let path = tmp("nonexistent_agriculture_31.bin");
     let result: Result<CropField, _> = decode_from_file(&path);
     assert!(
         result.is_err(),
@@ -471,7 +475,7 @@ fn test_bytes_match_between_file_and_encode_to_vec() {
         lon_x1e6: 151_209_290,
         depth_cm: 20,
     };
-    let path = temp_dir().join("bytes_match_sensor_31.bin");
+    let path = tmp("bytes_match_sensor_31.bin");
     encode_to_file(&sensor, &path).expect("encode_to_file failed for bytes match test");
 
     let file_bytes = std::fs::read(&path).expect("fs::read failed for bytes match test");
@@ -566,7 +570,7 @@ fn test_irrigation_subsurface_sprinkler_roundtrip_file() {
             method: IrrigationMethod::Sprinkler,
         },
     ];
-    let path = temp_dir().join("irrigation_sub_sprinkler_31.bin");
+    let path = tmp("irrigation_sub_sprinkler_31.bin");
     encode_to_file(&events, &path)
         .expect("encode_to_file failed for Subsurface/Sprinkler IrrigationEvents");
     let decoded: Vec<IrrigationEvent> = decode_from_file(&path)
@@ -584,7 +588,7 @@ fn test_harvest_record_extreme_values_roundtrip_file() {
         moisture_content_pct: u8::MAX,
         quality_score: u8::MAX,
     };
-    let path = temp_dir().join("harvest_extreme_31.bin");
+    let path = tmp("harvest_extreme_31.bin");
     encode_to_file(&record, &path).expect("encode_to_file failed for HarvestRecord extreme values");
     let decoded: HarvestRecord =
         decode_from_file(&path).expect("decode_from_file failed for HarvestRecord extreme values");
@@ -601,7 +605,7 @@ fn test_field_sensor_negative_coordinates_roundtrip_file() {
         lon_x1e6: -58_381_940,
         depth_cm: 60,
     };
-    let path = temp_dir().join("sensor_negative_coords_31.bin");
+    let path = tmp("sensor_negative_coords_31.bin");
     encode_to_file(&sensor, &path)
         .expect("encode_to_file failed for FieldSensor negative coordinates");
     let decoded: FieldSensor = decode_from_file(&path)
@@ -619,7 +623,7 @@ fn test_pest_alert_virus_high_severity_roundtrip_file() {
         severity: 10,
         treatment: Some("Quarantine and destroy affected crop immediately".to_string()),
     };
-    let path = temp_dir().join("pest_virus_severe_31.bin");
+    let path = tmp("pest_virus_severe_31.bin");
     encode_to_file(&alert, &path).expect("encode_to_file failed for virus PestAlert");
     let decoded: PestAlert =
         decode_from_file(&path).expect("decode_from_file failed for virus PestAlert");

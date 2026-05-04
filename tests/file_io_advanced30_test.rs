@@ -80,6 +80,10 @@
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 use std::env::temp_dir;
 
+fn tmp(name: impl AsRef<str>) -> std::path::PathBuf {
+    temp_dir().join(format!("{}_{}", name.as_ref(), std::process::id()))
+}
+
 // ---------------------------------------------------------------------------
 // Domain model
 // ---------------------------------------------------------------------------
@@ -239,7 +243,7 @@ fn test_order_file_roundtrip() {
         100_000_000,
         OrderStatus::Open,
     );
-    let path = temp_dir().join("oxicode_crypto_order_roundtrip.bin");
+    let path = tmp("oxicode_crypto_order_roundtrip.bin");
 
     encode_to_file(&order, &path).expect("encode_to_file Order failed");
     let decoded: Order = decode_from_file(&path).expect("decode_from_file Order failed");
@@ -251,7 +255,7 @@ fn test_order_file_roundtrip() {
 #[test]
 fn test_trade_file_roundtrip() {
     let trade = make_trade(101, 1, 2, 6_500_000_000, 50_000_000);
-    let path = temp_dir().join("oxicode_crypto_trade_roundtrip.bin");
+    let path = tmp("oxicode_crypto_trade_roundtrip.bin");
 
     encode_to_file(&trade, &path).expect("encode_to_file Trade failed");
     let decoded: Trade = decode_from_file(&path).expect("decode_from_file Trade failed");
@@ -268,7 +272,7 @@ fn test_account_balance_file_roundtrip() {
         available_sat: 500_000_000,
         locked_sat: 100_000_000,
     };
-    let path = temp_dir().join("oxicode_crypto_balance_roundtrip.bin");
+    let path = tmp("oxicode_crypto_balance_roundtrip.bin");
 
     encode_to_file(&balance, &path).expect("encode AccountBalance failed");
     let decoded: AccountBalance = decode_from_file(&path).expect("decode AccountBalance failed");
@@ -313,7 +317,7 @@ fn test_order_book_file_roundtrip() {
         asks,
         timestamp: 1_700_050_000,
     };
-    let path = temp_dir().join("oxicode_crypto_orderbook_roundtrip.bin");
+    let path = tmp("oxicode_crypto_orderbook_roundtrip.bin");
 
     encode_to_file(&book, &path).expect("encode OrderBook failed");
     let decoded: OrderBook = decode_from_file(&path).expect("decode OrderBook failed");
@@ -360,7 +364,7 @@ fn test_large_order_book_500_orders() {
         asks,
         timestamp: 1_700_060_000,
     };
-    let path = temp_dir().join("oxicode_crypto_large_orderbook.bin");
+    let path = tmp("oxicode_crypto_large_orderbook.bin");
 
     encode_to_file(&book, &path).expect("encode large OrderBook failed");
     let decoded: OrderBook = decode_from_file(&path).expect("decode large OrderBook failed");
@@ -376,7 +380,7 @@ fn test_vec_of_trades_roundtrip() {
     let trades: Vec<Trade> = (0..200)
         .map(|i| make_trade(i, i * 2, i * 2 + 1, 6_500_000_000 + i * 500, 10_000_000))
         .collect();
-    let path = temp_dir().join("oxicode_crypto_vec_trades.bin");
+    let path = tmp("oxicode_crypto_vec_trades.bin");
 
     encode_to_file(&trades, &path).expect("encode Vec<Trade> failed");
     let decoded: Vec<Trade> = decode_from_file(&path).expect("decode Vec<Trade> failed");
@@ -397,7 +401,7 @@ fn test_bytes_match_encode_to_vec_for_order() {
         200_000_000,
         OrderStatus::Filled,
     );
-    let path = temp_dir().join("oxicode_crypto_bytes_match_order.bin");
+    let path = tmp("oxicode_crypto_bytes_match_order.bin");
 
     encode_to_file(&order, &path).expect("encode_to_file for byte-match test failed");
     let file_bytes = std::fs::read(&path).expect("read file bytes failed");
@@ -432,7 +436,7 @@ fn test_bytes_match_encode_to_vec_for_order_book() {
         asks: Vec::new(),
         timestamp: 1_700_070_000,
     };
-    let path = temp_dir().join("oxicode_crypto_bytes_match_book.bin");
+    let path = tmp("oxicode_crypto_bytes_match_book.bin");
 
     encode_to_file(&book, &path).expect("encode_to_file OrderBook for byte match failed");
     let file_bytes = std::fs::read(&path).expect("read file bytes for OrderBook failed");
@@ -444,7 +448,7 @@ fn test_bytes_match_encode_to_vec_for_order_book() {
 
 #[test]
 fn test_overwrite_order_file() {
-    let path = temp_dir().join("oxicode_crypto_overwrite_order.bin");
+    let path = tmp("oxicode_crypto_overwrite_order.bin");
 
     let first = make_order(
         1,
@@ -478,7 +482,7 @@ fn test_overwrite_order_file() {
 
 #[test]
 fn test_error_on_missing_file() {
-    let path = temp_dir().join("oxicode_crypto_nonexistent_order_xyzabc.bin");
+    let path = tmp("oxicode_crypto_nonexistent_order_xyzabc.bin");
     let result = decode_from_file::<Order>(&path);
     assert!(result.is_err(), "expected Err for missing file, got Ok");
 }
@@ -486,7 +490,7 @@ fn test_error_on_missing_file() {
 #[test]
 fn test_all_order_sides_roundtrip() {
     for (idx, side) in [OrderSide::Buy, OrderSide::Sell].iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_crypto_side_{idx}.bin"));
+        let path = tmp(format!("oxicode_crypto_side_{idx}.bin"));
         encode_to_file(side, &path).expect("encode OrderSide failed");
         let decoded: OrderSide = decode_from_file(&path).expect("decode OrderSide failed");
         assert_eq!(side, &decoded);
@@ -504,7 +508,7 @@ fn test_all_order_types_roundtrip() {
         OrderType::TrailingStop,
     ];
     for (idx, ot) in types.iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_crypto_order_type_{idx}.bin"));
+        let path = tmp(format!("oxicode_crypto_order_type_{idx}.bin"));
         encode_to_file(ot, &path).expect("encode OrderType failed");
         let decoded: OrderType = decode_from_file(&path).expect("decode OrderType failed");
         assert_eq!(ot, &decoded);
@@ -523,7 +527,7 @@ fn test_all_order_statuses_roundtrip() {
         OrderStatus::Rejected,
     ];
     for (idx, status) in statuses.iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_crypto_status_{idx}.bin"));
+        let path = tmp(format!("oxicode_crypto_status_{idx}.bin"));
         encode_to_file(status, &path).expect("encode OrderStatus failed");
         let decoded: OrderStatus = decode_from_file(&path).expect("decode OrderStatus failed");
         assert_eq!(status, &decoded);
@@ -540,7 +544,7 @@ fn test_all_asset_classes_roundtrip() {
         AssetClass::Perpetual,
     ];
     for (idx, cls) in classes.iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_crypto_asset_class_{idx}.bin"));
+        let path = tmp(format!("oxicode_crypto_asset_class_{idx}.bin"));
         encode_to_file(cls, &path).expect("encode AssetClass failed");
         let decoded: AssetClass = decode_from_file(&path).expect("decode AssetClass failed");
         assert_eq!(cls, &decoded);
@@ -573,7 +577,7 @@ fn test_trading_pair_all_asset_classes() {
         },
     ];
     for (idx, pair) in pairs.iter().enumerate() {
-        let path = temp_dir().join(format!("oxicode_crypto_trading_pair_{idx}.bin"));
+        let path = tmp(format!("oxicode_crypto_trading_pair_{idx}.bin"));
         encode_to_file(pair, &path).expect("encode TradingPair failed");
         let decoded: TradingPair = decode_from_file(&path).expect("decode TradingPair failed");
         assert_eq!(pair, &decoded);
@@ -597,7 +601,7 @@ fn test_partially_filled_order_roundtrip() {
         1_000_000_000,
         OrderStatus::PartiallyFilled,
     );
-    let path = temp_dir().join("oxicode_crypto_partial_fill.bin");
+    let path = tmp("oxicode_crypto_partial_fill.bin");
 
     encode_to_file(&order, &path).expect("encode partially filled order failed");
     let decoded: Order = decode_from_file(&path).expect("decode partially filled order failed");
@@ -619,7 +623,7 @@ fn test_stop_limit_order_roundtrip() {
         300_000_000,
         OrderStatus::Pending,
     );
-    let path = temp_dir().join("oxicode_crypto_stop_limit_order.bin");
+    let path = tmp("oxicode_crypto_stop_limit_order.bin");
 
     encode_to_file(&order, &path).expect("encode StopLimit order failed");
     let decoded: Order = decode_from_file(&path).expect("decode StopLimit order failed");
@@ -641,7 +645,7 @@ fn test_trailing_stop_order_roundtrip() {
         200_000_000,
         OrderStatus::Open,
     );
-    let path = temp_dir().join("oxicode_crypto_trailing_stop.bin");
+    let path = tmp("oxicode_crypto_trailing_stop.bin");
 
     encode_to_file(&order, &path).expect("encode TrailingStop order failed");
     let decoded: Order = decode_from_file(&path).expect("decode TrailingStop order failed");
@@ -664,7 +668,7 @@ fn test_vec_of_balances_roundtrip() {
             locked_sat: (i as u64) * 100_000,
         })
         .collect();
-    let path = temp_dir().join("oxicode_crypto_vec_balances.bin");
+    let path = tmp("oxicode_crypto_vec_balances.bin");
 
     encode_to_file(&balances, &path).expect("encode Vec<AccountBalance> failed");
     let decoded: Vec<AccountBalance> =
@@ -682,7 +686,7 @@ fn test_empty_order_book_roundtrip() {
         asks: Vec::new(),
         timestamp: 1_700_080_000,
     };
-    let path = temp_dir().join("oxicode_crypto_empty_orderbook.bin");
+    let path = tmp("oxicode_crypto_empty_orderbook.bin");
 
     encode_to_file(&book, &path).expect("encode empty OrderBook failed");
     let decoded: OrderBook = decode_from_file(&path).expect("decode empty OrderBook failed");
@@ -774,7 +778,7 @@ fn test_options_futures_order_book() {
         asks,
         timestamp: 1_700_090_000,
     };
-    let path = temp_dir().join("oxicode_crypto_options_futures_book.bin");
+    let path = tmp("oxicode_crypto_options_futures_book.bin");
 
     encode_to_file(&book, &path).expect("encode options/futures OrderBook failed");
     let decoded: OrderBook =
@@ -809,8 +813,8 @@ fn test_cancelled_rejected_orders_roundtrip() {
         OrderStatus::Rejected,
     );
 
-    let path_c = temp_dir().join("oxicode_crypto_cancelled_order.bin");
-    let path_r = temp_dir().join("oxicode_crypto_rejected_order.bin");
+    let path_c = tmp("oxicode_crypto_cancelled_order.bin");
+    let path_r = tmp("oxicode_crypto_rejected_order.bin");
 
     encode_to_file(&cancelled, &path_c).expect("encode Cancelled order failed");
     encode_to_file(&rejected, &path_r).expect("encode Rejected order failed");

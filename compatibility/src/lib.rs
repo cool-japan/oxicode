@@ -15,7 +15,7 @@ mod tests {
 
         // Encode with bincode
         let bin_config = bincode::config::standard();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -38,7 +38,7 @@ mod tests {
 
         let oxi_bytes = oxicode::encode_to_vec(&value).expect("oxicode encode failed");
         let bin_config = bincode::config::standard();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -85,7 +85,7 @@ mod tests {
 
         let oxi_bytes = oxicode::encode_to_vec(&value).expect("oxicode encode failed");
         let bin_config = bincode::config::standard();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -99,7 +99,7 @@ mod tests {
 
         let oxi_bytes = oxicode::encode_to_vec(&value).expect("oxicode encode failed");
         let bin_config = bincode::config::standard();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -132,7 +132,7 @@ mod tests {
 
         // bincode with legacy config
         let bin_config = bincode::config::legacy();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -149,7 +149,7 @@ mod tests {
             oxicode::encode_to_vec_with_config(&value, oxi_config).expect("oxicode encode failed");
 
         let bin_config = bincode::config::standard().with_big_endian();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -166,7 +166,7 @@ mod tests {
             oxicode::encode_to_vec_with_config(&value, oxi_config).expect("oxicode encode failed");
 
         let bin_config = bincode::config::standard().with_fixed_int_encoding();
-        let bin_bytes = bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+        let bin_bytes = bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
         assert_eq!(
             oxi_bytes, bin_bytes,
@@ -318,7 +318,7 @@ mod tests {
         for ch in chars {
             let oxi_bytes = oxicode::encode_to_vec(&ch).expect("oxicode encode failed");
             let bin_config = bincode::config::standard();
-            let bin_bytes = bincode::encode_to_vec(&ch, bin_config).expect("bincode encode failed");
+            let bin_bytes = bincode::encode_to_vec(ch, bin_config).expect("bincode encode failed");
 
             assert_eq!(
                 oxi_bytes, bin_bytes,
@@ -350,7 +350,7 @@ mod tests {
             let oxi_bytes = oxicode::encode_to_vec(&value).expect("oxicode encode failed");
             let bin_config = bincode::config::standard();
             let bin_bytes =
-                bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+                bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
             assert_eq!(
                 oxi_bytes, bin_bytes,
@@ -369,7 +369,7 @@ mod tests {
             let oxi_bytes = oxicode::encode_to_vec(&value).expect("oxicode encode failed");
             let bin_config = bincode::config::standard();
             let bin_bytes =
-                bincode::encode_to_vec(&value, bin_config).expect("bincode encode failed");
+                bincode::encode_to_vec(value, bin_config).expect("bincode encode failed");
 
             assert_eq!(
                 oxi_bytes, bin_bytes,

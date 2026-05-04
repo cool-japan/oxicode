@@ -471,7 +471,7 @@ OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::lega
 
 ## Project Status
 
-**Version 0.2.2 - Production Ready**
+**Version 0.2.3 - Production Ready**
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 

@@ -120,6 +120,13 @@ struct Nested {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: PID-suffixed temp path to avoid cross-process collisions
+// ---------------------------------------------------------------------------
+fn tmp_path(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{}_{}", name, std::process::id()))
+}
+
+// ---------------------------------------------------------------------------
 // Test 1: Decode from truly empty buffer returns error (UnexpectedEof)
 // ---------------------------------------------------------------------------
 #[tokio::test]
@@ -661,8 +668,7 @@ async fn test_async7_file_io_write_and_read_back() {
     use tokio::fs;
     use tokio::io::BufReader;
 
-    let dir = std::env::temp_dir();
-    let path = dir.join("oxicode_async7_test20.bin");
+    let path = tmp_path("oxicode_async7_test20.bin");
 
     let values: Vec<u32> = vec![111, 222, 333, 444, 555];
 
@@ -699,8 +705,7 @@ async fn test_async7_file_io_structs_roundtrip() {
     use tokio::fs;
     use tokio::io::BufWriter;
 
-    let dir = std::env::temp_dir();
-    let path = dir.join("oxicode_async7_test21.bin");
+    let path = tmp_path("oxicode_async7_test21.bin");
 
     let points: Vec<Point> = (0i32..10).map(|i| Point { x: i * 10, y: -i }).collect();
 
@@ -739,8 +744,7 @@ async fn test_async7_file_io_structs_roundtrip() {
 async fn test_async7_file_io_write_read_with_progress_check() {
     use tokio::fs;
 
-    let dir = std::env::temp_dir();
-    let path = dir.join("oxicode_async7_test22.bin");
+    let path = tmp_path("oxicode_async7_test22.bin");
 
     const ITEM_COUNT: usize = 50;
     let values: Vec<u64> = (0..ITEM_COUNT as u64).map(|i| i * i).collect();

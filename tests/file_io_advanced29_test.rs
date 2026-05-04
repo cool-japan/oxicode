@@ -80,6 +80,10 @@
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 use std::env::temp_dir;
 
+fn tmp(name: impl AsRef<str>) -> std::path::PathBuf {
+    temp_dir().join(format!("{}_{}", name.as_ref(), std::process::id()))
+}
+
 // ---------------------------------------------------------------------------
 // Domain model
 // ---------------------------------------------------------------------------
@@ -202,7 +206,7 @@ fn make_profile(station_id: u32, n_readings: usize) -> OceanicProfile {
 #[test]
 fn test_ocean_station_file_roundtrip() {
     let station = make_station(1);
-    let path = temp_dir().join("oxicode_ocean_station_1.bin");
+    let path = tmp("oxicode_ocean_station_1.bin");
 
     encode_to_file(&station, &path).expect("encode OceanStation to file");
     let decoded: OceanStation = decode_from_file(&path).expect("decode OceanStation from file");
@@ -214,7 +218,7 @@ fn test_ocean_station_file_roundtrip() {
 #[test]
 fn test_ctd_reading_file_roundtrip() {
     let ctd = make_ctd(42, 250.0);
-    let path = temp_dir().join("oxicode_ctd_reading_1.bin");
+    let path = tmp("oxicode_ctd_reading_1.bin");
 
     encode_to_file(&ctd, &path).expect("encode CTDReading to file");
     let decoded: CTDReading = decode_from_file(&path).expect("decode CTDReading from file");
@@ -233,7 +237,7 @@ fn test_current_vector_file_roundtrip() {
         v_ms: -0.12,
         w_ms: 0.002,
     };
-    let path = temp_dir().join("oxicode_current_vector_1.bin");
+    let path = tmp("oxicode_current_vector_1.bin");
 
     encode_to_file(&cv, &path).expect("encode CurrentVector to file");
     let decoded: CurrentVector = decode_from_file(&path).expect("decode CurrentVector from file");
@@ -250,7 +254,7 @@ fn test_tidal_observation_file_roundtrip() {
         water_level_cm: 312,
         predicted_cm: 298,
     };
-    let path = temp_dir().join("oxicode_tidal_obs_1.bin");
+    let path = tmp("oxicode_tidal_obs_1.bin");
 
     encode_to_file(&obs, &path).expect("encode TidalObservation to file");
     let decoded: TidalObservation =
@@ -270,7 +274,7 @@ fn test_seabed_sample_file_roundtrip() {
         sediment_type: SedimentType::CoralReef,
         organic_pct: 3.7,
     };
-    let path = temp_dir().join("oxicode_seabed_sample_1.bin");
+    let path = tmp("oxicode_seabed_sample_1.bin");
 
     encode_to_file(&sample, &path).expect("encode SeabedSample to file");
     let decoded: SeabedSample = decode_from_file(&path).expect("decode SeabedSample from file");
@@ -282,7 +286,7 @@ fn test_seabed_sample_file_roundtrip() {
 #[test]
 fn test_oceanic_profile_file_roundtrip() {
     let profile = make_profile(5, 20);
-    let path = temp_dir().join("oxicode_oceanic_profile_1.bin");
+    let path = tmp("oxicode_oceanic_profile_1.bin");
 
     encode_to_file(&profile, &path).expect("encode OceanicProfile to file");
     let decoded: OceanicProfile = decode_from_file(&path).expect("decode OceanicProfile from file");
@@ -295,7 +299,7 @@ fn test_oceanic_profile_file_roundtrip() {
 fn test_large_profile_500_readings() {
     let profile = make_profile(99, 500);
     assert_eq!(profile.readings.len(), 500);
-    let path = temp_dir().join("oxicode_large_profile_500.bin");
+    let path = tmp("oxicode_large_profile_500.bin");
 
     encode_to_file(&profile, &path).expect("encode large profile (500 readings)");
     let decoded: OceanicProfile =
@@ -309,7 +313,7 @@ fn test_large_profile_500_readings() {
 #[test]
 fn test_vec_of_stations_file_roundtrip() {
     let stations: Vec<OceanStation> = (1..=15).map(make_station).collect();
-    let path = temp_dir().join("oxicode_vec_stations.bin");
+    let path = tmp("oxicode_vec_stations.bin");
 
     encode_to_file(&stations, &path).expect("encode Vec<OceanStation>");
     let decoded: Vec<OceanStation> = decode_from_file(&path).expect("decode Vec<OceanStation>");
@@ -322,7 +326,7 @@ fn test_vec_of_stations_file_roundtrip() {
 #[test]
 fn test_byte_match_file_vs_encode_to_vec_station() {
     let station = make_station(3);
-    let path = temp_dir().join("oxicode_byte_match_station.bin");
+    let path = tmp("oxicode_byte_match_station.bin");
 
     encode_to_file(&station, &path).expect("encode station for byte match");
     let file_bytes = std::fs::read(&path).expect("read station file");
@@ -338,7 +342,7 @@ fn test_byte_match_file_vs_encode_to_vec_station() {
 #[test]
 fn test_byte_match_file_vs_encode_to_vec_profile() {
     let profile = make_profile(10, 30);
-    let path = temp_dir().join("oxicode_byte_match_profile.bin");
+    let path = tmp("oxicode_byte_match_profile.bin");
 
     encode_to_file(&profile, &path).expect("encode profile for byte match");
     let file_bytes = std::fs::read(&path).expect("read profile file");
@@ -353,7 +357,7 @@ fn test_byte_match_file_vs_encode_to_vec_profile() {
 
 #[test]
 fn test_error_on_missing_file() {
-    let path = temp_dir().join("oxicode_ocean_nonexistent_xyz_29.bin");
+    let path = tmp("oxicode_ocean_nonexistent_xyz_29.bin");
     // Ensure it doesn't exist
     let _ = std::fs::remove_file(&path);
     let result = decode_from_file::<OceanStation>(&path);
@@ -365,7 +369,7 @@ fn test_error_on_missing_file() {
 
 #[test]
 fn test_overwrite_station_file() {
-    let path = temp_dir().join("oxicode_overwrite_station.bin");
+    let path = tmp("oxicode_overwrite_station.bin");
 
     let first = make_station(1);
     encode_to_file(&first, &path).expect("first write");
@@ -398,7 +402,7 @@ fn test_all_sediment_type_variants() {
             sediment_type: variant.clone(),
             organic_pct: i as f32 * 0.5,
         };
-        let path = temp_dir().join(format!("oxicode_sediment_{i}.bin"));
+        let path = tmp(format!("oxicode_sediment_{i}.bin"));
         encode_to_file(&sample, &path).expect("encode sediment sample");
         let decoded: SeabedSample = decode_from_file(&path).expect("decode sediment sample");
         assert_eq!(sample, decoded);
@@ -409,7 +413,7 @@ fn test_all_sediment_type_variants() {
 #[test]
 fn test_vec_of_ctd_readings_roundtrip() {
     let readings: Vec<CTDReading> = (0..50).map(|i| make_ctd(7, i as f32 * 5.0)).collect();
-    let path = temp_dir().join("oxicode_vec_ctd_readings.bin");
+    let path = tmp("oxicode_vec_ctd_readings.bin");
 
     encode_to_file(&readings, &path).expect("encode Vec<CTDReading>");
     let decoded: Vec<CTDReading> = decode_from_file(&path).expect("decode Vec<CTDReading>");
@@ -421,7 +425,7 @@ fn test_vec_of_ctd_readings_roundtrip() {
 #[test]
 fn test_option_station_some_roundtrip() {
     let opt: Option<OceanStation> = Some(make_station(77));
-    let path = temp_dir().join("oxicode_option_station_some.bin");
+    let path = tmp("oxicode_option_station_some.bin");
 
     encode_to_file(&opt, &path).expect("encode Option<OceanStation> Some");
     let decoded: Option<OceanStation> =
@@ -434,7 +438,7 @@ fn test_option_station_some_roundtrip() {
 #[test]
 fn test_option_station_none_roundtrip() {
     let opt: Option<OceanStation> = None;
-    let path = temp_dir().join("oxicode_option_station_none.bin");
+    let path = tmp("oxicode_option_station_none.bin");
 
     encode_to_file(&opt, &path).expect("encode Option<OceanStation> None");
     let decoded: Option<OceanStation> =
@@ -484,7 +488,7 @@ fn test_multiple_profiles_different_depths() {
     let depths_counts = [(100usize, "shallow"), (300usize, "mid"), (600usize, "deep")];
     for (id, (count, label)) in depths_counts.iter().enumerate() {
         let profile = make_profile(id as u32, *count);
-        let path = temp_dir().join(format!("oxicode_profile_{label}.bin"));
+        let path = tmp(format!("oxicode_profile_{label}.bin"));
 
         encode_to_file(&profile, &path).expect("encode profile");
         let decoded: OceanicProfile = decode_from_file(&path).expect("decode profile");
@@ -508,7 +512,7 @@ fn test_station_with_unicode_name() {
         depth_m: 40.0,
         name: "東京湾観測点 🌊".to_string(),
     };
-    let path = temp_dir().join("oxicode_station_unicode.bin");
+    let path = tmp("oxicode_station_unicode.bin");
 
     encode_to_file(&station, &path).expect("encode station unicode");
     let decoded: OceanStation = decode_from_file(&path).expect("decode station unicode");
@@ -528,7 +532,7 @@ fn test_vec_of_tidal_observations_file_roundtrip() {
             predicted_cm: (i as i32 * 7 - 345),
         })
         .collect();
-    let path = temp_dir().join("oxicode_vec_tidal_obs.bin");
+    let path = tmp("oxicode_vec_tidal_obs.bin");
 
     encode_to_file(&observations, &path).expect("encode Vec<TidalObservation>");
     let decoded: Vec<TidalObservation> =
@@ -564,7 +568,7 @@ fn test_empty_oceanic_profile_file_roundtrip() {
         timestamp: 0,
         readings: Vec::new(),
     };
-    let path = temp_dir().join("oxicode_empty_profile.bin");
+    let path = tmp("oxicode_empty_profile.bin");
 
     encode_to_file(&profile, &path).expect("encode empty OceanicProfile");
     let decoded: OceanicProfile = decode_from_file(&path).expect("decode empty OceanicProfile");

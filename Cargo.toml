@@ -3,7 +3,7 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
 rust-version = "1.74.0"
@@ -60,7 +60,7 @@ validation = []               # Enable validation trait implementations in tests
 versioning = []               # Enable versioning API tests
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.2.2", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.3", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
 oxiarc-lz4 = { version = "0.2.7", optional = true }
 oxiarc-zstd = { version = "0.2.7", optional = true }
