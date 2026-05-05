@@ -35,6 +35,20 @@ This TODO list tracks the development of oxicode, the successor to bincode.
 ### Refactoring
 - [x] **`splitrs` of `compression_lz4_advanced31_test.rs`**: Pre-emptive split of the 1,960-line monolith into 5 focused files (`…_venue_test.rs` 370 / `…_stage_test.rs` 674 / `…_ops_test.rs` 521 / `…_sales_test.rs` 606 / `…_bundle_test.rs` 241), preserving all 22 test names. No test file now exceeds 1,881 lines.
 - [x] **`splitrs` of `tests/versioning_test.rs`**: Pre-emptive split of the 1,881-line file into 5 focused files (`versioning_basics_test.rs` 290 / `versioning_compat_test.rs` 360 / `versioning_encoding_test.rs` 479 / `versioning_evolution_test.rs` 551 / `versioning_advanced55_test.rs` 428), preserving all 99 test names. Largest descendant: 551 lines.
+- [x] **`splitrs` of 5 `nested_structs_advanced*` watch-list files**: Pre-emptive split of the 5 largest `tests/` files (8,499 lines total) into 20 focused files, preserving all 110 test names. Per-file results:
+  - `advanced12_test.rs` (5G telecom, 1,871 → ran 536 / slice 418 / operations 1089 / snapshot 540)
+  - `advanced6_test.rs` (semiconductor, 1,742 → wafer 439 / deposition 583 / metrology 600 / etest 406)
+  - `advanced16_test.rs` (cemetery, 1,660 → plots 634 / monuments 491 / maintenance 696 / deeds 649)
+  - `advanced14_test.rs` (wine, 1,634 → vineyard 358 / fermentation 455 / lab 412 / cellar 1187)
+  - `advanced5_test.rs` (digital twins, 1,592 → factory 607 / maintenance 356 / energy 369 / simulation 806)
+  Largest descendant: `nested_structs_advanced14_cellar_test.rs` at 1,187 lines.
+- [x] **`splitrs` of `tests/proptest_test.rs`**: Pre-emptive split of the 1,698-line
+  property-based roundtrip suite into 5 themed files (`proptest_primitives_test.rs` 691
+  / `proptest_structs_test.rs` 283 / `proptest_collections_net_test.rs` 368 /
+  `proptest_io_misc_test.rs` 503 / `proptest_collections_ext_test.rs` 160), preserving all
+  80 `proptest!` blocks from the original. Pre-existing `tests/proptest_derive_test.rs`
+  (407 lines, 22 blocks) preserved intact. `.config/nextest.toml` updated to reference
+  the 5 new test binaries. Largest new file: `proptest_primitives_test.rs` at 691 lines.
 
 ### Versioning
 - [x] **Branch-name-driven bump**: Workspace and crate versions raised from `0.2.2` to `0.2.3`; `oxicode_derive` and `compatibility` dep pins updated to match.
@@ -45,7 +59,7 @@ This TODO list tracks the development of oxicode, the successor to bincode.
 - [x] **19,951 / 19,951 tests pass** under `cargo nextest run --all-features --workspace`.
 - [x] **Zero warnings** from `cargo clippy --all-features --workspace --all-targets -- -D warnings`.
 - [x] **Zero `.unwrap()`** in production `src/` — audit confirmed all 20 occurrences are inside `///` doc-comment fenced code blocks.
-- [x] **All files < 2000 lines**: largest `src/` file is `src/lib.rs` (1,137); largest `tests/` file is `tests/versioning_test.rs` (1,881).
+- [x] **All files < 2000 lines**: largest `src/` file is `src/lib.rs` (1,137); largest `tests/` file is `tests/file_io_advanced37_test.rs` (1,638).
 
 ---
 

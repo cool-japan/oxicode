@@ -3,5 +3,5 @@
 slow-timeout = { period = "60s", terminate-after = 3 }
 
 [[profile.default.overrides]]
-filter = 'binary_id(oxicode::proptest_test)'
+filter = 'binary_id(oxicode::proptest_collections_ext_test) | binary_id(oxicode::proptest_collections_net_test) | binary_id(oxicode::proptest_io_misc_test) | binary_id(oxicode::proptest_primitives_test) | binary_id(oxicode::proptest_structs_test)'
 slow-timeout = { period = "120s", terminate-after = 1 }
