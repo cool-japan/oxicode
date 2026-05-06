@@ -4,7 +4,9 @@ mod decoder;
 mod impl_tuples;
 mod impls;
 
+pub mod borrow_slice;
 pub mod read;
+pub use self::borrow_slice::BorrowableSliceElement;
 
 use crate::{config::Config, error::Error, utils::Sealed};
 

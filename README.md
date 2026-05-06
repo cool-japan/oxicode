@@ -23,7 +23,7 @@ This project serves as the spiritual successor to [bincode](https://github.com/b
 - **Modern**: Built with latest Rust practices and 2021 edition features
 - **no_std support**: Works in embedded and resource-constrained environments (with `alloc` feature)
 - **Bincode compatibility**: Wire-format compatible with bincode 1.x default via `config::legacy()` (equivalent to bincode 2.0's `config::legacy()` preset)
-- **BorrowDecode**: Zero-copy decoding via the `BorrowDecode` trait — decode into borrowed slices without allocation
+- **BorrowDecode**: Zero-copy decoding via the `BorrowDecode` trait — decode into borrowed slices without allocation; generic `BorrowDecode<'de> for &'de [T]` supported for `u16`, `u32`, `u64`, `i16`, `i32`, `i64`, `f32`, `f64` via `BorrowableSliceElement`
 - **encoded_size API**: Pre-calculate exact encoded byte length without allocating via `encoded_size` / `encoded_size_with_config`
 - **Fixed-array encoding**: `encode_to_fixed_array::<N>()` — encode directly into a stack-allocated `[u8; N]`
 - **Sequence API**: `encode_seq_to_vec` / `decode_iter_from_slice` for streaming multi-item buffers
@@ -475,12 +475,12 @@ OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::lega
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 
-**Statistics** (as of 2026-05-03):
-- **Lines of Code**: 514,298 (Rust source lines across 985 files)
-- **Files**: 985 Rust files
-- **Test Coverage**: 19,933 tests passing (100% pass rate, 0 skipped)
+**Statistics** (as of 2026-05-06):
+- **Lines of Code**: 518,445 (Rust source lines across 1,014 files)
+- **Files**: 1,014 Rust files
+- **Test Coverage**: 19,970 tests passing (100% pass rate, 0 skipped)
   - 18 binary compatibility tests (100% byte-for-byte identical to bincode)
-  - 19,915+ feature, integration, property-based, and stress tests
+  - 19,952+ feature, integration, property-based, and stress tests
 - **Type Coverage**: 120+ types with full Encode/Decode support
 - **Binary Compatibility**: 100% verified through cross-library testing
 - **Code Quality**: ✓ Zero unwrap(), ✓ Zero warnings, ✓ All files < 2000 lines
