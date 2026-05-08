@@ -83,6 +83,10 @@ pub mod simd;
 #[cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 pub mod compression;
 
+#[cfg(feature = "alloc")]
+pub mod flat;
+#[cfg(feature = "alloc")]
+pub use flat::{FlatDecoder, FlatEncoder};
 // Schema versioning support
 pub mod versioning;
 

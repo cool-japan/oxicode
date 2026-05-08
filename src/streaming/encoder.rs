@@ -2,6 +2,9 @@
 
 use super::chunk::ChunkHeader;
 use super::{StreamingConfig, StreamingProgress};
+use crate::config::Config;
+#[cfg(feature = "std")]
+use crate::config::{Configuration, LittleEndian, NoLimit, Varint};
 use crate::enc::{Encode, EncoderImpl, VecWriter};
 use crate::{config, Result};
 
@@ -22,8 +25,9 @@ use std::io::Write;
 /// This allows encoding very large collections without loading
 /// everything into memory at once.
 #[cfg(feature = "std")]
-pub struct StreamingEncoder<W: Write> {
+pub struct StreamingEncoder<W: Write, C = Configuration<LittleEndian, Varint, NoLimit>> {
     writer: W,
+    encoding_config: C,
     config: StreamingConfig,
     buffer: alloc::vec::Vec<u8>,
     items_in_buffer: u32,
@@ -42,6 +46,7 @@ impl<W: Write> StreamingEncoder<W> {
     pub fn with_config(writer: W, config: StreamingConfig) -> Self {
         Self {
             writer,
+            encoding_config: config::standard(),
             config,
             buffer: alloc::vec::Vec::new(),
             items_in_buffer: 0,
@@ -49,7 +54,41 @@ impl<W: Write> StreamingEncoder<W> {
             progress_callback: None,
         }
     }
+}
 
+#[cfg(feature = "std")]
+impl<W: Write, C: Config> StreamingEncoder<W, C> {
+    /// Create a streaming encoder with custom encoding configuration.
+    /// The chunking configuration is still taken from the default `StreamingConfig`.
+    /// This allows you to use a custom encoding configuration while still using the default chunking behavior.
+    pub fn new_with(writer: W, encoding_config: C) -> Self {
+        Self {
+            writer,
+            encoding_config,
+            config: StreamingConfig::default(),
+            buffer: alloc::vec::Vec::new(),
+            items_in_buffer: 0,
+            progress: StreamingProgress::default(),
+            progress_callback: None,
+        }
+    }
+    
+    /// Create a streaming encoder with custom encoding and chunking configuration.
+    /// This allows you to fully customize both the encoding behavior and the chunking behavior.
+    /// The `encoding_config` is used for encoding individual items, while the `config` is used for controlling how items are buffered and when chunks are flushed.
+    /// For example, you could use a custom encoding configuration that uses a different endianness or varint encoding, while still using the default chunking behavior.
+    /// Or you could use a custom chunking configuration that flushes after every item, while still using the default encoding configuration.
+    pub fn new_with_config(writer: W, encoding_config: C, config: StreamingConfig) -> Self {
+        Self {
+            writer,
+            encoding_config,
+            config,
+            buffer: alloc::vec::Vec::new(),
+            items_in_buffer: 0,
+            progress: StreamingProgress::default(),
+            progress_callback: None,
+        }
+    }
     /// Set a progress callback.
     pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
         self.progress_callback = Some(callback);
@@ -65,7 +104,7 @@ impl<W: Write> StreamingEncoder<W> {
     pub fn write_item<T: Encode>(&mut self, item: &T) -> Result<()> {
         // Encode item to temporary buffer
         let item_writer = VecWriter::new();
-        let mut encoder = EncoderImpl::new(item_writer, config::standard());
+        let mut encoder = EncoderImpl::new(item_writer, self.encoding_config);
         item.encode(&mut encoder)?;
         let item_bytes = encoder.into_writer().into_vec();
 
