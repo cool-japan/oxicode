@@ -4,7 +4,7 @@
 
 This TODO list tracks the development of oxicode, the successor to bincode.
 
-**Last Updated**: 2026-05-06 (version 0.2.3)
+**Last Updated**: 2026-05-08 (version 0.2.3)
 
 ---
 

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.3] - 2026-05-06
+## [0.2.3] - 2026-05-08
 
 ### Fixed
 - Clippy `needless_borrows_for_generic_args` lint in the `compatibility` crate — removed redundant `&` borrow at 10 `bincode::encode_to_vec` call sites in `compatibility/src/lib.rs`. Restores `cargo clippy --all-features --workspace -- -D warnings` to a clean run, satisfying the no-warnings policy.
