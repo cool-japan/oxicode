@@ -567,3 +567,77 @@ impl<'de> BorrowDecode<'de> for &'de [i8] {
         Ok(signed_bytes)
     }
 }
+
+// ===== BorrowDecode for &[T] where T: BorrowableSliceElement (zero-copy Pod-primitive) =====
+
+/// Zero-copy borrow-decode for `&'de [T]` where `T` is a Pod-like primitive.
+///
+/// Reinterprets a contiguous byte slice from the input buffer as `&'de [T]`
+/// without copying. Three runtime guards ensure soundness:
+///
+/// 1. **Encoding gate** — `IntEncoding::Fixed` only; Varint compresses
+///    elements and breaks the in-memory layout identity.
+/// 2. **Endianness gate** — decoder endianness must match the host's native
+///    byte order for any `T` wider than one byte.
+/// 3. **Alignment gate** — `take_bytes`'s result must be aligned to
+///    `align_of::<T>()`.
+///
+/// All gates produce `Error::InvalidData` with a descriptive message on
+/// failure, making the error actionable (switch to `Vec<T>`, fix config, etc.).
+impl<'de, T> BorrowDecode<'de> for &'de [T]
+where
+    T: crate::de::BorrowableSliceElement,
+{
+    fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        use crate::config::{Config, IntEncoding};
+        use crate::de::Decode;
+
+        let len = u64::decode(decoder)? as usize;
+        decoder.claim_container_read::<T>(len)?;
+
+        // Encoding gate: only Fixint produces verbatim in-memory layout per element.
+        let cfg = decoder.config();
+        if cfg.int_encoding() != IntEncoding::Fixed {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T] requires IntEncoding::Fixed; \
+                          varint-encoded payloads do not match in-memory layout",
+            });
+        }
+
+        // Endianness gate: the buffer bytes must match the host's native byte order.
+        if !T::endianness_compatible(cfg.endianness()) {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T] requires native endianness; \
+                          use Vec<T> for cross-endian decoding",
+            });
+        }
+
+        let elem_size = core::mem::size_of::<T>();
+        let byte_count = len.checked_mul(elem_size).ok_or(Error::InvalidData {
+            message: "borrow-decode of &[T]: length × element-size overflows usize",
+        })?;
+
+        let bytes = decoder.borrow_reader().take_bytes(byte_count)?;
+
+        // Alignment gate: pointer must satisfy align_of::<T>().
+        let align = core::mem::align_of::<T>();
+        if (bytes.as_ptr() as usize) % align != 0 {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T]: buffer is not aligned to align_of::<T>(); \
+                          use Vec<T> instead",
+            });
+        }
+
+        // SAFETY:
+        // - `bytes` is `&'de [u8]` with length exactly `len * size_of::<T>()`.
+        // - `bytes.as_ptr()` is aligned to `align_of::<T>()` (checked above).
+        // - Encoding is Fixed and endianness is native (checked above), so
+        //   the bytes are a verbatim copy of `[T; len]` in host memory.
+        // - `T: BorrowableSliceElement` guarantees: `T: Copy + Sized + 'static`,
+        //   all bit patterns are valid, layout is fixed and known.
+        // - Lifetime `'de` of `bytes` is correctly propagated.
+        let slice: &'de [T] =
+            unsafe { core::slice::from_raw_parts(bytes.as_ptr() as *const T, len) };
+        Ok(slice)
+    }
+}

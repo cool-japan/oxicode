@@ -157,7 +157,7 @@ fn make_md_config() -> SimulationConfig {
 }
 
 fn temp_path(name: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!("oxicode_phys_{}", name))
+    std::env::temp_dir().join(format!("oxicode_phys_{}_{}", name, std::process::id()))
 }
 
 // ---------------------------------------------------------------------------

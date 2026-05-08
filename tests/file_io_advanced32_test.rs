@@ -80,6 +80,10 @@
 use oxicode::{decode_from_file, decode_from_slice, encode_to_file, encode_to_vec, Decode, Encode};
 use std::env::temp_dir;
 
+fn tmp(name: impl AsRef<str>) -> std::path::PathBuf {
+    temp_dir().join(format!("{}_{}", name.as_ref(), std::process::id()))
+}
+
 // ─── Domain types ────────────────────────────────────────────────────────────
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
@@ -186,7 +190,7 @@ fn test_rover_position_file_roundtrip() {
         heading_deg: 270.0,
         timestamp: 1_700_000_000,
     };
-    let path = temp_dir().join("oxicode_rover_position.bin");
+    let path = tmp("oxicode_rover_position.bin");
     encode_to_file(&pos, &path).expect("encode RoverPosition to file");
     let decoded: RoverPosition = decode_from_file(&path).expect("decode RoverPosition from file");
     assert_eq!(pos, decoded);
@@ -206,7 +210,7 @@ fn test_science_sample_file_roundtrip() {
         composition: vec![12, 34, 56, 78, 90, 11],
         collected_at: 1_700_001_000,
     };
-    let path = temp_dir().join("oxicode_science_sample.bin");
+    let path = tmp("oxicode_science_sample.bin");
     encode_to_file(&sample, &path).expect("encode ScienceSample to file");
     let decoded: ScienceSample = decode_from_file(&path).expect("decode ScienceSample from file");
     assert_eq!(sample, decoded);
@@ -224,7 +228,7 @@ fn test_system_health_file_roundtrip() {
         memory_free_kb: 204_800,
         mode: RoverMode::Science,
     };
-    let path = temp_dir().join("oxicode_system_health.bin");
+    let path = tmp("oxicode_system_health.bin");
     encode_to_file(&health, &path).expect("encode SystemHealth to file");
     let decoded: SystemHealth = decode_from_file(&path).expect("decode SystemHealth from file");
     assert_eq!(health, decoded);
@@ -242,7 +246,7 @@ fn test_instrument_reading_file_roundtrip() {
         data: (0u8..128).collect(),
         quality_score: 99,
     };
-    let path = temp_dir().join("oxicode_instrument_reading.bin");
+    let path = tmp("oxicode_instrument_reading.bin");
     encode_to_file(&reading, &path).expect("encode InstrumentReading to file");
     let decoded: InstrumentReading =
         decode_from_file(&path).expect("decode InstrumentReading from file");
@@ -269,7 +273,7 @@ fn test_terrain_map_small_file_roundtrip() {
         height_cells: 2,
         cells,
     };
-    let path = temp_dir().join("oxicode_terrain_map_small.bin");
+    let path = tmp("oxicode_terrain_map_small.bin");
     encode_to_file(&map, &path).expect("encode small TerrainMap to file");
     let decoded: TerrainMap = decode_from_file(&path).expect("decode small TerrainMap from file");
     assert_eq!(map, decoded);
@@ -287,7 +291,7 @@ fn test_mission_event_file_roundtrip() {
         description: "Touchdown confirmed — Jezero Crater".to_string(),
         is_anomaly: false,
     };
-    let path = temp_dir().join("oxicode_mission_event.bin");
+    let path = tmp("oxicode_mission_event.bin");
     encode_to_file(&event, &path).expect("encode MissionEvent to file");
     let decoded: MissionEvent = decode_from_file(&path).expect("decode MissionEvent from file");
     assert_eq!(event, decoded);
@@ -315,7 +319,7 @@ fn test_terrain_map_large_100x100_file_roundtrip() {
         height_cells: 100,
         cells,
     };
-    let path = temp_dir().join("oxicode_terrain_map_large.bin");
+    let path = tmp("oxicode_terrain_map_large.bin");
     encode_to_file(&map, &path).expect("encode large TerrainMap to file");
     let decoded: TerrainMap = decode_from_file(&path).expect("decode large TerrainMap from file");
     assert_eq!(map.rover_id, decoded.rover_id);
@@ -341,7 +345,7 @@ fn test_large_science_sample_collection_file_roundtrip() {
             collected_at: 1_700_000_000 + i as u64 * 60,
         })
         .collect();
-    let path = temp_dir().join("oxicode_large_sample_collection.bin");
+    let path = tmp("oxicode_large_sample_collection.bin");
     encode_to_file(&samples, &path).expect("encode large sample collection to file");
     let decoded: Vec<ScienceSample> =
         decode_from_file(&path).expect("decode large sample collection from file");
@@ -361,7 +365,7 @@ fn test_rover_position_file_bytes_match_encode_to_vec() {
         heading_deg: 180.0,
         timestamp: 9_999_999,
     };
-    let path = temp_dir().join("oxicode_rover_pos_bytes_match.bin");
+    let path = tmp("oxicode_rover_pos_bytes_match.bin");
     encode_to_file(&pos, &path).expect("encode RoverPosition for bytes match");
     let file_bytes = std::fs::read(&path).expect("read RoverPosition file bytes");
     let vec_bytes = encode_to_vec(&pos).expect("encode_to_vec RoverPosition");
@@ -380,7 +384,7 @@ fn test_system_health_file_bytes_match_encode_to_vec() {
         memory_free_kb: 65_536,
         mode: RoverMode::Traversal,
     };
-    let path = temp_dir().join("oxicode_system_health_bytes_match.bin");
+    let path = tmp("oxicode_system_health_bytes_match.bin");
     encode_to_file(&health, &path).expect("encode SystemHealth for bytes match");
     let file_bytes = std::fs::read(&path).expect("read SystemHealth file bytes");
     let vec_bytes = encode_to_vec(&health).expect("encode_to_vec SystemHealth");
@@ -399,7 +403,7 @@ fn test_mission_event_file_bytes_match_encode_to_vec() {
         description: "Sample arm deployed successfully".to_string(),
         is_anomaly: false,
     };
-    let path = temp_dir().join("oxicode_mission_event_bytes_match.bin");
+    let path = tmp("oxicode_mission_event_bytes_match.bin");
     encode_to_file(&event, &path).expect("encode MissionEvent for bytes match");
     let file_bytes = std::fs::read(&path).expect("read MissionEvent file bytes");
     let vec_bytes = encode_to_vec(&event).expect("encode_to_vec MissionEvent");
@@ -411,7 +415,7 @@ fn test_mission_event_file_bytes_match_encode_to_vec() {
 
 #[test]
 fn test_overwrite_rover_position_file() {
-    let path = temp_dir().join("oxicode_rover_overwrite.bin");
+    let path = tmp("oxicode_rover_overwrite.bin");
 
     let first = RoverPosition {
         rover_id: 10,
@@ -441,7 +445,7 @@ fn test_overwrite_rover_position_file() {
 
 #[test]
 fn test_decode_from_missing_file_returns_error() {
-    let path = temp_dir().join("oxicode_does_not_exist_rover_telemetry_xyz.bin");
+    let path = tmp("oxicode_does_not_exist_rover_telemetry_xyz.bin");
     // Ensure it really doesn't exist
     let _ = std::fs::remove_file(&path);
     let result = decode_from_file::<RoverPosition>(&path);
@@ -459,7 +463,7 @@ fn test_all_rover_mode_variants_file_roundtrip() {
         RoverMode::Charging,
         RoverMode::Emergency,
     ];
-    let path = temp_dir().join("oxicode_rover_modes.bin");
+    let path = tmp("oxicode_rover_modes.bin");
     encode_to_file(&modes, &path).expect("encode RoverMode variants");
     let decoded: Vec<RoverMode> = decode_from_file(&path).expect("decode RoverMode variants");
     assert_eq!(modes, decoded);
@@ -477,7 +481,7 @@ fn test_all_instrument_type_variants_file_roundtrip() {
         InstrumentType::Weather,
         InstrumentType::Radar,
     ];
-    let path = temp_dir().join("oxicode_instrument_types.bin");
+    let path = tmp("oxicode_instrument_types.bin");
     encode_to_file(&types, &path).expect("encode InstrumentType variants");
     let decoded: Vec<InstrumentType> =
         decode_from_file(&path).expect("decode InstrumentType variants");
@@ -497,7 +501,7 @@ fn test_all_mission_phase_variants_file_roundtrip() {
         MissionPhase::Surface,
         MissionPhase::Return,
     ];
-    let path = temp_dir().join("oxicode_mission_phases.bin");
+    let path = tmp("oxicode_mission_phases.bin");
     encode_to_file(&phases, &path).expect("encode MissionPhase variants");
     let decoded: Vec<MissionPhase> = decode_from_file(&path).expect("decode MissionPhase variants");
     assert_eq!(phases, decoded);
@@ -515,7 +519,7 @@ fn test_all_terrain_type_variants_file_roundtrip() {
         TerrainType::Sandy,
         TerrainType::IcyTerrain,
     ];
-    let path = temp_dir().join("oxicode_terrain_types.bin");
+    let path = tmp("oxicode_terrain_types.bin");
     encode_to_file(&terrains, &path).expect("encode TerrainType variants");
     let decoded: Vec<TerrainType> = decode_from_file(&path).expect("decode TerrainType variants");
     assert_eq!(terrains, decoded);
@@ -533,7 +537,7 @@ fn test_option_rover_position_some_file_roundtrip() {
         heading_deg: 315.0,
         timestamp: 2_000_000_000,
     });
-    let path = temp_dir().join("oxicode_option_rover_position_some.bin");
+    let path = tmp("oxicode_option_rover_position_some.bin");
     encode_to_file(&maybe_pos, &path).expect("encode Some(RoverPosition)");
     let decoded: Option<RoverPosition> =
         decode_from_file(&path).expect("decode Some(RoverPosition)");
@@ -546,7 +550,7 @@ fn test_option_rover_position_some_file_roundtrip() {
 #[test]
 fn test_option_rover_position_none_file_roundtrip() {
     let maybe_pos: Option<RoverPosition> = None;
-    let path = temp_dir().join("oxicode_option_rover_position_none.bin");
+    let path = tmp("oxicode_option_rover_position_none.bin");
     encode_to_file(&maybe_pos, &path).expect("encode None RoverPosition");
     let decoded: Option<RoverPosition> =
         decode_from_file(&path).expect("decode None RoverPosition");
@@ -565,7 +569,7 @@ fn test_anomaly_mission_event_file_roundtrip() {
         description: "CRITICAL: Wheel motor stall detected on front-right actuator".to_string(),
         is_anomaly: true,
     };
-    let path = temp_dir().join("oxicode_anomaly_event.bin");
+    let path = tmp("oxicode_anomaly_event.bin");
     encode_to_file(&event, &path).expect("encode anomaly MissionEvent");
     let decoded: MissionEvent =
         decode_from_file(&path).expect("decode anomaly MissionEvent from file");
@@ -585,7 +589,7 @@ fn test_instrument_reading_decode_from_slice_matches_file() {
         data: vec![0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE],
         quality_score: 77,
     };
-    let path = temp_dir().join("oxicode_instrument_slice_vs_file.bin");
+    let path = tmp("oxicode_instrument_slice_vs_file.bin");
     encode_to_file(&reading, &path).expect("encode InstrumentReading for slice comparison");
 
     // Decode from file
@@ -647,9 +651,9 @@ fn test_mixed_rover_telemetry_batch_file_roundtrip() {
         })
         .collect();
 
-    let path_pos = temp_dir().join("oxicode_batch_positions.bin");
-    let path_health = temp_dir().join("oxicode_batch_health.bin");
-    let path_readings = temp_dir().join("oxicode_batch_readings.bin");
+    let path_pos = tmp("oxicode_batch_positions.bin");
+    let path_health = tmp("oxicode_batch_health.bin");
+    let path_readings = tmp("oxicode_batch_readings.bin");
 
     encode_to_file(&positions, &path_pos).expect("encode batch positions");
     encode_to_file(&health_snapshots, &path_health).expect("encode batch health");

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-05-08
+
+### Fixed
+- Clippy `needless_borrows_for_generic_args` lint in the `compatibility` crate — removed redundant `&` borrow at 10 `bincode::encode_to_vec` call sites in `compatibility/src/lib.rs`. Restores `cargo clippy --all-features --workspace -- -D warnings` to a clean run, satisfying the no-warnings policy.
+- Temp-file collisions across concurrent test invocations in `tests/async_advanced7_test.rs`, `tests/file_io_advanced15_test.rs`, `tests/file_io_advanced17_test.rs`, `tests/file_io_advanced29_test.rs`, `tests/file_io_advanced30_test.rs`, `tests/file_io_advanced31_test.rs`, and `tests/file_io_advanced32_test.rs`. Each file now uses the canonical `std::process::id()`-suffixed temp-path helper that was introduced for `file_io_advanced13_test.rs` in 0.2.2.
+
+### Changed
+- Bumped workspace and crate versions from 0.2.2 to 0.2.3 (branch-name-drives-version policy).
+
 ## [0.2.2] - 2026-05-03
 
 ### Added
@@ -304,6 +313,7 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 ---
 
+[0.2.3]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.3
 [0.2.2]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.2
 [0.2.1]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.1
 [0.2.0]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.0

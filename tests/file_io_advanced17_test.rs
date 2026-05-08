@@ -133,7 +133,7 @@ struct DrivingSession {
 // ---------------------------------------------------------------------------
 
 fn temp_path(name: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(name)
+    std::env::temp_dir().join(format!("oxicode_av17_{}_{}", name, std::process::id()))
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-//! Advanced nested structs test #12 — 5G telecommunications network management theme, 22 tests.
+//! Operations / KPI / scheduling-focused tests for nested_structs_advanced12 (split from nested_structs_advanced12_test.rs).
 
 #![allow(
     clippy::approx_constant,
@@ -133,13 +133,6 @@ enum NfType {
 }
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
-enum BearerType {
-    DefaultBearer,
-    DedicatedBearer,
-    EmergencyBearer,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 enum ModulationScheme {
     Qpsk,
     Qam16,
@@ -167,7 +160,7 @@ enum AlarmSeverity {
 }
 
 // ---------------------------------------------------------------------------
-// Domain structs — deeply nested for 5G telecom
+// Domain structs
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
@@ -175,51 +168,6 @@ struct GeoLocation {
     latitude: f64,
     longitude: f64,
     altitude_m: f32,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct BeamPattern {
-    beam_id: u16,
-    azimuth_deg: f32,
-    elevation_deg: f32,
-    beamwidth_h_deg: f32,
-    beamwidth_v_deg: f32,
-    gain_dbi: f32,
-    ssb_index: u8,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct AntennaArray {
-    array_id: u32,
-    rows: u16,
-    columns: u16,
-    polarization_count: u8,
-    element_spacing_mm: f32,
-    beam_patterns: Vec<BeamPattern>,
-    tilt_deg: f32,
-    frequency_band: FrequencyBand,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct CellSector {
-    sector_id: u32,
-    pci: u16,
-    earfcn: u32,
-    bandwidth_mhz: u16,
-    tx_power_dbm: f32,
-    antenna: AntennaArray,
-    neighbor_pcis: Vec<u16>,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct CellTower {
-    tower_id: u64,
-    name: String,
-    location: GeoLocation,
-    sectors: Vec<CellSector>,
-    backhaul_capacity_gbps: f32,
-    power_supply_backup_hours: u16,
-    operator_id: String,
 }
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
@@ -244,59 +192,6 @@ struct NetworkSlice {
     max_subscribers: u32,
     isolation_level: u8,
     allowed_tai_list: Vec<u32>,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct BearerContext {
-    bearer_id: u32,
-    bearer_type: BearerType,
-    qos: QosProfile,
-    tft_filters: Vec<String>,
-    gtp_teid: u32,
-    uplink_bytes: u64,
-    downlink_bytes: u64,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct SubscriberSession {
-    imsi: String,
-    msisdn: String,
-    session_id: u64,
-    apn: String,
-    ip_address: String,
-    bearer_contexts: Vec<BearerContext>,
-    serving_cell_pci: u16,
-    slice: Option<NetworkSlice>,
-    registration_timestamp: u64,
-    idle: bool,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct GnbNode {
-    gnb_id: u64,
-    name: String,
-    location: GeoLocation,
-    cells: Vec<CellSector>,
-    connected_amf_ids: Vec<u64>,
-    max_ue_capacity: u32,
-    f1_interface_ip: String,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct CuDuSplit {
-    cu_id: u64,
-    du_nodes: Vec<GnbNode>,
-    midhaul_latency_us: u32,
-    midhaul_bandwidth_gbps: f32,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct RanTopology {
-    region_name: String,
-    cu_du_splits: Vec<CuDuSplit>,
-    total_gnb_count: u32,
-    total_cell_count: u32,
-    inter_gnb_x2_links: Vec<(u64, u64)>,
 }
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
@@ -329,25 +224,6 @@ struct CoreNetworkDeployment {
 }
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct SpectrumBlock {
-    start_freq_mhz: u32,
-    end_freq_mhz: u32,
-    bandwidth_mhz: u16,
-    band: FrequencyBand,
-    license_holder: String,
-    license_expiry_year: u16,
-    duplex_mode: String,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct SpectrumAllocationTable {
-    country_code: String,
-    blocks: Vec<SpectrumBlock>,
-    total_allocated_mhz: u32,
-    last_auction_date: String,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 struct MeasurementReport {
     rsrp_dbm: i16,
     rsrq_db: i16,
@@ -377,37 +253,6 @@ struct HandoverDecision {
     selected_target_pci: Option<u16>,
     execution_time_ms: u32,
     success: bool,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct MimoLayer {
-    layer_id: u8,
-    precoding_matrix_index: u16,
-    modulation: ModulationScheme,
-    code_rate: f32,
-    cw_index: u8,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct MimoConfig {
-    config_id: u64,
-    antenna_ports: u16,
-    layers: Vec<MimoLayer>,
-    max_rank: u8,
-    codebook_type: String,
-    srs_resources: u8,
-    csi_rs_resources: u16,
-    digital_beamforming: bool,
-    analog_beamforming: bool,
-}
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct MassiveMimoDeployment {
-    site_id: u64,
-    configs: Vec<MimoConfig>,
-    total_antenna_elements: u32,
-    supported_bands: Vec<FrequencyBand>,
-    calibration_timestamp: u64,
 }
 
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
@@ -612,51 +457,6 @@ fn make_geo(lat: f64, lon: f64, alt: f32) -> GeoLocation {
     }
 }
 
-fn make_beam(id: u16, az: f32, el: f32) -> BeamPattern {
-    BeamPattern {
-        beam_id: id,
-        azimuth_deg: az,
-        elevation_deg: el,
-        beamwidth_h_deg: 10.0,
-        beamwidth_v_deg: 8.0,
-        gain_dbi: 18.5,
-        ssb_index: id as u8,
-    }
-}
-
-fn make_antenna(id: u32, band: FrequencyBand, beams: Vec<BeamPattern>) -> AntennaArray {
-    AntennaArray {
-        array_id: id,
-        rows: 8,
-        columns: 8,
-        polarization_count: 2,
-        element_spacing_mm: 17.5,
-        beam_patterns: beams,
-        tilt_deg: 6.0,
-        frequency_band: band,
-    }
-}
-
-fn make_sector(sid: u32, pci: u16, band: FrequencyBand) -> CellSector {
-    CellSector {
-        sector_id: sid,
-        pci,
-        earfcn: 630000 + sid,
-        bandwidth_mhz: 100,
-        tx_power_dbm: 43.0,
-        antenna: make_antenna(
-            sid,
-            band,
-            vec![
-                make_beam(0, 0.0, -6.0),
-                make_beam(1, 30.0, -6.0),
-                make_beam(2, -30.0, -6.0),
-            ],
-        ),
-        neighbor_pcis: vec![pci.wrapping_add(1), pci.wrapping_add(2)],
-    }
-}
-
 fn make_qos(qci: u8, fqi: u16, delay_ms: u32) -> QosProfile {
     QosProfile {
         qci,
@@ -706,18 +506,6 @@ fn make_measurement(rsrp: i16, sinr: i16) -> MeasurementReport {
     }
 }
 
-fn make_bearer(id: u32, bt: BearerType) -> BearerContext {
-    BearerContext {
-        bearer_id: id,
-        bearer_type: bt,
-        qos: make_qos(1, 1, 100),
-        tft_filters: vec!["permit ip any any".to_string()],
-        gtp_teid: 0xABCD_0000 + id,
-        uplink_bytes: 1_000_000,
-        downlink_bytes: 5_000_000,
-    }
-}
-
 fn make_kpi_metric(name: &str, value: f64, unit: &str) -> KpiMetric {
     KpiMetric {
         metric_name: name.to_string(),
@@ -725,16 +513,6 @@ fn make_kpi_metric(name: &str, value: f64, unit: &str) -> KpiMetric {
         unit: unit.to_string(),
         threshold_warning: Some(value * 0.8),
         threshold_critical: Some(value * 0.5),
-    }
-}
-
-fn make_mimo_layer(lid: u8, mod_scheme: ModulationScheme) -> MimoLayer {
-    MimoLayer {
-        layer_id: lid,
-        precoding_matrix_index: 42,
-        modulation: mod_scheme,
-        code_rate: 0.65,
-        cw_index: lid % 2,
     }
 }
 
@@ -749,146 +527,6 @@ fn make_scheduling_grant(rnti: u16, mod_scheme: ModulationScheme) -> SchedulingG
         harq_process_id: 0,
         tpc_command: 1,
     }
-}
-
-// ---------------------------------------------------------------------------
-// Test 1: Cell tower with multi-sector antenna arrays
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_cell_tower_multisector() {
-    let tower = CellTower {
-        tower_id: 1001,
-        name: "Tokyo-Shibuya-01".to_string(),
-        location: make_geo(35.6595, 139.7004, 45.0),
-        sectors: vec![
-            make_sector(1, 100, FrequencyBand::N78),
-            make_sector(2, 101, FrequencyBand::N78),
-            make_sector(3, 102, FrequencyBand::N257),
-        ],
-        backhaul_capacity_gbps: 25.0,
-        power_supply_backup_hours: 8,
-        operator_id: "JP-OPER-01".to_string(),
-    };
-    let bytes = encode_to_vec(&tower).expect("encode cell tower");
-    let (decoded, _): (CellTower, usize) = decode_from_slice(&bytes).expect("decode cell tower");
-    assert_eq!(tower, decoded);
-    assert_eq!(decoded.sectors.len(), 3);
-    assert_eq!(decoded.sectors[0].antenna.beam_patterns.len(), 3);
-}
-
-// ---------------------------------------------------------------------------
-// Test 2: Network slice with QoS profiles
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_network_slice_qos() {
-    let slice = NetworkSlice {
-        snssai_sst: 1,
-        snssai_sd: Some(0xABCDEF),
-        slice_type: SliceType::EmBB,
-        name: "Enhanced Mobile Broadband".to_string(),
-        qos_profiles: vec![
-            make_qos(1, 1, 100),
-            make_qos(5, 5, 300),
-            make_qos(9, 9, 500),
-            QosProfile {
-                qci: 65,
-                five_qi: 65,
-                priority_level: 1,
-                packet_delay_budget_ms: 75,
-                packet_error_rate_exp: -2,
-                max_data_burst_volume_bytes: 4096,
-                guaranteed_bitrate_kbps: Some(500_000),
-                max_bitrate_kbps: None,
-            },
-        ],
-        max_subscribers: 200_000,
-        isolation_level: 3,
-        allowed_tai_list: vec![10001, 10002, 10003, 10004],
-    };
-    let bytes = encode_to_vec(&slice).expect("encode network slice");
-    let (decoded, _): (NetworkSlice, usize) =
-        decode_from_slice(&bytes).expect("decode network slice");
-    assert_eq!(slice, decoded);
-    assert_eq!(decoded.qos_profiles.len(), 4);
-    assert_eq!(decoded.qos_profiles[3].max_bitrate_kbps, None);
-}
-
-// ---------------------------------------------------------------------------
-// Test 3: Subscriber session with bearer contexts
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_subscriber_session_bearers() {
-    let session = SubscriberSession {
-        imsi: "440101234567890".to_string(),
-        msisdn: "+81901234567".to_string(),
-        session_id: 9999001,
-        apn: "internet.5g.jp".to_string(),
-        ip_address: "100.64.10.55".to_string(),
-        bearer_contexts: vec![
-            make_bearer(5, BearerType::DefaultBearer),
-            make_bearer(6, BearerType::DedicatedBearer),
-            make_bearer(7, BearerType::DedicatedBearer),
-        ],
-        serving_cell_pci: 100,
-        slice: Some(make_slice(1, SliceType::EmBB, "eMBB-01")),
-        registration_timestamp: 1_700_000_000,
-        idle: false,
-    };
-    let bytes = encode_to_vec(&session).expect("encode subscriber session");
-    let (decoded, _): (SubscriberSession, usize) =
-        decode_from_slice(&bytes).expect("decode subscriber session");
-    assert_eq!(session, decoded);
-    assert_eq!(decoded.bearer_contexts.len(), 3);
-    assert!(decoded.slice.is_some());
-}
-
-// ---------------------------------------------------------------------------
-// Test 4: RAN topology with CU-DU split
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_ran_topology_cu_du() {
-    let gnb1 = GnbNode {
-        gnb_id: 5001,
-        name: "gNB-Osaka-01".to_string(),
-        location: make_geo(34.6937, 135.5023, 30.0),
-        cells: vec![make_sector(10, 200, FrequencyBand::N77)],
-        connected_amf_ids: vec![1, 2],
-        max_ue_capacity: 5000,
-        f1_interface_ip: "10.100.0.1".to_string(),
-    };
-    let gnb2 = GnbNode {
-        gnb_id: 5002,
-        name: "gNB-Osaka-02".to_string(),
-        location: make_geo(34.6950, 135.5050, 28.0),
-        cells: vec![
-            make_sector(11, 201, FrequencyBand::N77),
-            make_sector(12, 202, FrequencyBand::N258),
-        ],
-        connected_amf_ids: vec![1],
-        max_ue_capacity: 8000,
-        f1_interface_ip: "10.100.0.2".to_string(),
-    };
-    let topology = RanTopology {
-        region_name: "Kansai".to_string(),
-        cu_du_splits: vec![CuDuSplit {
-            cu_id: 9001,
-            du_nodes: vec![gnb1, gnb2],
-            midhaul_latency_us: 250,
-            midhaul_bandwidth_gbps: 25.0,
-        }],
-        total_gnb_count: 2,
-        total_cell_count: 3,
-        inter_gnb_x2_links: vec![(5001, 5002)],
-    };
-    let bytes = encode_to_vec(&topology).expect("encode RAN topology");
-    let (decoded, _): (RanTopology, usize) =
-        decode_from_slice(&bytes).expect("decode RAN topology");
-    assert_eq!(topology, decoded);
-    assert_eq!(decoded.cu_du_splits[0].du_nodes.len(), 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -936,53 +574,6 @@ fn test_core_network_chain() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 6: Spectrum allocation table
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_spectrum_allocation() {
-    let table = SpectrumAllocationTable {
-        country_code: "JP".to_string(),
-        blocks: vec![
-            SpectrumBlock {
-                start_freq_mhz: 3600,
-                end_freq_mhz: 3700,
-                bandwidth_mhz: 100,
-                band: FrequencyBand::N78,
-                license_holder: "OperatorA".to_string(),
-                license_expiry_year: 2035,
-                duplex_mode: "TDD".to_string(),
-            },
-            SpectrumBlock {
-                start_freq_mhz: 27500,
-                end_freq_mhz: 27900,
-                bandwidth_mhz: 400,
-                band: FrequencyBand::N257,
-                license_holder: "OperatorB".to_string(),
-                license_expiry_year: 2033,
-                duplex_mode: "TDD".to_string(),
-            },
-            SpectrumBlock {
-                start_freq_mhz: 700,
-                end_freq_mhz: 730,
-                bandwidth_mhz: 30,
-                band: FrequencyBand::N28,
-                license_holder: "OperatorC".to_string(),
-                license_expiry_year: 2040,
-                duplex_mode: "FDD".to_string(),
-            },
-        ],
-        total_allocated_mhz: 530,
-        last_auction_date: "2024-06-15".to_string(),
-    };
-    let bytes = encode_to_vec(&table).expect("encode spectrum table");
-    let (decoded, _): (SpectrumAllocationTable, usize) =
-        decode_from_slice(&bytes).expect("decode spectrum table");
-    assert_eq!(table, decoded);
-    assert_eq!(decoded.blocks.len(), 3);
-}
-
-// ---------------------------------------------------------------------------
 // Test 7: Handover decision with candidates
 // ---------------------------------------------------------------------------
 
@@ -1020,57 +611,6 @@ fn test_handover_decision() {
     assert_eq!(decision, decoded);
     assert_eq!(decoded.candidates.len(), 2);
     assert_eq!(decoded.selected_target_pci, Some(101));
-}
-
-// ---------------------------------------------------------------------------
-// Test 8: Massive MIMO deployment
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_massive_mimo_deployment() {
-    let deployment = MassiveMimoDeployment {
-        site_id: 2001,
-        configs: vec![
-            MimoConfig {
-                config_id: 1,
-                antenna_ports: 64,
-                layers: vec![
-                    make_mimo_layer(0, ModulationScheme::Qam256),
-                    make_mimo_layer(1, ModulationScheme::Qam256),
-                    make_mimo_layer(2, ModulationScheme::Qam64),
-                    make_mimo_layer(3, ModulationScheme::Qam64),
-                ],
-                max_rank: 4,
-                codebook_type: "TypeII".to_string(),
-                srs_resources: 4,
-                csi_rs_resources: 32,
-                digital_beamforming: true,
-                analog_beamforming: true,
-            },
-            MimoConfig {
-                config_id: 2,
-                antenna_ports: 32,
-                layers: vec![
-                    make_mimo_layer(0, ModulationScheme::Qam1024),
-                    make_mimo_layer(1, ModulationScheme::Qam1024),
-                ],
-                max_rank: 2,
-                codebook_type: "TypeI".to_string(),
-                srs_resources: 2,
-                csi_rs_resources: 16,
-                digital_beamforming: true,
-                analog_beamforming: false,
-            },
-        ],
-        total_antenna_elements: 256,
-        supported_bands: vec![FrequencyBand::N78, FrequencyBand::N257],
-        calibration_timestamp: 1_700_100_000,
-    };
-    let bytes = encode_to_vec(&deployment).expect("encode MIMO deployment");
-    let (decoded, _): (MassiveMimoDeployment, usize) =
-        decode_from_slice(&bytes).expect("decode MIMO deployment");
-    assert_eq!(deployment, decoded);
-    assert_eq!(decoded.configs[0].layers.len(), 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -1242,132 +782,6 @@ fn test_handover_a5_dual_threshold() {
     assert_eq!(decision, decoded);
     assert_eq!(decoded.candidates.len(), 3);
     assert!(decoded.success);
-}
-
-// ---------------------------------------------------------------------------
-// Test 12: URLLC slice with strict QoS
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_urllc_slice_strict_qos() {
-    let slice = NetworkSlice {
-        snssai_sst: 2,
-        snssai_sd: Some(0x000001),
-        slice_type: SliceType::URLLC,
-        name: "Ultra-Reliable Factory Automation".to_string(),
-        qos_profiles: vec![
-            QosProfile {
-                qci: 82,
-                five_qi: 82,
-                priority_level: 1,
-                packet_delay_budget_ms: 1,
-                packet_error_rate_exp: -5,
-                max_data_burst_volume_bytes: 256,
-                guaranteed_bitrate_kbps: Some(1_000),
-                max_bitrate_kbps: Some(5_000),
-            },
-            QosProfile {
-                qci: 83,
-                five_qi: 83,
-                priority_level: 2,
-                packet_delay_budget_ms: 5,
-                packet_error_rate_exp: -5,
-                max_data_burst_volume_bytes: 512,
-                guaranteed_bitrate_kbps: Some(2_000),
-                max_bitrate_kbps: Some(10_000),
-            },
-        ],
-        max_subscribers: 1_000,
-        isolation_level: 5,
-        allowed_tai_list: vec![50001],
-    };
-    let bytes = encode_to_vec(&slice).expect("encode URLLC slice");
-    let (decoded, _): (NetworkSlice, usize) =
-        decode_from_slice(&bytes).expect("decode URLLC slice");
-    assert_eq!(slice, decoded);
-    assert_eq!(decoded.qos_profiles[0].packet_delay_budget_ms, 1);
-}
-
-// ---------------------------------------------------------------------------
-// Test 13: Subscriber session without slice (no slice assigned)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_subscriber_session_no_slice() {
-    let session = SubscriberSession {
-        imsi: "440105556667778".to_string(),
-        msisdn: "+81905556677".to_string(),
-        session_id: 8888001,
-        apn: "legacy.lte.jp".to_string(),
-        ip_address: "100.64.20.99".to_string(),
-        bearer_contexts: vec![make_bearer(5, BearerType::DefaultBearer)],
-        serving_cell_pci: 400,
-        slice: None,
-        registration_timestamp: 1_700_050_000,
-        idle: true,
-    };
-    let bytes = encode_to_vec(&session).expect("encode session no slice");
-    let (decoded, _): (SubscriberSession, usize) =
-        decode_from_slice(&bytes).expect("decode session no slice");
-    assert_eq!(session, decoded);
-    assert!(decoded.slice.is_none());
-    assert!(decoded.idle);
-}
-
-// ---------------------------------------------------------------------------
-// Test 14: Complex RAN topology with multiple CU-DU splits
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_ran_topology_multi_cu() {
-    let make_gnb = |id: u64, name: &str, lat: f64, lon: f64| -> GnbNode {
-        GnbNode {
-            gnb_id: id,
-            name: name.to_string(),
-            location: make_geo(lat, lon, 25.0),
-            cells: vec![
-                make_sector(id as u32 * 10, (id * 10) as u16, FrequencyBand::N78),
-                make_sector(
-                    id as u32 * 10 + 1,
-                    (id * 10 + 1) as u16,
-                    FrequencyBand::N258,
-                ),
-            ],
-            connected_amf_ids: vec![1, 2],
-            max_ue_capacity: 6000,
-            f1_interface_ip: format!("10.200.{}.1", id),
-        }
-    };
-
-    let topology = RanTopology {
-        region_name: "Chubu".to_string(),
-        cu_du_splits: vec![
-            CuDuSplit {
-                cu_id: 8001,
-                du_nodes: vec![
-                    make_gnb(7001, "gNB-Nagoya-01", 35.1815, 136.9066),
-                    make_gnb(7002, "gNB-Nagoya-02", 35.1700, 136.8900),
-                ],
-                midhaul_latency_us: 200,
-                midhaul_bandwidth_gbps: 50.0,
-            },
-            CuDuSplit {
-                cu_id: 8002,
-                du_nodes: vec![make_gnb(7003, "gNB-Shizuoka-01", 34.9756, 138.3828)],
-                midhaul_latency_us: 350,
-                midhaul_bandwidth_gbps: 25.0,
-            },
-        ],
-        total_gnb_count: 3,
-        total_cell_count: 6,
-        inter_gnb_x2_links: vec![(7001, 7002), (7001, 7003)],
-    };
-    let bytes = encode_to_vec(&topology).expect("encode multi-CU topology");
-    let (decoded, _): (RanTopology, usize) =
-        decode_from_slice(&bytes).expect("decode multi-CU topology");
-    assert_eq!(topology, decoded);
-    assert_eq!(decoded.cu_du_splits.len(), 2);
-    assert_eq!(decoded.inter_gnb_x2_links.len(), 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -1672,200 +1086,4 @@ fn test_security_posture() {
     assert_eq!(decoded.zones.len(), 2);
     assert_eq!(decoded.zones[0].events.len(), 2);
     assert!(decoded.zones[1].events.is_empty());
-}
-
-// ---------------------------------------------------------------------------
-// Test 21: Full 5G deployment snapshot (deeply nested aggregate)
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-struct Full5gDeploymentSnapshot {
-    operator_name: String,
-    snapshot_timestamp: u64,
-    towers: Vec<CellTower>,
-    slices: Vec<NetworkSlice>,
-    core: CoreNetworkDeployment,
-    mec: MecDeployment,
-    kpi: NetworkKpiDashboard,
-    spectrum: SpectrumAllocationTable,
-}
-
-#[test]
-fn test_full_5g_deployment_snapshot() {
-    let snapshot = Full5gDeploymentSnapshot {
-        operator_name: "5G-Japan-Corp".to_string(),
-        snapshot_timestamp: 1_700_400_000,
-        towers: vec![CellTower {
-            tower_id: 1,
-            name: "Central-Tower".to_string(),
-            location: make_geo(35.6762, 139.6503, 50.0),
-            sectors: vec![
-                make_sector(1, 10, FrequencyBand::N78),
-                make_sector(2, 11, FrequencyBand::N257),
-            ],
-            backhaul_capacity_gbps: 100.0,
-            power_supply_backup_hours: 12,
-            operator_id: "5GJC".to_string(),
-        }],
-        slices: vec![
-            make_slice(1, SliceType::EmBB, "Consumer-Broadband"),
-            make_slice(2, SliceType::URLLC, "Industrial-Control"),
-        ],
-        core: CoreNetworkDeployment {
-            deployment_id: "CORE-MAIN".to_string(),
-            service_chains: vec![NfServiceChain {
-                chain_id: 1,
-                name: "Primary-UP".to_string(),
-                functions: vec![
-                    make_nf("amf-main", NfType::Amf),
-                    make_nf("smf-main", NfType::Smf),
-                    make_nf("upf-main", NfType::Upf),
-                ],
-                latency_budget_ms: 15,
-                redundancy_level: 3,
-            }],
-            nrf_endpoint: "https://nrf.main.5gjc.jp:8443".to_string(),
-            total_nf_count: 3,
-            region: "National".to_string(),
-        },
-        mec: MecDeployment {
-            deployment_name: "MEC-National".to_string(),
-            hosts: vec![MecHost {
-                host_id: "mec-central".to_string(),
-                location: make_geo(35.6762, 139.6503, 5.0),
-                total_cpu_cores: 128,
-                total_memory_mb: 262144,
-                applications: vec![MecApplication {
-                    app_id: "cdn-edge".to_string(),
-                    name: "CDN Edge Cache".to_string(),
-                    state: MecAppState::Running,
-                    cpu_cores: 32,
-                    memory_mb: 65536,
-                    storage_gb: 2000,
-                    latency_requirement_ms: 5,
-                    endpoints: vec!["https://cdn.edge.5gjc.jp".to_string()],
-                }],
-                connected_gnb_ids: vec![1, 2, 3],
-            }],
-            orchestrator_endpoint: "https://mec-orch.5gjc.jp:9443".to_string(),
-            total_app_count: 1,
-        },
-        kpi: NetworkKpiDashboard {
-            dashboard_id: 1,
-            region: "National".to_string(),
-            timestamp: 1_700_400_000,
-            categories: vec![KpiCategory {
-                category_name: "Overall".to_string(),
-                metrics: vec![make_kpi_metric("connected_ues", 1_500_000.0, "count")],
-            }],
-            overall_health_score: 95.0,
-            active_alarms: vec![],
-        },
-        spectrum: SpectrumAllocationTable {
-            country_code: "JP".to_string(),
-            blocks: vec![SpectrumBlock {
-                start_freq_mhz: 3700,
-                end_freq_mhz: 3800,
-                bandwidth_mhz: 100,
-                band: FrequencyBand::N78,
-                license_holder: "5G-Japan-Corp".to_string(),
-                license_expiry_year: 2038,
-                duplex_mode: "TDD".to_string(),
-            }],
-            total_allocated_mhz: 100,
-            last_auction_date: "2023-03-01".to_string(),
-        },
-    };
-    let bytes = encode_to_vec(&snapshot).expect("encode full snapshot");
-    let (decoded, _): (Full5gDeploymentSnapshot, usize) =
-        decode_from_slice(&bytes).expect("decode full snapshot");
-    assert_eq!(snapshot, decoded);
-    assert_eq!(decoded.towers.len(), 1);
-    assert_eq!(decoded.slices.len(), 2);
-    assert_eq!(decoded.core.service_chains[0].functions.len(), 3);
-}
-
-// ---------------------------------------------------------------------------
-// Test 22: V2X custom slice with emergency bearer session
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_v2x_slice_emergency_bearer() {
-    let v2x_slice = NetworkSlice {
-        snssai_sst: 4,
-        snssai_sd: Some(0x040000),
-        slice_type: SliceType::V2X,
-        name: "Vehicle-to-Everything".to_string(),
-        qos_profiles: vec![
-            QosProfile {
-                qci: 75,
-                five_qi: 75,
-                priority_level: 1,
-                packet_delay_budget_ms: 3,
-                packet_error_rate_exp: -5,
-                max_data_burst_volume_bytes: 1200,
-                guaranteed_bitrate_kbps: Some(50_000),
-                max_bitrate_kbps: Some(200_000),
-            },
-            QosProfile {
-                qci: 79,
-                five_qi: 79,
-                priority_level: 3,
-                packet_delay_budget_ms: 50,
-                packet_error_rate_exp: -3,
-                max_data_burst_volume_bytes: 8000,
-                guaranteed_bitrate_kbps: None,
-                max_bitrate_kbps: Some(500_000),
-            },
-        ],
-        max_subscribers: 10_000,
-        isolation_level: 4,
-        allowed_tai_list: vec![60001, 60002, 60003],
-    };
-
-    let session = SubscriberSession {
-        imsi: "440107777888999".to_string(),
-        msisdn: "+81907778899".to_string(),
-        session_id: 7777001,
-        apn: "v2x.connected.jp".to_string(),
-        ip_address: "100.64.50.1".to_string(),
-        bearer_contexts: vec![
-            make_bearer(5, BearerType::DefaultBearer),
-            BearerContext {
-                bearer_id: 6,
-                bearer_type: BearerType::EmergencyBearer,
-                qos: QosProfile {
-                    qci: 69,
-                    five_qi: 69,
-                    priority_level: 0,
-                    packet_delay_budget_ms: 1,
-                    packet_error_rate_exp: -6,
-                    max_data_burst_volume_bytes: 256,
-                    guaranteed_bitrate_kbps: Some(256),
-                    max_bitrate_kbps: Some(512),
-                },
-                tft_filters: vec![
-                    "permit ip 10.0.0.0/8 any".to_string(),
-                    "permit ip any 224.0.0.0/4".to_string(),
-                ],
-                gtp_teid: 0xE000_0006,
-                uplink_bytes: 500,
-                downlink_bytes: 1200,
-            },
-        ],
-        serving_cell_pci: 600,
-        slice: Some(v2x_slice),
-        registration_timestamp: 1_700_500_000,
-        idle: false,
-    };
-    let bytes = encode_to_vec(&session).expect("encode V2X session");
-    let (decoded, _): (SubscriberSession, usize) =
-        decode_from_slice(&bytes).expect("decode V2X session");
-    assert_eq!(session, decoded);
-    assert_eq!(decoded.bearer_contexts.len(), 2);
-    let emergency = &decoded.bearer_contexts[1];
-    assert_eq!(emergency.bearer_type, BearerType::EmergencyBearer);
-    assert_eq!(emergency.qos.priority_level, 0);
-    let decoded_slice = decoded.slice.expect("V2X slice should be present");
-    assert_eq!(decoded_slice.slice_type, SliceType::V2X);
 }
