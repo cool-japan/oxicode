@@ -332,6 +332,7 @@ fn test_adv3_lz4_double_nested_compress_roundtrip() {
 // Test 12 – CompressionStats default() yields all-zero fields
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 #[test]
 fn test_adv3_compression_stats_default_is_zero() {
     use oxicode::compression::CompressionStats;
@@ -361,6 +362,7 @@ fn test_adv3_compression_stats_default_is_zero() {
 // Test 13 – CompressionStats when compressed_size > original_size (expansion)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 #[test]
 fn test_adv3_compression_stats_expansion_scenario() {
     use oxicode::compression::CompressionStats;

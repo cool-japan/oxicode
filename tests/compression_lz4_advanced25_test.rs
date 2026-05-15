@@ -6,6 +6,7 @@
 //! readings, pipeline SCADA data, artificial lift systems (ESP, rod pump, gas lift),
 //! well test results, decline curve analysis, enhanced oil recovery parameters,
 //! and HSE incident tracking.
+#![cfg(feature = "compression-lz4")]
 
 #![allow(
     clippy::approx_constant,
