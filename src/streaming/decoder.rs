@@ -2,6 +2,7 @@
 
 use super::chunk::ChunkHeader;
 use super::StreamingProgress;
+use crate::config::Config;
 use crate::de::{Decode, DecoderImpl, SliceReader};
 use crate::{config, Error, Result};
 
@@ -16,9 +17,15 @@ use std::io::Read;
 /// Reads chunks from the input and decodes items one at a time,
 /// allowing processing of very large streams without loading
 /// everything into memory.
+///
+/// The `C` type parameter controls the codec configuration (integer encoding,
+/// endianness, byte limit).  Use [`StreamingDecoder::new`] to get the default
+/// variable-width integer encoding, or [`StreamingDecoder::new_with_config`]
+/// to select an alternative that matches the encoder's configuration.
 #[cfg(feature = "std")]
-pub struct StreamingDecoder<R: Read> {
+pub struct StreamingDecoder<R: Read, C: Config = config::Configuration> {
     reader: R,
+    codec_config: C,
     current_chunk: Option<ChunkData>,
     progress: StreamingProgress,
     finished: bool,
@@ -33,10 +40,32 @@ struct ChunkData {
 
 #[cfg(feature = "std")]
 impl<R: Read> StreamingDecoder<R> {
-    /// Create a new streaming decoder.
+    /// Create a new streaming decoder using the standard codec configuration
+    /// (little-endian, variable-width integer encoding).
     pub fn new(reader: R) -> Self {
+        Self::new_with_config(reader, config::standard())
+    }
+}
+
+#[cfg(feature = "std")]
+impl<R: Read, C: Config> StreamingDecoder<R, C> {
+    /// Create a streaming decoder with a custom codec configuration.
+    ///
+    /// The codec configuration **must match** the one used by the encoder,
+    /// otherwise decoding will produce incorrect values or errors.
+    ///
+    /// ```rust,ignore
+    /// use oxicode::streaming::{StreamingDecoder, StreamingEncoder};
+    ///
+    /// let codec = oxicode::config::standard().with_fixed_int_encoding();
+    /// let mut encoder = StreamingEncoder::new_with_config(&mut buf, codec);
+    /// // …encode…
+    /// let mut decoder = StreamingDecoder::new_with_config(Cursor::new(buf), codec);
+    /// ```
+    pub fn new_with_config(reader: R, codec_config: C) -> Self {
         Self {
             reader,
+            codec_config,
             current_chunk: None,
             progress: StreamingProgress::default(),
             finished: false,
@@ -71,9 +100,9 @@ impl<R: Read> StreamingDecoder<R> {
             return Ok(None);
         }
 
-        // Create reader from remaining chunk data
+        // Create reader from remaining chunk data, using the stored codec config.
         let reader = SliceReader::new(&chunk.data[chunk.offset..]);
-        let mut decoder = DecoderImpl::new(reader, config::standard());
+        let mut decoder = DecoderImpl::new(reader, self.codec_config);
         let item = T::decode(&mut decoder)?;
 
         // Update offset based on how much was read
@@ -346,5 +375,36 @@ mod tests {
 
         assert_eq!(decoder.progress().items_processed, 10);
         assert!(decoder.progress().chunks_processed >= 1);
+    }
+
+    // ── Regression tests: issue #1 — new_with_config constructors ──────────
+
+    /// Verify that `StreamingDecoder::new_with_config` with fixed-width integer
+    /// encoding correctly roundtrips values encoded by a matching encoder.
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_streaming_decoder_with_fixed_int_config() {
+        use super::super::encoder::StreamingEncoder;
+        use std::io::Cursor;
+
+        let codec = crate::config::standard().with_fixed_int_encoding();
+
+        // Encode with fixed-width integers.
+        let mut buffer = alloc::vec::Vec::new();
+        {
+            let mut encoder = StreamingEncoder::new_with_config(&mut buffer, codec);
+            for i in 0u32..20 {
+                encoder.write_item(&i).expect("write failed");
+            }
+            encoder.finish().expect("finish failed");
+        }
+
+        // Decode with the same fixed-width config.
+        let cursor = Cursor::new(buffer);
+        let mut decoder = StreamingDecoder::new_with_config(cursor, codec);
+        let decoded: alloc::vec::Vec<u32> = decoder.read_all().expect("read_all failed");
+
+        let expected: alloc::vec::Vec<u32> = (0..20).collect();
+        assert_eq!(expected, decoded, "fixed-int roundtrip mismatch");
     }
 }

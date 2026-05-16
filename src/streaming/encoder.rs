@@ -2,6 +2,7 @@
 
 use super::chunk::ChunkHeader;
 use super::{StreamingConfig, StreamingProgress};
+use crate::config::Config;
 use crate::enc::{Encode, EncoderImpl, VecWriter};
 use crate::{config, Result};
 
@@ -21,10 +22,16 @@ use std::io::Write;
 /// Buffers items until a chunk is full, then writes the chunk.
 /// This allows encoding very large collections without loading
 /// everything into memory at once.
+///
+/// The `C` type parameter controls the codec configuration (integer encoding,
+/// endianness, byte limit).  Use [`StreamingEncoder::new`] to get the default
+/// variable-width integer encoding, or [`StreamingEncoder::new_with_config`]
+/// to select an alternative such as `config::standard().with_fixed_int_encoding()`.
 #[cfg(feature = "std")]
-pub struct StreamingEncoder<W: Write> {
+pub struct StreamingEncoder<W: Write, C: Config = config::Configuration> {
     writer: W,
-    config: StreamingConfig,
+    streaming_config: StreamingConfig,
+    codec_config: C,
     buffer: alloc::vec::Vec<u8>,
     items_in_buffer: u32,
     progress: StreamingProgress,
@@ -33,16 +40,45 @@ pub struct StreamingEncoder<W: Write> {
 
 #[cfg(feature = "std")]
 impl<W: Write> StreamingEncoder<W> {
-    /// Create a new streaming encoder.
+    /// Create a new streaming encoder using the standard codec configuration
+    /// (little-endian, variable-width integer encoding).
     pub fn new(writer: W) -> Self {
-        Self::with_config(writer, StreamingConfig::default())
+        Self::new_with_config(writer, config::standard())
     }
 
-    /// Create a streaming encoder with custom configuration.
-    pub fn with_config(writer: W, config: StreamingConfig) -> Self {
-        Self {
+    /// Create a streaming encoder with custom chunking configuration and the
+    /// standard codec configuration.
+    pub fn with_config(writer: W, streaming_config: StreamingConfig) -> Self {
+        StreamingEncoder {
             writer,
-            config,
+            streaming_config,
+            codec_config: config::standard(),
+            buffer: alloc::vec::Vec::new(),
+            items_in_buffer: 0,
+            progress: StreamingProgress::default(),
+            progress_callback: None,
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<W: Write, C: Config> StreamingEncoder<W, C> {
+    /// Create a streaming encoder with a custom codec configuration.
+    ///
+    /// This allows selecting, for example, fixed-width integer encoding for
+    /// efficient random-access seeks:
+    ///
+    /// ```rust,ignore
+    /// use oxicode::streaming::StreamingEncoder;
+    ///
+    /// let config = oxicode::config::standard().with_fixed_int_encoding();
+    /// let mut encoder = StreamingEncoder::new_with_config(writer, config);
+    /// ```
+    pub fn new_with_config(writer: W, codec_config: C) -> Self {
+        StreamingEncoder {
+            writer,
+            streaming_config: StreamingConfig::default(),
+            codec_config,
             buffer: alloc::vec::Vec::new(),
             items_in_buffer: 0,
             progress: StreamingProgress::default(),
@@ -63,24 +99,25 @@ impl<W: Write> StreamingEncoder<W> {
 
     /// Write a single item to the stream.
     pub fn write_item<T: Encode>(&mut self, item: &T) -> Result<()> {
-        // Encode item to temporary buffer
+        // Encode item to temporary buffer using the stored codec configuration.
         let item_writer = VecWriter::new();
-        let mut encoder = EncoderImpl::new(item_writer, config::standard());
+        let mut encoder = EncoderImpl::new(item_writer, self.codec_config);
         item.encode(&mut encoder)?;
         let item_bytes = encoder.into_writer().into_vec();
 
-        // Check if adding this item would exceed chunk size
-        if !self.buffer.is_empty() && self.buffer.len() + item_bytes.len() > self.config.chunk_size
+        // Check if adding this item would exceed chunk size.
+        if !self.buffer.is_empty()
+            && self.buffer.len() + item_bytes.len() > self.streaming_config.chunk_size
         {
             self.flush_chunk()?;
         }
 
-        // Add item to buffer
+        // Add item to buffer.
         self.buffer.extend_from_slice(&item_bytes);
         self.items_in_buffer += 1;
 
-        // Flush if configured to flush per item
-        if self.config.flush_per_item {
+        // Flush if configured to flush per item.
+        if self.streaming_config.flush_per_item {
             self.flush_chunk()?;
         }
 
@@ -304,5 +341,38 @@ mod tests {
 
         // Should have created multiple chunks
         assert!(progress.chunks_processed >= 1);
+    }
+
+    // ── Regression tests: issue #1 — new_with_config constructor ───────────
+
+    /// Verify that `StreamingEncoder::new_with_config` with fixed-width integer
+    /// encoding produces bytes that can be decoded with the same codec config.
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_streaming_encoder_with_fixed_int_config() {
+        use super::super::decoder::StreamingDecoder;
+        use std::io::Cursor;
+
+        let codec = crate::config::standard().with_fixed_int_encoding();
+
+        // Encode with fixed-width integers via new_with_config.
+        let mut buffer = alloc::vec::Vec::new();
+        {
+            let mut encoder = StreamingEncoder::new_with_config(&mut buffer, codec);
+            for i in 0u32..30 {
+                encoder.write_item(&i).expect("write failed");
+            }
+            encoder.finish().expect("finish failed");
+        }
+
+        assert!(!buffer.is_empty(), "encoded buffer must not be empty");
+
+        // Decode with the matching fixed-int decoder.
+        let cursor = Cursor::new(buffer);
+        let mut decoder = StreamingDecoder::new_with_config(cursor, codec);
+        let decoded: alloc::vec::Vec<u32> = decoder.read_all().expect("read_all failed");
+
+        let expected: alloc::vec::Vec<u32> = (0..30).collect();
+        assert_eq!(expected, decoded, "fixed-int encoder roundtrip mismatch");
     }
 }
