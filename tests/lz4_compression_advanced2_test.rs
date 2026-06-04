@@ -79,14 +79,17 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
+#[cfg(feature = "compression-lz4")]
 use oxicode::{Decode, Encode};
 
+#[cfg(feature = "compression-lz4")]
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct SimpleStruct {
     id: u32,
     label: String,
 }
 
+#[cfg(feature = "compression-lz4")]
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum SimpleEnum {
     Alpha,

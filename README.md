@@ -471,16 +471,16 @@ OxiCode is the spiritual successor to bincode. In **legacy mode** (`config::lega
 
 ## Project Status
 
-**Version 0.2.3 - Production Ready**
+**Version 0.2.4 - Production Ready**
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 
-**Statistics** (as of 2026-05-08):
-- **Lines of Code**: 518,445 (Rust source lines across 1,014 files)
+**Statistics** (as of 2026-06-04):
+- **Lines of Code**: 518,521 (Rust source lines across 1,014 files)
 - **Files**: 1,014 Rust files
-- **Test Coverage**: 19,970 tests passing (100% pass rate, 0 skipped)
+- **Test Coverage**: 19,953 tests passing (100% pass rate, 0 skipped)
   - 18 binary compatibility tests (100% byte-for-byte identical to bincode)
-  - 19,952+ feature, integration, property-based, and stress tests
+  - 19,935+ feature, integration, property-based, and stress tests
 - **Type Coverage**: 120+ types with full Encode/Decode support
 - **Binary Compatibility**: 100% verified through cross-library testing
 - **Code Quality**: ✓ Zero unwrap(), ✓ Zero warnings, ✓ All files < 2000 lines

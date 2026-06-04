@@ -4,7 +4,7 @@
 
 This TODO list tracks the development of oxicode, the successor to bincode.
 
-**Last Updated**: 2026-05-08 (version 0.2.3)
+**Last Updated**: 2026-06-04 (version 0.2.4)
 
 ---
 
@@ -78,6 +78,33 @@ This TODO list tracks the development of oxicode, the successor to bincode.
   `src/de/borrow_slice.rs`. Runtime gates reject varint encoding,
   cross-endian payloads, and unaligned buffers via `Error::InvalidData`.
   18 dedicated tests in `tests/borrow_decode_slice_pod_test.rs`.
+
+---
+
+## Version 0.2.4 Accomplishments (2026-06-04) ✓
+
+### Features
+- [x] **`StreamingDecoder`/`StreamingEncoder` config support**: Added generic `C: Config` type parameter to both streaming types. `new()` keeps default standard config; new `new_with_config(reader/writer, codec_config)` constructor allows matched encoder/decoder codec configurations.
+- [x] **`core::error::Error` for error types**: `DeError` and `SerError` now implement `core::error::Error` (Rust 1.81+ stable) instead of `std::error::Error`, enabling `no_std + alloc` contexts without feature gating.
+
+### Dependencies
+- [x] **MSRV bump**: `rust-version` raised from `1.74.0` to `1.81.0` (required by `core::error::Error`).
+- [x] **oxiarc 0.3.2**: `oxiarc-lz4` and `oxiarc-zstd` updated from `0.2.8` to `0.3.2`.
+
+### Quality
+- [x] **LZ4 test feature flags**: Added feature gates to LZ4 compression test modules.
+- [x] **Blank line cleanup**: Removed spurious blank lines in several LZ4 compression test files.
+
+### Versioning
+- [x] **Branch-name-driven bump**: Workspace and crate versions raised from `0.2.3` to `0.2.4`; `oxicode_derive` and `compatibility` dep pins updated to match.
+- [x] **CHANGELOG**: New `[0.2.4]` section added with full diff-based change log.
+- [x] **README**: Version line and statistics updated to 0.2.4 / 2026-06-04.
+
+### Verification
+- [x] **19,953 / 19,953 tests pass** under `cargo nextest run --all-features`.
+- [x] **Zero warnings** from `cargo clippy --all-features --all-targets -- -D warnings`.
+- [x] **45 / 45 doc tests pass** under `cargo test --all-features --doc`.
+- [x] **Zero clippy warnings**, clean format, clean rustdoc.
 
 ---
 

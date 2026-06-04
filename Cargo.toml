@@ -3,10 +3,10 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
-rust-version = "1.74.0"
+rust-version = "1.81.0"
 repository = "https://github.com/cool-japan/oxicode"
 license = "Apache-2.0"
 description = "A modern binary serialization library - successor to bincode"
@@ -60,10 +60,10 @@ validation = []               # Enable validation trait implementations in tests
 versioning = []               # Enable versioning API tests
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.2.3", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.4", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
-oxiarc-lz4 = { version = "0.2.8", optional = true }
-oxiarc-zstd = { version = "0.2.8", optional = true }
+oxiarc-lz4 = { version = "0.3.2", optional = true }
+oxiarc-zstd = { version = "0.3.2", optional = true }
 tokio = { version = "1.52", features = ["io-util"], optional = true }
 crc32fast = { workspace = true, optional = true }
 

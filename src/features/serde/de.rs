@@ -32,8 +32,7 @@ impl core::fmt::Display for DeError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for DeError {}
+impl core::error::Error for DeError {}
 
 impl From<DeError> for crate::error::Error {
     fn from(err: DeError) -> Self {

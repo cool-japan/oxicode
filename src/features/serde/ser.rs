@@ -32,8 +32,7 @@ impl core::fmt::Display for SerError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for SerError {}
+impl core::error::Error for SerError {}
 
 impl From<SerError> for crate::error::Error {
     fn from(err: SerError) -> Self {

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-06-04
+
+### Added
+- `StreamingDecoder<R, C>` and `StreamingEncoder<W, C>` now accept a generic `Config` type parameter (`C: Config = config::Configuration`). The existing `new()` constructors are unchanged (default to standard config); a new `new_with_config(reader/writer, codec_config)` constructor allows the codec configuration to be matched between encoder and decoder pairs.
+- Regression test `test_streaming_decoder_with_fixed_int_config` covering `StreamingDecoder::new_with_config` with fixed-width integer encoding roundtrip.
+- Feature flags added to LZ4 compression test modules.
+
+### Changed
+- MSRV bumped from 1.74.0 to 1.81.0 (`rust-version` in `[workspace.package]`).
+- `oxiarc-lz4` and `oxiarc-zstd` optional dependencies updated from 0.2.8 to 0.3.2.
+- `DeError` and `SerError` now implement `core::error::Error` instead of `std::error::Error`, removing the `#[cfg(feature = "std")]` gate and enabling the impls in `no_std` + `alloc` contexts (Rust 1.81+ stabilised `core::error::Error`).
+- Bumped workspace and crate versions from 0.2.3 to 0.2.4 (branch-name-drives-version policy).
+
+### Fixed
+- Removed spurious blank lines in several LZ4 compression test files.
+
 ## [0.2.3] - 2026-05-08
 
 ### Fixed
@@ -313,6 +329,7 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 ---
 
+[0.2.4]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.4
 [0.2.3]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.3
 [0.2.2]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.2
 [0.2.1]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.1
