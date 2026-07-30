@@ -1,5 +1,6 @@
 //! Advanced tests for deeply nested collection type encoding/decoding in OxiCode.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

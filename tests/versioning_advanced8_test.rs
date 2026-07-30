@@ -4,6 +4,7 @@
 //! prefix fields) can decode V1 data, and verifies that V1/V2 enum discriminants
 //! remain stable for shared variants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

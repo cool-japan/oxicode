@@ -1,5 +1,6 @@
 //! Advanced char encoding tests for OxiCode (set 2)
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

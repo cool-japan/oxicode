@@ -1,5 +1,6 @@
 //! Roundtrip tests for Cell<T> and RefCell<T> encoding/decoding.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

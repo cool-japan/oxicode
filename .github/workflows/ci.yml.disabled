@@ -10,77 +10,11 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
-    name: Check
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        rust: [stable, "1.70.0"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-      - run: cargo check --all-targets
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-
-  test-default:
-    name: Test (default features)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        rust: [stable, "1.70.0"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-      - run: cargo test
-
-  test-all-features:
-    name: Test (all features)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-features
-
-  test-no-std:
-    name: Test (no_std + alloc)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --no-default-features --features alloc
-
-  test-features:
-    name: Test feature (${{ matrix.feature }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        feature:
-          - simd
-          - compression-lz4
-          - compression-zstd
-          - serde
-          - async-tokio
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --features ${{ matrix.feature }}
-
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -91,6 +25,151 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+      - run: cargo check --workspace --all-targets --all-features
+
+  # MSRV is 1.81.0 for the *library* (oxicode + oxicode_derive). This
+  # intentionally does not use `--all-targets`/`--all-features`:
+  #
+  # - `compression-lz4`/`compression-zstd` transitively depend on
+  #   `oxiarc-core`, which requires Cargo's `edition2024` support
+  #   (stabilized in Rust 1.85) — building those features needs a newer
+  #   toolchain than the crate's own MSRV. Tracked as a follow-up; the
+  #   README/MSRV docs should note this caveat until oxiarc-core no
+  #   longer requires edition2024 at our MSRV.
+  # - dev-dependencies (criterion -> clap 4.6.2) also require
+  #   `edition2024`, so `--all-targets` (which pulls in benches/tests)
+  #   cannot build at 1.81.0 either. MSRV therefore covers the public
+  #   library surface, matching how `rust-version` is documented by
+  #   Cargo itself (it governs the package, not its dev-dependencies).
+  msrv:
+    name: MSRV (1.81.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check -p oxicode_derive
+      - run: cargo check -p oxicode --no-default-features
+      - run: cargo check -p oxicode --no-default-features --features alloc
+      - run: cargo check -p oxicode --no-default-features --features std
+      - run: cargo check -p oxicode --no-default-features --features derive
+      - run: cargo check -p oxicode --no-default-features --features serde
+      - run: cargo check -p oxicode --no-default-features --features checksum
+      - run: cargo check -p oxicode --no-default-features --features simd
+      - run: cargo check -p oxicode --features async-tokio
+
+  test:
+    name: Test (all features, partition ${{ matrix.partition }}/2)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.partition }}
+      - run: cargo nextest run --workspace --all-features --partition count:${{ matrix.partition }}/2
+
+  test-macos:
+    name: Test (default features, macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo nextest run --workspace
+
+  # The entire tests/ integration-test tree is now crate-level `#![cfg(...)]`
+  # gated on the exact features each file needs (derive/std/alloc/serde/
+  # checksum/compression/simd/async-tokio/validation/versioning, determined
+  # per-file from its imports), so `--tests` builds cleanly for every reduced
+  # feature set below (verified locally via `cargo check -p oxicode
+  # --no-default-features --all-targets` and `--no-default-features
+  # --features alloc --all-targets`). `--all-targets` (which also pulls in
+  # benches/ and examples/) is intentionally NOT used yet: those targets
+  # still call `alloc`-gated APIs (e.g. `encode_to_vec`) unconditionally and
+  # have no `required-features` in Cargo.toml, which is a separate,
+  # not-yet-fixed gap tracked outside this test-tree hardening pass.
+  feature-matrix-reduced:
+    name: Check (--no-default-features, feature=${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ["", alloc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: reduced-${{ matrix.feature }}
+      - name: cargo check --no-default-features (lib + tests)
+        if: matrix.feature == ''
+        run: cargo check -p oxicode --no-default-features --lib --tests
+      - name: cargo nextest run --lib --tests --no-default-features
+        if: matrix.feature == ''
+        run: cargo nextest run -p oxicode --lib --tests --no-default-features
+      - name: cargo check --no-default-features --features ${{ matrix.feature }} (lib + tests)
+        if: matrix.feature != ''
+        run: cargo check -p oxicode --no-default-features --features ${{ matrix.feature }} --lib --tests
+      - name: cargo nextest run --lib --tests --no-default-features --features ${{ matrix.feature }}
+        if: matrix.feature != ''
+        run: cargo nextest run -p oxicode --lib --tests --no-default-features --features ${{ matrix.feature }}
+
+  feature-matrix:
+    name: Test (feature=${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          - simd
+          - compression-lz4
+          - compression-zstd
+          - serde
+          - checksum
+          - async-tokio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: feature-${{ matrix.feature }}
+      - run: cargo nextest run -p oxicode --lib --tests --features ${{ matrix.feature }}
+
   doc:
     name: Documentation
     runs-on: ubuntu-latest
@@ -99,19 +178,94 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo doc --all-features --no-deps
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --workspace --all-features --no-deps
+      - run: cargo test --doc --all-features
 
-  miri:
-    name: Miri (unsafe code check)
+  # Big-endian (s390x) and 32-bit (i686) checks for a serialization crate
+  # with explicit endianness handling (to_le_bytes/to_be_bytes/from_*_bytes
+  # in config.rs, varint/*, de/impls.rs) and unsafe pointer-width-sensitive
+  # code (de/impls.rs, de/borrow_slice.rs, features/impl_alloc.rs,
+  # simd/aligned.rs). `cargo check --target` catches byte-order/pointer-
+  # width regressions in type layout and const-eval without requiring a
+  # full cross-linked test run.
+  cross-target:
+    name: Cross-check (${{ matrix.target }})
     runs-on: ubuntu-latest
-    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - s390x-unknown-linux-gnu # big-endian, 64-bit
+          - i686-unknown-linux-gnu # little-endian, 32-bit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cross-${{ matrix.target }}
+      - run: cargo check -p oxicode --all-features --target ${{ matrix.target }}
+
+  # Miri coverage of the crate's `unsafe` usage (src/de/impls.rs — fixed
+  # array MaybeUninit decode; src/de/borrow_slice.rs — zero-copy slice
+  # borrow; src/features/impl_alloc.rs — Rc/Arc/Box alloc paths;
+  # src/simd/{aligned,array,copy}.rs — aligned-buffer SIMD paths). Targets
+  # are hand-picked integration tests that exercise these modules; unlike
+  # the previous job, this is NOT `continue-on-error` — a Miri failure
+  # fails the build.
+  miri:
+    name: Miri (unsafe code)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
-      - name: Run Miri on array decode (unsafe MaybeUninit path)
-        run: |
-          cargo +nightly miri test --lib --no-default-features -- de::impls
+      - uses: Swatinem/rust-cache@v2
+      - name: Miri - fixed-size array decode (de::impls MaybeUninit path)
+        run: cargo +nightly miri test -p oxicode --test array_fixed_size_advanced2_test --test fixed_array_advanced_test --features derive
         env:
           MIRIFLAGS: "-Zmiri-strict-provenance"
+      - name: Miri - alloc types (Rc/Arc/Box/BTreeMap unsafe paths)
+        run: cargo +nightly miri test -p oxicode --test alloc_types_test --features derive
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+      - name: Miri - borrow-decode (zero-copy str/bytes paths)
+        run: cargo +nightly miri test -p oxicode --test borrow_decode_test --features derive
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+      - name: Miri - SIMD aligned buffers
+        run: cargo +nightly miri test -p oxicode --test simd_correctness_test --features simd,derive
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans licenses advisories sources
+
+  # `AsyncEncoder`/`AsyncDecoder` were renamed to `AsyncStreamingEncoder`/
+  # `AsyncStreamingDecoder`, but backward-compatible `pub type` aliases were
+  # kept (source-compat proven by tests/async_backcompat_names_test.rs).
+  # cargo-semver-checks does not recognize a type alias as an equivalent
+  # re-export of the old struct path, so it still flags a `struct_missing`
+  # false positive for oxicode::streaming::{AsyncEncoder,AsyncDecoder}. That
+  # single lint is downgraded to `warn` in the root Cargo.toml under
+  # `[package.metadata.cargo-semver-checks.lints]` (read automatically by
+  # the action below); every other semver lint stays at `deny` and this job
+  # still hard-fails on any real breakage.
+  semver-checks:
+    name: cargo-semver-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: oxicode, oxicode_derive

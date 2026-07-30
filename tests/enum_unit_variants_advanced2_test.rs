@@ -24,6 +24,7 @@
 //! 21.  (UnitEnum, UnitEnum) tuple roundtrip
 //! 22.  Default::default() (first variant) roundtrip
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

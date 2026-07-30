@@ -5,6 +5,7 @@
 //! enum variants (named-field, newtype, and unit variants) across a variety of
 //! OxiCode config options, consumed-byte checks, and vec roundtrips.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

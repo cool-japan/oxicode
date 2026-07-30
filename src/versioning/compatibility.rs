@@ -103,7 +103,22 @@ pub fn can_migrate(from: Version, to: Version) -> bool {
 /// Determine the migration path between versions.
 ///
 /// Returns a list of intermediate versions that should be migrated through.
-/// Empty list means direct migration is possible.
+/// An empty list means direct migration is possible.
+///
+/// This is kept in agreement with [`can_migrate`]: when `can_migrate(from,
+/// to)` is `false` (which, by that function's rules, only happens for a
+/// *backward* migration across a major-version boundary, i.e. `from.major >
+/// to.major`), this function does **not** return an empty path — doing so
+/// would misleadingly report the migration as trivially direct, which is
+/// exactly the inconsistency this function used to have with
+/// [`can_migrate`]. Instead it returns `[to]`, a single-element path
+/// containing only the requested target. This value can never occur for a
+/// migratable pair: every element pushed by the forward-migration loop below
+/// has a strictly greater major version than `from`, and the `from == to`
+/// case returns the (also unambiguous) empty path before reaching the loop.
+/// Callers that need a hard yes/no answer before acting on the path — rather
+/// than inferring it from `path.is_empty()` — should call [`can_migrate`]
+/// directly.
 #[cfg(feature = "alloc")]
 pub fn migration_path(from: Version, to: Version) -> alloc::vec::Vec<Version> {
     let mut path = alloc::vec::Vec::new();
@@ -112,7 +127,14 @@ pub fn migration_path(from: Version, to: Version) -> alloc::vec::Vec<Version> {
         return path;
     }
 
-    // If major versions differ, we need intermediate major version bumps
+    if !can_migrate(from, to) {
+        return alloc::vec![to];
+    }
+
+    // If major versions differ, we need intermediate major version bumps.
+    // `can_migrate` above already guarantees `from < to` here (the only
+    // other case, same major, is unreachable in this branch since it always
+    // returns `true` above), so this loop always terminates.
     let mut current = from;
     while current.major < to.major {
         // Add the next major version as a migration step
@@ -229,6 +251,49 @@ mod tests {
         let path = migration_path(Version::new(1, 0, 0), Version::new(3, 0, 0));
         assert_eq!(path.len(), 1);
         assert_eq!(path[0], Version::new(2, 0, 0));
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_migration_path_backward_is_not_falsely_direct() {
+        // Backward migrations are rejected by `can_migrate`; `migration_path`
+        // must not report them as an empty (i.e. trivially direct) path,
+        // which would contradict `can_migrate`.
+        let from = Version::new(3, 0, 0);
+        let to = Version::new(1, 0, 0);
+        assert!(!can_migrate(from, to));
+        assert!(!migration_path(from, to).is_empty());
+        assert_eq!(migration_path(from, to), alloc::vec![to]);
+
+        let from2 = Version::new(2, 0, 0);
+        let to2 = Version::new(1, 5, 0);
+        assert!(!can_migrate(from2, to2));
+        assert!(!migration_path(from2, to2).is_empty());
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_migration_path_agrees_with_can_migrate() {
+        // Property: whenever `can_migrate` reports a pair as unmigratable,
+        // `migration_path` must never report an empty (achievable-looking)
+        // path for that same pair. This is the specific agreement the two
+        // APIs must uphold; it does not assert an "iff" relationship since
+        // a *reachable* pair can validly still yield a non-empty path (e.g.
+        // a multi-step major bump).
+        let versions: alloc::vec::Vec<Version> = (0u16..4)
+            .flat_map(|major| (0u16..3).map(move |minor| Version::new(major, minor, 0)))
+            .collect();
+
+        for &from in &versions {
+            for &to in &versions {
+                if !can_migrate(from, to) {
+                    assert!(
+                        !migration_path(from, to).is_empty(),
+                        "migration_path({from}, {to}) must not be empty when can_migrate is false"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

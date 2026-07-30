@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for OxiCode — domain: quantum computing infrastructure
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,4 +1,5 @@
 //! Advanced nested structs test #13 — Veterinary medicine and animal health management theme, 22 tests.
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

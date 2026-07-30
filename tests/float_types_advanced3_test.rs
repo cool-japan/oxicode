@@ -1,5 +1,6 @@
 //! Advanced float type tests: scientific measurements with floating point precision
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

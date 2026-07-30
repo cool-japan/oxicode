@@ -1,5 +1,6 @@
 //! Advanced tests for Reverse<T> and Wrapping<T> serialization in OxiCode — set advanced2.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

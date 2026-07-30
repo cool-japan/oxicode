@@ -2,6 +2,7 @@
 //! OrderType, Order, TradeEvent, Vec<Order>, big-endian config, fixed-int config,
 //! discriminant uniqueness, consumed-bytes verification, and Option<u64> in Limit variant.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -22,6 +22,7 @@
 //! 19.  Encode/decode enum in Vec<MyEnum>
 //! 20.  Encode/decode enum as map value BTreeMap<String, MyEnum>
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced Cow<str> and Cow<[u8]> encoding tests for OxiCode (set 4)
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

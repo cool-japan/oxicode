@@ -3,6 +3,7 @@
 //! Tests cover encode/decode roundtrips, wire-byte compatibility between atomic and raw integer
 //! types, config variations (fixed-int, big-endian), and boundary values.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced tests for alloc-specific types: BinaryHeap, Rc, Arc, and nested combinations.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

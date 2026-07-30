@@ -212,6 +212,15 @@ impl Encode for f64 {
 impl<T: Encode, const N: usize> Encode for [T; N] {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
         // Arrays don't encode length (compile-time known)
+        if unty::type_equal::<T, u8>() {
+            // SAFETY: `unty::type_equal::<T, u8>()` proved that `T` is exactly
+            // `u8`, so the array occupies `N` contiguous bytes. Building a
+            // `&[u8]` of length `N` over the same memory yields the identical
+            // bytes the per-element path would have written, in one bulk write.
+            let bytes: &[u8] =
+                unsafe { core::slice::from_raw_parts(self.as_ptr().cast::<u8>(), N) };
+            return encoder.writer().write(bytes);
+        }
         for item in self.iter() {
             item.encode(encoder)?;
         }
@@ -225,10 +234,35 @@ impl<T: Encode> Encode for [T] {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
         // Encode length first
         (self.len() as u64).encode(encoder)?;
+        if unty::type_equal::<T, u8>() {
+            // SAFETY: `unty::type_equal::<T, u8>()` proved that `T` is exactly
+            // `u8`, so the slice is `self.len()` contiguous bytes. The bulk
+            // write produces the identical bytes the per-element path would.
+            let bytes: &[u8] =
+                unsafe { core::slice::from_raw_parts(self.as_ptr().cast::<u8>(), self.len()) };
+            return encoder.writer().write(bytes);
+        }
         for item in self.iter() {
             item.encode(encoder)?;
         }
         Ok(())
+    }
+}
+
+// ===== Blanket reference impl =====
+
+/// Blanket `Encode` for shared references, mirroring bincode 2.0.1
+/// (`impl<T: Encode + ?Sized> Encode for &T`).
+///
+/// This subsumes the previously-concrete `&str` / `&[u8]` impls (now removed
+/// from `features::impl_alloc`) — `&str` routes through `str::encode` and
+/// `&[u8]` through `<[u8]>::encode`, producing byte-identical output — while
+/// also covering `&u32`, `&Vec<T>`, `&SomeStruct`, `&Path`, `&CStr`, `&[T]`,
+/// `&&T`, and any other `&T` where `T: Encode`. It makes
+/// `encode_to_vec::<&Foo>` compile.
+impl<T: Encode + ?Sized> Encode for &T {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
+        T::encode(self, encoder)
     }
 }
 

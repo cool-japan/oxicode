@@ -1,6 +1,7 @@
 //! Advanced mixed-type encoding scenarios testing complex interactions between
 //! structs, enums, collections, options, tuples, and nested encodings.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

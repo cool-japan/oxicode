@@ -3,6 +3,7 @@
 //! Covers: absolute/relative paths, empty paths, Unicode, spaces, extensions,
 //! collections, options, tuples, and alternative config encodings.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -14,6 +14,7 @@
 //!     nearest non-skipped successor, so encoding them produces the same bytes as encoding
 //!     that successor; decoding always yields the successor.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

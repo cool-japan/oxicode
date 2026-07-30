@@ -1,4 +1,4 @@
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 //! Advanced LZ4 compression tests #23 — Fashion Retail & E-Commerce domain.
 //!
 //! Covers product catalogs (SKU, color, size, material), inventory by warehouse/store,

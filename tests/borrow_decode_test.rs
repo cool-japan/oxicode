@@ -1,5 +1,6 @@
 //! Tests for zero-copy BorrowDecode
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Tests for streaming encoder/decoder API
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

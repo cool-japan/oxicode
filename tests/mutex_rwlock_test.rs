@@ -1,5 +1,6 @@
 //! Roundtrip and encoding tests for `Mutex<T>` and `RwLock<T>`.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

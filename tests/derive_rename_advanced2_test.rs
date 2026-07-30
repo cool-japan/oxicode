@@ -9,6 +9,7 @@
 //! All 22 tests are top-level `#[test]` functions; no `#[cfg(test)]` wrappers.
 //! No `unwrap()` — every fallible call uses `.expect("msg")`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

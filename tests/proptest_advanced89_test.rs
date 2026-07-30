@@ -7,6 +7,7 @@
 //! immunosuppression protocols, rejection episode classifications, graft
 //! survival metrics, living donor evaluations, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -7,7 +7,7 @@
 //! water activity measurements, metal detector check results, pest control inspection records,
 //! and related food safety management concepts.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

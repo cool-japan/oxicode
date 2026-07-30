@@ -8,7 +8,7 @@
 //! osseointegration tracking, bite force measurements, surgical guide coordinates,
 //! and prosthetic occlusion maps.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

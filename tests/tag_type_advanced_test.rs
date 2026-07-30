@@ -11,6 +11,7 @@
 //!   - Nested struct fields using tagged enums
 //!   - Compactness comparison: u8 tag vs varint default
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

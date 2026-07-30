@@ -8,6 +8,7 @@
 //!   - No `#[cfg(test)]` module wrapper — every test is a top-level `#[test]`.
 //!   - No `unwrap()` — every fallible call uses `.expect("…")`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

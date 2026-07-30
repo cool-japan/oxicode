@@ -3,6 +3,7 @@
 //! Focuses on varint length boundaries, Unicode multibyte sequences, config
 //! variants, collection wrappers, and binary-size assertions.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

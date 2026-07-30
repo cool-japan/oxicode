@@ -4,6 +4,7 @@
 //! invalid type bytes, garbage data, error display, Result discriminants,
 //! struct underflow, byte corruption, and trailing-byte tolerance.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

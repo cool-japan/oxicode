@@ -4,6 +4,7 @@
 //! nested types, sequential streaming writes, and edge-case spot-checks — all
 //! designed to complete within 10 seconds each.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

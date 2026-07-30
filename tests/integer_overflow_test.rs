@@ -10,6 +10,7 @@
 //! similar values via macros; these tests are deliberately individual so that a
 //! failure pinpoints a single type/boundary without noise from other values.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

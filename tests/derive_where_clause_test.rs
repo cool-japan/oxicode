@@ -4,6 +4,7 @@
 //! PhantomData, nested generics, associated type bounds, complex trait combinations,
 //! and various collection types inside generic containers.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

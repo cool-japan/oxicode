@@ -1,6 +1,7 @@
 //! Advanced comprehensive tests for Range, RangeInclusive, and Bound types.
 //! These tests exercise edge cases and compositions not covered in std_extra_types_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

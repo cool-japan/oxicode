@@ -1,6 +1,7 @@
 //! Advanced streaming tests using encode_into_std_write and decode_from_std_read
 //! with std::io::Cursor as the backing I/O object.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

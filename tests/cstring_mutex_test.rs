@@ -1,5 +1,6 @@
 //! Roundtrip and error tests for CString, Mutex, and RwLock types.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

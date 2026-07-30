@@ -3,6 +3,7 @@
 //! 22 test functions covering empty input, truncation, invalid encodings,
 //! limit exceeded, bad discriminants, trailing bytes, Option, and double-decode.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -376,14 +377,16 @@ fn test_wrong_type_decode_u8_as_u64_no_panic_handles_truncation() {
 #[test]
 fn test_decode_tight_limit_just_enough_bytes_passes() {
     // Encode a Vec<u8> of exactly 8 bytes of content.
-    // Use a limit of 8, which is the exact content length.
+    // Decoding claims the length prefix (u64::decode claims a fixed 8 bytes,
+    // mirroring bincode 2.0.1) plus the 8-byte body, so the peak claim is
+    // 8 + 8 = 16. A limit of 16 is exactly enough and must succeed.
     let val: Vec<u8> = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
     let encoded = encode_to_vec(&val).expect("encode Vec<u8> 8");
-    let cfg = config::standard().with_limit::<8>();
+    let cfg = config::standard().with_limit::<16>();
     let result: Result<(Vec<u8>, usize), _> = decode_from_slice_with_config(&encoded, cfg);
     assert!(
         result.is_ok(),
-        "Vec<u8> of exactly 8 bytes with a limit of 8 should succeed; got: {:?}",
+        "Vec<u8> of 8 bytes with a limit of 16 (8-byte len claim + 8-byte body) should succeed; got: {:?}",
         result.err()
     );
     let (decoded, _) = result.expect("decode tight limit 8");

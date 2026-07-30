@@ -5,6 +5,7 @@
 //! sequences, strings, options, fixed-int encoding, varint encoding,
 //! tuples, fixed arrays, structs, and enums.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

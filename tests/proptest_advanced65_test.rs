@@ -4,6 +4,7 @@
 //!
 //! All 22 proptest functions are contained inside a single proptest! block.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,0 +1,5 @@
+error: #[oxicode(transparent)] is not supported on enums
+ --> tests/ui/transparent_on_enum.rs:9:1
+  |
+9 | enum Wrapper {
+  | ^^^^

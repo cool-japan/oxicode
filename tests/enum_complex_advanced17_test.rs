@@ -1,5 +1,6 @@
 //! Advanced tests for retail / e-commerce order processing enums (set 17)
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

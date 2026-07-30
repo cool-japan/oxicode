@@ -4,6 +4,7 @@
 //! Verifies that encoding then decoding produces the original value,
 //! and that the number of bytes consumed equals the encoded length.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

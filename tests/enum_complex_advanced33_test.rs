@@ -1,6 +1,7 @@
 //! Advanced tests for competitive gaming and esports tournament management domain types.
 //! 22 test functions covering enums, structs, configs, and edge cases.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

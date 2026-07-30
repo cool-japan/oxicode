@@ -4,6 +4,7 @@
 //! structs, unit structs, newtype wrappers, collection roundtrips, and
 //! configuration-aware encoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

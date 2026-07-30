@@ -1,5 +1,6 @@
 //! Lab, tasting, and bottling-focused tests for nested_structs_advanced14 (split from nested_structs_advanced14_test.rs).
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -2,6 +2,7 @@
 //! guarantees, determinism, and structural integrity across encode/decode
 //! roundtrips.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

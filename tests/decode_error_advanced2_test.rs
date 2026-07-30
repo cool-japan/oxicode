@@ -3,6 +3,7 @@
 //! 22 top-level `#[test]` functions covering malformed / invalid input
 //! scenarios.  No `#[cfg(test)]` wrapper, no `unwrap()`, no undefined helpers.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -321,17 +322,19 @@ fn test_empty_string_decodes_ok() {
 }
 
 // ---------------------------------------------------------------------------
-// 15. Limit=3: decode Vec<u8> with 2 elements (body=2 bytes) → Ok
-//    The limit enforces the body size via claim_bytes_read.  A Vec<u8>
-//    with 2 elements claims 2 bytes which is within limit=3.
+// 15. Limit=10: decode Vec<u8> with 2 elements → Ok
+//    Decoding a Vec claims its length prefix (u64::decode claims a fixed 8
+//    bytes, mirroring bincode 2.0.1) plus the 2-byte body, so the peak claim
+//    is 8 + 2 = 10. A limit of 10 is exactly enough and must succeed.
 // ---------------------------------------------------------------------------
 #[test]
-fn test_limit_3_decode_vec_2_elements_succeeds() {
-    let cfg = config::standard().with_limit::<3>();
+fn test_limit_10_decode_vec_2_elements_succeeds() {
+    let cfg = config::standard().with_limit::<10>();
     let data: Vec<u8> = vec![10, 20];
     let encoded = encode_to_vec(&data).expect("encode Vec<u8>");
-    let (decoded, _): (Vec<u8>, usize) = decode_from_slice_with_config(&encoded, cfg)
-        .expect("Vec<u8> of 2 elements must succeed within limit=3");
+    let (decoded, _): (Vec<u8>, usize) = decode_from_slice_with_config(&encoded, cfg).expect(
+        "Vec<u8> of 2 elements must succeed within limit=10 (8-byte len claim + 2-byte body)",
+    );
     assert_eq!(decoded, data);
 }
 

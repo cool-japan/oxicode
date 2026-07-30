@@ -4,6 +4,7 @@
 //! These tests are designed to be distinct from versioning_advanced_test.rs and
 //! versioning_basic_test.rs, exercising deeper API surface and edge cases.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

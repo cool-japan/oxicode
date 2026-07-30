@@ -4,6 +4,7 @@
 //! the same enum, including roundtrips, wire-format properties, config variants,
 //! collections, nesting, and discriminant verification.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced tests for `decode_from_reader` / `decode_from_std_read` using in-memory `Cursor`
 //! readers, file I/O, sequential decoding, and error-path coverage.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

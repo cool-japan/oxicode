@@ -3,7 +3,7 @@
 //! Covers delivery routes, warehouse inventory, shipment tracking, vehicle fleet status,
 //! package dimensions/weight, customs declarations, carrier rates, last-mile delivery,
 //! cold chain logistics, reverse logistics, cross-docking operations, and freight forwarding.
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

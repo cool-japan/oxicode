@@ -1,6 +1,7 @@
 //! Advanced tests for autonomous vehicle manufacturing QA system domain types.
 //! 22 test functions covering sensor fusion, path planning, V2X, safety levels, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -15,7 +15,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```
 //! use oxicode::{Encode, Decode};
 //!
 //! #[derive(Encode, Decode, PartialEq, Debug)]
@@ -28,10 +28,10 @@
 //!     let point = Point { x: 1.0, y: 2.0 };
 //!
 //!     // Encode to bytes
-//!     let encoded = oxicode::encode(&point)?;
+//!     let encoded = oxicode::encode_to_vec(&point)?;
 //!
 //!     // Decode from bytes
-//!     let decoded: Point = oxicode::decode(&encoded)?;
+//!     let decoded: Point = oxicode::decode_value(&encoded)?;
 //!
 //!     assert_eq!(point, decoded);
 //!     Ok(())
@@ -84,6 +84,7 @@ pub mod simd;
 pub mod compression;
 
 // Schema versioning support
+#[cfg(feature = "versioning")]
 pub mod versioning;
 
 // Streaming serialization support
@@ -125,6 +126,7 @@ pub mod async_io {
 }
 
 // Validation middleware
+#[cfg(feature = "validation")]
 pub mod validation;
 
 // Checksum/integrity verification
@@ -543,7 +545,7 @@ pub fn encode_to_display<E: Encode>(value: &E) -> Result<display::EncodedBytesOw
 /// assert_eq!(decoded, 42u32);
 /// assert_eq!(ver, version);
 /// ```
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "versioning"))]
 pub fn encode_versioned_value<E: Encode>(
     value: &E,
     version: versioning::Version,
@@ -567,7 +569,7 @@ pub fn encode_versioned_value<E: Encode>(
 /// assert_eq!(decoded, 99u64);
 /// assert_eq!(ver, version);
 /// ```
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "versioning"))]
 pub fn decode_versioned_value<D: Decode>(src: &[u8]) -> Result<(D, versioning::Version, usize)> {
     let (payload, version) = versioning::decode_versioned(src)?;
     let header_size = src.len() - payload.len();
@@ -843,11 +845,12 @@ pub fn decode_from_slice_with_config<D: Decode, C: config::Config>(
 /// # Examples
 ///
 /// ```
-/// use oxicode::enc::SizeWriter;
-/// let writer = SizeWriter::new();
-/// let mut encoder_result = oxicode::encode_into_slice(42u8, &mut [0u8; 4], oxicode::config::standard())
-///     .expect("encode");
-/// assert_eq!(encoder_result, 1);
+/// use oxicode::enc::SliceWriter;
+///
+/// let mut buf = [0u8; 4];
+/// let writer = SliceWriter::new(&mut buf);
+/// oxicode::encode_into_writer(42u8, writer, oxicode::config::standard()).expect("encode");
+/// assert_eq!(buf[0], 42);
 /// ```
 pub fn encode_into_writer<E: Encode, W: enc::Writer, C: config::Config>(
     value: E,
@@ -975,8 +978,16 @@ pub fn decode_from_hex<D: Decode>(hex: &str) -> Result<(D, usize)> {
     let bytes = (0..hex.len())
         .step_by(2)
         .map(|i| {
-            hex.get(i..i + 2)
-                .and_then(|s| u8::from_str_radix(s, 16).ok())
+            hex.get(i..i + 2).and_then(|s| {
+                // `u8::from_str_radix` alone would silently accept a leading
+                // `+`/`-` sign (e.g. "+f" => Ok(15)); reject anything that
+                // is not a plain pair of hex digits first.
+                if s.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    u8::from_str_radix(s, 16).ok()
+                } else {
+                    None
+                }
+            })
         })
         .collect::<Option<Vec<u8>>>()
         .ok_or(Error::InvalidData {
@@ -1125,13 +1136,4 @@ where
     let result = D::borrow_decode(&mut decoder)?;
     let bytes_read = src.len() - decoder.reader().slice.len();
     Ok((result, bytes_read))
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_basic_encoding() {
-        // Basic test placeholder
-        assert_eq!(2 + 2, 4);
-    }
 }

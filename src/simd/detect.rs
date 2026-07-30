@@ -130,79 +130,86 @@ pub fn optimal_alignment() -> usize {
     detect_capability().vector_width()
 }
 
-// Platform-specific detection implementation
-#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
-fn detect_capability_impl() -> SimdCapability {
-    // On x86_64, SSE2 is always available
-    // Check for higher capabilities
+// Platform-specific detection implementation.
+//
+// Two dispatch strategies are used depending on the build:
+//
+//  * With `std`, `is_x86_feature_detected!` (a std-only macro) probes the CPU
+//    at runtime, so a binary built for the x86_64 baseline still lights up AVX2
+//    on capable hardware.
+//  * Without `std` the macro is unavailable, so detection falls back to
+//    compile-time `cfg!(target_feature = ...)`, reflecting exactly the
+//    instruction sets the compiler was told it may emit.
 
-    #[cfg(target_feature = "avx512f")]
-    {
-        // If compiled with AVX-512 support, it's available
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
+fn detect_capability_impl() -> SimdCapability {
+    // Runtime detection via std::arch. SSE2 is part of the x86_64 baseline, but
+    // this enum's SIMD tiers start at SSE4.2, so a plain-SSE2 CPU reports
+    // Scalar (the vectorized copy path still uses the SSE2 baseline directly).
+    if is_x86_feature_detected!("avx512f") {
         return SimdCapability::Avx512;
     }
+    if is_x86_feature_detected!("avx2") {
+        return SimdCapability::Avx2;
+    }
+    if is_x86_feature_detected!("sse4.2") {
+        return SimdCapability::Sse42;
+    }
+    SimdCapability::Scalar
+}
 
-    #[cfg(not(target_feature = "avx512f"))]
-    {
-        // Runtime detection using std::arch
-        if is_x86_feature_detected!("avx512f") {
-            return SimdCapability::Avx512;
-        }
-
-        if is_x86_feature_detected!("avx2") {
-            return SimdCapability::Avx2;
-        }
-
-        if is_x86_feature_detected!("sse4.2") {
-            return SimdCapability::Sse42;
-        }
-
-        // SSE2 is always available on x86_64, but we require SSE4.2 minimum
+#[cfg(all(target_arch = "x86_64", not(feature = "std")))]
+fn detect_capability_impl() -> SimdCapability {
+    // Compile-time detection (no runtime feature probing in no_std).
+    if cfg!(target_feature = "avx512f") {
+        SimdCapability::Avx512
+    } else if cfg!(target_feature = "avx2") {
+        SimdCapability::Avx2
+    } else if cfg!(target_feature = "sse4.2") {
+        SimdCapability::Sse42
+    } else {
         SimdCapability::Scalar
     }
 }
 
-#[cfg(all(target_arch = "x86", target_feature = "sse2"))]
+#[cfg(all(target_arch = "x86", feature = "std"))]
 fn detect_capability_impl() -> SimdCapability {
-    // On 32-bit x86, check for SSE4.2 and AVX2
     if is_x86_feature_detected!("avx2") {
         return SimdCapability::Avx2;
     }
-
     if is_x86_feature_detected!("sse4.2") {
         return SimdCapability::Sse42;
     }
-
     SimdCapability::Scalar
+}
+
+#[cfg(all(target_arch = "x86", not(feature = "std")))]
+fn detect_capability_impl() -> SimdCapability {
+    if cfg!(target_feature = "avx2") {
+        SimdCapability::Avx2
+    } else if cfg!(target_feature = "sse4.2") {
+        SimdCapability::Sse42
+    } else {
+        SimdCapability::Scalar
+    }
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 fn detect_capability_impl() -> SimdCapability {
-    // NEON is mandatory on AArch64
+    // NEON is mandatory on the aarch64 base ABI.
     SimdCapability::Neon
 }
 
 #[cfg(all(target_arch = "arm", target_feature = "neon"))]
 fn detect_capability_impl() -> SimdCapability {
-    // Check if NEON is actually available at runtime
-    #[cfg(target_os = "linux")]
-    {
-        // On Linux, we can check /proc/cpuinfo or use getauxval
-        // For simplicity, if compiled with neon feature, assume it's available
-        SimdCapability::Neon
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        // On other platforms, assume NEON if compiled with feature
-        SimdCapability::Neon
-    }
+    // 32-bit ARM: if the compiler was told NEON is available, assume it.
+    SimdCapability::Neon
 }
 
-// Fallback for platforms without SIMD or with unknown SIMD support
+// Fallback for platforms without SIMD or with unknown SIMD support.
 #[cfg(not(any(
-    all(target_arch = "x86_64", target_feature = "sse2"),
-    all(target_arch = "x86", target_feature = "sse2"),
+    target_arch = "x86_64",
+    target_arch = "x86",
     all(target_arch = "aarch64", target_feature = "neon"),
     all(target_arch = "arm", target_feature = "neon"),
 )))]

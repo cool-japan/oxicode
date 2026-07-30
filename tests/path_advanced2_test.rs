@@ -1,6 +1,7 @@
 //! Advanced PathBuf serialization tests (set 2): 22 tests covering
 //! roundtrips, config variants, collections, and wire-format properties.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

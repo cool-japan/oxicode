@@ -4,6 +4,7 @@
 //! Only `Vec<T>` carries a varint length prefix. These tests verify that property and
 //! exercise a wide range of element types, nesting patterns, and configurations.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

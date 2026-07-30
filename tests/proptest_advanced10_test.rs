@@ -3,6 +3,7 @@
 //! Each test is a top-level #[test] function containing exactly one
 //! proptest! macro block, verifying non-trivial invariants beyond basic roundtrips.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

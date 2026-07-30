@@ -3,7 +3,11 @@
 //! Tests both compression algorithms with realistic warehouse schema structures,
 //! verifying round-trip correctness, size reduction, and cross-algorithm consistency.
 
-#![cfg(all(feature = "compression-lz4", feature = "compression-zstd"))]
+#![cfg(all(
+    feature = "compression-lz4",
+    feature = "compression-zstd",
+    feature = "derive"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

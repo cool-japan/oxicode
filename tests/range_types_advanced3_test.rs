@@ -2,6 +2,7 @@
 //! Covers basic roundtrips, empty ranges, negative values, Vec/Option wrappers,
 //! derived Encode/Decode on structs containing range semantics, and encoding invariants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

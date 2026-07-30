@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for satellite telemetry / space mission domain
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,7 +4,7 @@
 //! material properties, test specimens, tensile strength, thermal expansion, and
 //! vibration analysis — all using the compression-lz4 feature.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

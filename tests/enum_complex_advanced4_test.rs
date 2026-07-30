@@ -1,5 +1,6 @@
 //! Advanced complex enum encoding tests — DatabaseOp / QueryResult / Transaction
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

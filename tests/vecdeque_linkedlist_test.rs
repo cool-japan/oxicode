@@ -1,5 +1,6 @@
 //! Comprehensive tests for VecDeque and LinkedList encode/decode roundtrips.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced file I/O tests — VR/AR gaming / virtual environment domain
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

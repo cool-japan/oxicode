@@ -1,6 +1,7 @@
 //! Advanced encoding size tests (set 3): verifies encoded_size matches encode_to_vec length
 //! for a wide variety of types, including structs, enums, Options, tuples, and configs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

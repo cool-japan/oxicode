@@ -4,6 +4,7 @@
 //! proptest! macro block, verifying non-trivial invariants for Record,
 //! Status, collections, smart pointers, and encoding properties.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced tests for Duration and SystemTime encoding in OxiCode.
 //! 22 tests covering roundtrips, edge cases, configs, and composite types.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

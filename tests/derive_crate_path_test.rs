@@ -2,6 +2,7 @@
 //! This allows the derive macros to work when oxicode is re-exported
 //! under a different name.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

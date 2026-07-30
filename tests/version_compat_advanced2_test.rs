@@ -3,6 +3,7 @@
 //! These tests pin down the exact byte sequences produced for primitive types
 //! so that any accidental change to the wire format is immediately caught.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

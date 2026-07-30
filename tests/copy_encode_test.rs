@@ -1,5 +1,6 @@
 //! Tests for encode_copy convenience function.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

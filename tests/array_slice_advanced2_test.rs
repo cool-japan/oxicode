@@ -9,6 +9,7 @@
 //!   * Wire-size invariants, consumed-byte assertions
 //!   * Struct containing a fixed-array field with a derived codec
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

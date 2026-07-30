@@ -4,6 +4,7 @@
 //! float precision, multi-struct batches, nested collections, and stats
 //! accuracy — none of which are covered by the existing suites.
 
+#![cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -86,7 +87,7 @@ mod compression_stress_tests {
     // LZ4 tests (12)
     // -----------------------------------------------------------------------
 
-    #[cfg(feature = "compression-lz4")]
+    #[cfg(all(feature = "compression-lz4", feature = "derive"))]
     mod lz4 {
         use oxicode::compression::{compress, compress_with_stats, decompress, Compression};
         use oxicode::{Decode, Encode};
@@ -421,7 +422,7 @@ mod compression_stress_tests {
     // Zstd tests (8)
     // -----------------------------------------------------------------------
 
-    #[cfg(feature = "compression-zstd")]
+    #[cfg(all(feature = "compression-zstd", feature = "derive"))]
     mod zstd {
         use oxicode::compression::{compress, decompress, Compression};
         use oxicode::{Decode, Encode};

@@ -4,6 +4,7 @@
 //! primitive integer and floating-point types at their extreme values, as well
 //! as the exact byte-length guarantees of the oxicode varint scheme.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

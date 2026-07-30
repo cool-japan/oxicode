@@ -1,5 +1,6 @@
 //! Tests for float encode/decode including special values.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

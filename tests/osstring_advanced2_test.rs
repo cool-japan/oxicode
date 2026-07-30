@@ -1,6 +1,7 @@
 //! Advanced tests for OsString and PathBuf encoding in OxiCode (set 2).
 //! 22 top-level #[test] functions — no cfg(test) module wrapper.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

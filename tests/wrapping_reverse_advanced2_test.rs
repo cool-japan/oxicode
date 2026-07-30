@@ -1,5 +1,6 @@
 //! Advanced tests for Wrapping<T> and Reverse<T> serialization — new angles set 2.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

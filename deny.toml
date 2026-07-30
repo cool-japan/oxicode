@@ -15,7 +15,16 @@ deny = [
 ]
 
 [advisories]
-ignore = []
+ignore = [
+    # bincode is a dev-dependency only, used exclusively as the compatibility
+    # oracle for oxicode's wire-format tests (compatibility/, tests/bincode_compat_test.rs).
+    # It is intentionally pinned to =2.0.1 (see the `bans` ban on bincode>=3 above)
+    # and never reaches consumers of the `oxicode` library. RUSTSEC-2025-0141
+    # flags the upstream bincode project as unmaintained (not a vulnerability);
+    # there is no upgrade path that preserves the 2.0.1 wire format we rely on
+    # as a test oracle, so this advisory is accepted for the dev-dependency only.
+    "RUSTSEC-2025-0141",
+]
 
 [licenses]
 # Allow all common open-source licenses used in the Rust ecosystem.

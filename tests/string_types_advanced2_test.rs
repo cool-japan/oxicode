@@ -1,5 +1,6 @@
 //! Advanced string encoding tests for OxiCode — 22 unique test functions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

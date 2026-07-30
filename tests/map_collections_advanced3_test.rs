@@ -2,6 +2,7 @@
 //! Focus: HashMap<u32,u32>, HashMap<String,*>, BTreeMap variants, HashSet,
 //! BTreeSet, nested maps, Option/Vec wrappers, and a struct-level roundtrip.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

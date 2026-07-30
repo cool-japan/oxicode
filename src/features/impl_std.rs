@@ -38,15 +38,24 @@ where
     S: BuildHasher + Default,
 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        let len = u64::decode(decoder)? as usize;
+        crate::de::decode_with_depth_guard(decoder, |decoder| {
+            let raw_len = u64::decode(decoder)?;
+            let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
 
-        let mut map = HashMap::with_capacity_and_hasher(len, S::default());
-        for _ in 0..len {
-            let key = K::decode(decoder)?;
-            let value = V::decode(decoder)?;
-            map.insert(key, value);
-        }
-        Ok(map)
+            // Claim memory for the container BEFORE allocating, so an attacker-controlled
+            // length cannot bypass the configured decode limit and trigger an
+            // unbounded/oversized allocation.
+            decoder.claim_container_read::<(K, V)>(len)?;
+
+            let mut map = HashMap::with_capacity_and_hasher(len, S::default());
+            for _ in 0..len {
+                decoder.unclaim_bytes_read(core::mem::size_of::<(K, V)>());
+                let key = K::decode(decoder)?;
+                let value = V::decode(decoder)?;
+                map.insert(key, value);
+            }
+            Ok(map)
+        })
     }
 }
 
@@ -71,13 +80,22 @@ where
     S: BuildHasher + Default,
 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        let len = u64::decode(decoder)? as usize;
+        crate::de::decode_with_depth_guard(decoder, |decoder| {
+            let raw_len = u64::decode(decoder)?;
+            let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
 
-        let mut set = HashSet::with_capacity_and_hasher(len, S::default());
-        for _ in 0..len {
-            set.insert(T::decode(decoder)?);
-        }
-        Ok(set)
+            // Claim memory for the container BEFORE allocating, so an attacker-controlled
+            // length cannot bypass the configured decode limit and trigger an
+            // unbounded/oversized allocation.
+            decoder.claim_container_read::<T>(len)?;
+
+            let mut set = HashSet::with_capacity_and_hasher(len, S::default());
+            for _ in 0..len {
+                decoder.unclaim_bytes_read(core::mem::size_of::<T>());
+                set.insert(T::decode(decoder)?);
+            }
+            Ok(set)
+        })
     }
 }
 
@@ -159,7 +177,8 @@ impl Decode for PathBuf {
             use std::ffi::OsStr;
             use std::os::unix::ffi::OsStrExt;
 
-            let len = u64::decode(decoder)? as usize;
+            let raw_len = u64::decode(decoder)?;
+            let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
             decoder.claim_bytes_read(len)?;
 
             let mut bytes = alloc::vec![0u8; len];
@@ -172,7 +191,14 @@ impl Decode for PathBuf {
             use std::ffi::OsString;
             use std::os::windows::ffi::OsStringExt;
 
-            let len = u64::decode(decoder)? as usize;
+            let raw_len = u64::decode(decoder)?;
+            let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
+
+            // Claim memory for the container BEFORE allocating, so an attacker-controlled
+            // length cannot bypass the configured decode limit and trigger an
+            // unbounded/oversized allocation (mirrors the Vec impl and the unix branch above).
+            decoder.claim_container_read::<u16>(len)?;
+
             let mut wide = alloc::vec![0u16; len];
             for code_unit in &mut wide {
                 *code_unit = u16::decode(decoder)?;
@@ -331,7 +357,8 @@ impl Encode for CString {
 
 impl Decode for CString {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        let len = u64::decode(decoder)? as usize;
+        let raw_len = u64::decode(decoder)?;
+        let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
         decoder.claim_bytes_read(len)?;
 
         let mut bytes = alloc::vec![0u8; len];
@@ -361,11 +388,27 @@ impl Encode for CStr {
 }
 
 // ===== OsStr & OsString =====
-
+//
+// NOTE on the `not(target_family = "wasm")` gate below: on wasm32 targets that provide
+// `std` (e.g. wasm32-wasip1/wasip2), `std::ffi::OsStr` is fully functional and this impl
+// would work unmodified. However, wasm32-unknown-unknown's std sysroot around OsStr/OsString
+// has historically been inconsistent across toolchain versions, and this crate has no wasm
+// target in CI to verify against, so the existing gate is left in place conservatively rather
+// than risking an unverifiable compile break. If wasm coverage is added to CI, this gate
+// should be revisited and narrowed (or removed) at that point.
 #[cfg(not(target_family = "wasm"))]
 impl Encode for std::ffi::OsStr {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
-        self.to_string_lossy().as_ref().encode(encoder)
+        // Do NOT silently lossy-convert: `to_string_lossy()` replaces invalid UTF-8/UTF-16
+        // sequences with U+FFFD, which would make encode-then-decode silently return DIFFERENT
+        // data for any non-UTF-8 OsStr (a legal value on unix). Error instead, matching the
+        // strictness bincode applies to Path. For valid UTF-8 input, `to_str()` returns the
+        // exact same string `to_string_lossy()` would have, so the byte layout for valid input
+        // is unchanged.
+        let s = self.to_str().ok_or(Error::InvalidData {
+            message: "OsStr is not valid UTF-8",
+        })?;
+        s.encode(encoder)
     }
 }
 
@@ -397,28 +440,54 @@ crate::impl_borrow_decode!(CString);
 #[cfg(not(target_family = "wasm"))]
 crate::impl_borrow_decode!(std::ffi::OsString);
 
+// Element-wise `BorrowDecode` (mirrors bincode 2), so borrowing element types
+// such as `HashSet<&'de str>` / `HashMap<&'de str, u32>` compile rather than
+// being blocked by a `Decode + 'static` delegation.
+
 impl<'de, T, S> crate::de::BorrowDecode<'de> for HashSet<T, S>
 where
-    T: crate::de::Decode + Eq + Hash + 'static,
-    S: BuildHasher + Default + 'static,
+    T: crate::de::BorrowDecode<'de> + Eq + Hash,
+    S: BuildHasher + Default,
 {
     fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
-        HashSet::<T, S>::decode(decoder)
+        crate::de::decode_with_depth_guard(decoder, |decoder| {
+            let len = crate::de::decode_slice_len(decoder)?;
+            decoder.claim_container_read::<T>(len)?;
+
+            let mut set = HashSet::with_capacity_and_hasher(len, S::default());
+            for _ in 0..len {
+                decoder.unclaim_bytes_read(core::mem::size_of::<T>());
+                set.insert(T::borrow_decode(decoder)?);
+            }
+            Ok(set)
+        })
     }
 }
 
 impl<'de, K, V, S> crate::de::BorrowDecode<'de> for HashMap<K, V, S>
 where
-    K: crate::de::Decode + Eq + Hash + 'static,
-    V: crate::de::Decode + 'static,
-    S: BuildHasher + Default + 'static,
+    K: crate::de::BorrowDecode<'de> + Eq + Hash,
+    V: crate::de::BorrowDecode<'de>,
+    S: BuildHasher + Default,
 {
     fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
-        HashMap::<K, V, S>::decode(decoder)
+        crate::de::decode_with_depth_guard(decoder, |decoder| {
+            let len = crate::de::decode_slice_len(decoder)?;
+            decoder.claim_container_read::<(K, V)>(len)?;
+
+            let mut map = HashMap::with_capacity_and_hasher(len, S::default());
+            for _ in 0..len {
+                decoder.unclaim_bytes_read(core::mem::size_of::<(K, V)>());
+                let key = K::borrow_decode(decoder)?;
+                let value = V::borrow_decode(decoder)?;
+                map.insert(key, value);
+            }
+            Ok(map)
+        })
     }
 }
 

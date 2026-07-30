@@ -27,6 +27,7 @@
 //! 21. Single `Validator<i32>` with two *different* field names
 //! 22. `CollectionValidator` three constraints applied in separate instances
 
+#![cfg(all(feature = "alloc", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced complex enum tests for OxiCode — crop genetics and plant breeding domain.
 //! 22 test functions covering deeply nested enums, enums with named fields, and enums containing enums.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

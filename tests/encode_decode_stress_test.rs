@@ -3,6 +3,7 @@
 //! These tests exercise a broad range of types, sizes, and structural patterns
 //! to verify correctness under load, boundary conditions, and deep nesting.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

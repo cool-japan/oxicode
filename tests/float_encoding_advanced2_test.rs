@@ -4,6 +4,7 @@
 //! zero sign preservation, fixed-int config, big-endian byte order verification,
 //! mixed-value collections, struct derive, and consumed-bytes correctness.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

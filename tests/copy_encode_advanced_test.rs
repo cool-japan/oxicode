@@ -1,6 +1,7 @@
 //! Advanced tests for copy-based encoding in OxiCode, covering fixed arrays,
 //! tuples, structs, and bulk encoding patterns via `encode_copy` and related APIs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

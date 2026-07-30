@@ -1,6 +1,7 @@
 //! Advanced tests for smart home IoT ecosystem domain types.
 //! 22 test functions covering complex enums, nested enums, and rich domain modeling.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

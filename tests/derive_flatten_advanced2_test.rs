@@ -5,6 +5,7 @@
 //! field-value access, max-value boundaries, skip-inside-flatten, three-level
 //! nesting, and re-encode identity.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

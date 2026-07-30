@@ -1,6 +1,7 @@
 //! Advanced tests for deeply nested struct encoding in OxiCode.
 //! 22 tests covering nesting, attributes, generics, collections, and configs.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

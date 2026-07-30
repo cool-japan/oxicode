@@ -1,5 +1,6 @@
 //! Tests for std::cmp::Ordering and std::ops::ControlFlow encode/decode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

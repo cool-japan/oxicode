@@ -1,5 +1,6 @@
 //! Tests for encode_to_writer and decode_from_reader convenience functions.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

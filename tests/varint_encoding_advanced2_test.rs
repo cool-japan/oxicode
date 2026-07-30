@@ -4,6 +4,7 @@
 //! signed integer zigzag behavior, and roundtrip correctness across
 //! a wide range of values and types.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

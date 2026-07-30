@@ -5,6 +5,7 @@
 //! payload size differences, container types, nested enums, error handling,
 //! tag_type attribute, and config interactions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

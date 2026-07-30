@@ -1,6 +1,7 @@
 //! Tests for decode resilience: verifies that malformed data produces proper errors
 //! rather than panics, undefined behavior, or silent wrong results.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

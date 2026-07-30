@@ -1,5 +1,6 @@
 //! Comprehensive tests for all map and set types
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

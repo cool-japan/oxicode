@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for OxiCode — domain: digital pathology (medical imaging for pathology labs)
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

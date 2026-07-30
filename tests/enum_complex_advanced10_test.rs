@@ -1,5 +1,6 @@
 //! Tests for Gaming / RPG character system — advanced enum roundtrip coverage.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

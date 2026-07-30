@@ -6,7 +6,7 @@
 //! invasive species monitoring, LiDAR canopy height models, seed bank inventories,
 //! and forest regeneration tracking.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

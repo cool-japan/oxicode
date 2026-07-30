@@ -7,6 +7,7 @@
 //! GPS-guided tractor waypoints, satellite vegetation indices, weather station data,
 //! and grain silo monitoring.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

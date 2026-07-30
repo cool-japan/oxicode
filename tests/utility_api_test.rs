@@ -1,6 +1,7 @@
 //! Tests for utility API functions: encode_to_fixed_array, decode_value, encode_bytes,
 //! and the #[oxicode(bytes)] derive attribute.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "simd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

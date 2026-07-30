@@ -3,6 +3,7 @@
 //! Verifies that the same data encoded via different container types
 //! produces identical or predictably different byte representations.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

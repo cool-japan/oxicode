@@ -8,6 +8,7 @@
 // LZ4 tests
 // ---------------------------------------------------------------------------
 
+#![cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -85,7 +86,7 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 mod lz4_extended {
     use oxicode::compression::{
         compress, compress_with_stats, decompress, decompress_or_passthrough, detect_compression,
@@ -391,7 +392,7 @@ mod cross_codec {
 // Zstd tests
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "compression-zstd")]
+#[cfg(all(feature = "compression-zstd", feature = "derive"))]
 mod zstd_extended {
     use oxicode::compression::{compress, decompress, detect_compression, Compression};
     use oxicode::{Decode, Encode};
@@ -472,7 +473,7 @@ mod zstd_extended {
 // LZ4 extended tests – batch 2
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 mod lz4_extended2 {
     use oxicode::compression::{compress, compress_with_stats, decompress, Compression};
     use oxicode::{Decode, Encode};
@@ -802,7 +803,7 @@ mod lz4_extended2 {
 // Zstd extended tests – batch 2
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "compression-zstd")]
+#[cfg(all(feature = "compression-zstd", feature = "derive"))]
 mod zstd_extended2 {
     use oxicode::compression::{compress, decompress, Compression};
     use oxicode::{Decode, Encode};

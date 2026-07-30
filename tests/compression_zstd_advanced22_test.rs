@@ -7,7 +7,7 @@
 //! satisfaction surveys, channel manager rate parity, group block allocations,
 //! concierge requests, and night audit reconciliation.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

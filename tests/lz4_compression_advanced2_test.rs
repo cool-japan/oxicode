@@ -79,17 +79,17 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 use oxicode::{Decode, Encode};
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct SimpleStruct {
     id: u32,
     label: String,
 }
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum SimpleEnum {
     Alpha,
@@ -333,7 +333,7 @@ fn test_lz4_adv2_decompress_invalid_data_returns_error() {
 // ──────────────────────────────────────────────────────────────────────────────
 // 14. Struct roundtrip via compression
 // ──────────────────────────────────────────────────────────────────────────────
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[test]
 fn test_lz4_adv2_struct_roundtrip() {
     use oxicode::compression::{compress, decompress, Compression};
@@ -353,7 +353,7 @@ fn test_lz4_adv2_struct_roundtrip() {
 // ──────────────────────────────────────────────────────────────────────────────
 // 15. Enum roundtrip via compression
 // ──────────────────────────────────────────────────────────────────────────────
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[test]
 fn test_lz4_adv2_enum_roundtrip() {
     use oxicode::compression::{compress, decompress, Compression};

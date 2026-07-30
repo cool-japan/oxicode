@@ -1,6 +1,7 @@
 //! Advanced nested struct encoding tests for OxiCode (set 10)
 //! Theme: Neuroscience and Brain-Computer Interfaces
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

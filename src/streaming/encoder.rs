@@ -1,15 +1,17 @@
 //! Streaming encoder implementation.
 
 use super::chunk::ChunkHeader;
+#[cfg(feature = "alloc")]
+use super::MAX_CHUNK_SIZE;
 use super::{StreamingConfig, StreamingProgress};
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 use crate::config::Config;
 use crate::enc::{Encode, EncoderImpl, VecWriter};
 use crate::{config, Result};
 
 #[cfg(feature = "std")]
 use super::ProgressCallback;
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 use crate::Error;
 
 #[cfg(feature = "alloc")]
@@ -28,6 +30,17 @@ use std::io::Write;
 /// endianness, byte limit).  Use [`StreamingEncoder::new`] to get the default
 /// variable-width integer encoding, or [`StreamingEncoder::new_with_config`]
 /// to select an alternative such as `config::standard().with_fixed_int_encoding()`.
+///
+/// # Chunk-size limits
+///
+/// A single encoded chunk is never allowed to exceed [`MAX_CHUNK_SIZE`]; a single
+/// item whose encoding exceeds that bound is rejected at [`write_item`](Self::write_item)
+/// with [`Error::LimitExceeded`], and the on-wire length field is written via a
+/// checked conversion so a length can never be silently truncated.
+///
+/// The `max_buffer_size` of the streaming configuration additionally acts as a
+/// soft flush threshold: the pending buffer is flushed before it would exceed
+/// `min(chunk_size, max_buffer_size)`.
 #[cfg(feature = "std")]
 pub struct StreamingEncoder<W: Write, C: Config = config::Configuration> {
     writer: W,
@@ -44,21 +57,13 @@ impl<W: Write> StreamingEncoder<W> {
     /// Create a new streaming encoder using the standard codec configuration
     /// (little-endian, variable-width integer encoding).
     pub fn new(writer: W) -> Self {
-        Self::new_with_config(writer, config::standard())
+        Self::new_with_configs(writer, StreamingConfig::default(), config::standard())
     }
 
     /// Create a streaming encoder with custom chunking configuration and the
     /// standard codec configuration.
     pub fn with_config(writer: W, streaming_config: StreamingConfig) -> Self {
-        StreamingEncoder {
-            writer,
-            streaming_config,
-            codec_config: config::standard(),
-            buffer: alloc::vec::Vec::new(),
-            items_in_buffer: 0,
-            progress: StreamingProgress::default(),
-            progress_callback: None,
-        }
+        Self::new_with_configs(writer, streaming_config, config::standard())
     }
 }
 
@@ -76,9 +81,15 @@ impl<W: Write, C: Config> StreamingEncoder<W, C> {
     /// let mut encoder = StreamingEncoder::new_with_config(writer, config);
     /// ```
     pub fn new_with_config(writer: W, codec_config: C) -> Self {
+        Self::new_with_configs(writer, StreamingConfig::default(), codec_config)
+    }
+
+    /// Create a streaming encoder selecting **both** the chunking configuration
+    /// and the codec configuration.
+    pub fn new_with_configs(writer: W, streaming_config: StreamingConfig, codec_config: C) -> Self {
         StreamingEncoder {
             writer,
-            streaming_config: StreamingConfig::default(),
+            streaming_config,
             codec_config,
             buffer: alloc::vec::Vec::new(),
             items_in_buffer: 0,
@@ -106,10 +117,28 @@ impl<W: Write, C: Config> StreamingEncoder<W, C> {
         item.encode(&mut encoder)?;
         let item_bytes = encoder.into_writer().into_vec();
 
-        // Check if adding this item would exceed chunk size.
-        if !self.buffer.is_empty()
-            && self.buffer.len() + item_bytes.len() > self.streaming_config.chunk_size
-        {
+        // Reject any single item whose encoding cannot fit in one chunk.  This
+        // keeps every emitted chunk within MAX_CHUNK_SIZE (and thus within the
+        // decoder's acceptance bound), and guarantees the length field fits u32.
+        if item_bytes.len() > MAX_CHUNK_SIZE {
+            return Err(Error::LimitExceeded {
+                limit: MAX_CHUNK_SIZE as u64,
+                found: item_bytes.len() as u64,
+            });
+        }
+
+        // Flush before the pending buffer would exceed the effective threshold.
+        let threshold = self
+            .streaming_config
+            .chunk_size
+            .min(self.streaming_config.max_buffer_size);
+        if !self.buffer.is_empty() && self.buffer.len() + item_bytes.len() > threshold {
+            self.flush_chunk()?;
+        }
+
+        // Guard against item_count overflow for zero-sized items, which never
+        // grow the byte buffer and therefore never trigger the size-based flush.
+        if self.items_in_buffer == u32::MAX {
             self.flush_chunk()?;
         }
 
@@ -135,12 +164,22 @@ impl<W: Write, C: Config> StreamingEncoder<W, C> {
 
     /// Flush the current buffer as a chunk.
     fn flush_chunk(&mut self) -> Result<()> {
-        if self.buffer.is_empty() {
+        // Flush based on the item count, not the byte length, so that chunks
+        // containing only zero-sized items (with an empty byte buffer) are still
+        // emitted and their item count is preserved.
+        if self.items_in_buffer == 0 {
             return Ok(());
         }
 
+        // Checked length conversion: guaranteed to succeed because write_item
+        // keeps the buffer within MAX_CHUNK_SIZE, but never silently truncates.
+        let payload_len = u32::try_from(self.buffer.len()).map_err(|_| Error::LimitExceeded {
+            limit: MAX_CHUNK_SIZE as u64,
+            found: self.buffer.len() as u64,
+        })?;
+
         // Write chunk header
-        let header = ChunkHeader::data(self.buffer.len() as u32, self.items_in_buffer);
+        let header = ChunkHeader::data(payload_len, self.items_in_buffer);
         self.writer
             .write_all(&header.to_bytes())
             .map_err(|e| Error::Io {
@@ -200,27 +239,46 @@ impl<W: Write, C: Config> StreamingEncoder<W, C> {
 }
 
 /// Streaming encoder for in-memory buffers (no std required).
+///
+/// The `C` type parameter selects the codec configuration; use
+/// [`BufferStreamingEncoder::new`] for the standard variable-width integer
+/// encoding or [`BufferStreamingEncoder::new_with_config`] to choose another.
 #[cfg(feature = "alloc")]
-pub struct BufferStreamingEncoder {
+pub struct BufferStreamingEncoder<C: Config = config::Configuration> {
     buffer: alloc::vec::Vec<u8>,
     config: StreamingConfig,
+    codec_config: C,
     chunk_buffer: alloc::vec::Vec<u8>,
     items_in_chunk: u32,
     progress: StreamingProgress,
 }
 
 #[cfg(feature = "alloc")]
-impl BufferStreamingEncoder {
-    /// Create a new buffer streaming encoder.
+impl BufferStreamingEncoder<config::Configuration> {
+    /// Create a new buffer streaming encoder using the standard codec configuration.
     pub fn new() -> Self {
         Self::with_config(StreamingConfig::default())
     }
 
-    /// Create with custom configuration.
+    /// Create with a custom chunking configuration and the standard codec configuration.
     pub fn with_config(config: StreamingConfig) -> Self {
+        Self::new_with_configs(config, config::standard())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<C: Config> BufferStreamingEncoder<C> {
+    /// Create a buffer streaming encoder with a custom codec configuration.
+    pub fn new_with_config(codec_config: C) -> Self {
+        Self::new_with_configs(StreamingConfig::default(), codec_config)
+    }
+
+    /// Create a buffer streaming encoder selecting both configurations.
+    pub fn new_with_configs(config: StreamingConfig, codec_config: C) -> Self {
         Self {
             buffer: alloc::vec::Vec::new(),
             config,
+            codec_config,
             chunk_buffer: alloc::vec::Vec::new(),
             items_in_chunk: 0,
             progress: StreamingProgress::default(),
@@ -230,13 +288,23 @@ impl BufferStreamingEncoder {
     /// Write a single item.
     pub fn write_item<T: Encode>(&mut self, item: &T) -> Result<()> {
         let item_writer = VecWriter::new();
-        let mut encoder = EncoderImpl::new(item_writer, config::standard());
+        let mut encoder = EncoderImpl::new(item_writer, self.codec_config);
         item.encode(&mut encoder)?;
         let item_bytes = encoder.into_writer().into_vec();
 
-        if !self.chunk_buffer.is_empty()
-            && self.chunk_buffer.len() + item_bytes.len() > self.config.chunk_size
-        {
+        if item_bytes.len() > MAX_CHUNK_SIZE {
+            return Err(Error::LimitExceeded {
+                limit: MAX_CHUNK_SIZE as u64,
+                found: item_bytes.len() as u64,
+            });
+        }
+
+        let threshold = self.config.chunk_size.min(self.config.max_buffer_size);
+        if !self.chunk_buffer.is_empty() && self.chunk_buffer.len() + item_bytes.len() > threshold {
+            self.flush_chunk();
+        }
+
+        if self.items_in_chunk == u32::MAX {
             self.flush_chunk();
         }
 
@@ -248,11 +316,15 @@ impl BufferStreamingEncoder {
 
     /// Flush current chunk to output buffer.
     fn flush_chunk(&mut self) {
-        if self.chunk_buffer.is_empty() {
+        // Use the item count as the guard so zero-sized-item chunks are emitted.
+        if self.items_in_chunk == 0 {
             return;
         }
 
-        let header = ChunkHeader::data(self.chunk_buffer.len() as u32, self.items_in_chunk);
+        // `chunk_buffer.len()` is bounded by MAX_CHUNK_SIZE (enforced in
+        // write_item), so it always fits in u32; the conversion cannot truncate.
+        let payload_len = self.chunk_buffer.len() as u32;
+        let header = ChunkHeader::data(payload_len, self.items_in_chunk);
         self.buffer.extend_from_slice(&header.to_bytes());
         self.buffer.extend_from_slice(&self.chunk_buffer);
 
@@ -282,7 +354,7 @@ impl BufferStreamingEncoder {
 }
 
 #[cfg(feature = "alloc")]
-impl Default for BufferStreamingEncoder {
+impl Default for BufferStreamingEncoder<config::Configuration> {
     fn default() -> Self {
         Self::new()
     }

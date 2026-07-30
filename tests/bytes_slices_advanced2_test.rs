@@ -1,5 +1,6 @@
 //! Advanced tests for byte slice and array serialization in OxiCode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

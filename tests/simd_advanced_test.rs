@@ -5,6 +5,7 @@
 //! `encode_to_vec` / `decode_from_slice` API and run unconditionally — the
 //! SIMD feature simply changes internal dispatch but must not alter results.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

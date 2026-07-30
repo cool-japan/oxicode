@@ -3,6 +3,7 @@
 //! Covers `EncodedBytes`, `EncodedBytesOwned`, `encode_to_hex`, `decode_from_hex`,
 //! `hex_dump_bytes`, bool encoding, fixed-size arrays, versioned values, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

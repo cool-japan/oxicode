@@ -1,6 +1,7 @@
 //! Comprehensive Unicode encoding tests covering a wide range of scripts,
 //! emoji, mixed content, collections with unicode keys, and encoding invariants.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

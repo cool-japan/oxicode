@@ -72,10 +72,57 @@
 //! }
 //! ```
 //!
-//! Note: `default = "fn_path"` implies skipping the field during both encode and
-//! decode (the field is excluded from the binary stream and the default function
-//! is called to produce the value). To encode normally while specifying a default
-//! factory, combine with struct-level versioning.
+//! ### Important divergence from `serde`
+//!
+//! **`#[oxicode(default = "fn_path")]` skips the field during *encode* as well as decode.**
+//! The field is excluded from the binary stream entirely and `fn_path()` is called to
+//! reconstruct it on decode. This is the opposite of `#[serde(default = ...)]`, which only
+//! affects deserialization and still *serializes* the field. A type migrated from
+//! serde/bincode that annotates a still-transmitted field with `default` will silently drop
+//! that field from the wire, breaking round-trips with any peer that expects it. If you want
+//! the field encoded normally with only a decode-side fallback, do not use this attribute —
+//! implement the fallback in your own decode logic or a struct-level versioning scheme.
+//!
+//! ## `#[oxicode(bytes)]`
+//!
+//! Encode/decode the field as a length-prefixed raw byte run using a bulk read/write path
+//! (a `u64` length followed by the bytes). Works on any field whose type can be viewed as
+//! `&[u8]` for encoding and reconstructed from bytes for decoding — `Vec<u8>`, `Box<[u8]>`,
+//! `Arc<[u8]>`/`Rc<[u8]>`, `[u8; N]`, `bytes::Bytes`, and similar containers (the decode side
+//! materializes via `TryFrom<Vec<u8>>`, or `TryFrom<&'de [u8]>` for zero-copy `BorrowDecode`).
+//! Cannot be combined with `skip`, `default`, `seq_len`, `with`, `encode_with`, or
+//! `decode_with` — doing so is a compile error.
+//!
+//! ## `#[oxicode(seq_len = "u8" | "u16" | "u32" | "u64")]`
+//!
+//! Use a fixed-width length prefix of the given width for a `Vec<T>` field instead of the
+//! default `u64` length. **Wire-incompatible with bincode** (which always uses its varint/fixint
+//! length encoding) — only interoperates with other oxicode peers using the same `seq_len`.
+//! The decode path claims the container against the configured decode memory limit before
+//! allocating, so a malicious length cannot drive an unbounded pre-allocation.
+//!
+//! ## `#[oxicode(with = "module_path")]`
+//!
+//! Use `module_path::encode(&field, encoder)` and `module_path::decode(decoder)` for this field
+//! instead of its own `Encode`/`Decode` impls. Useful for third-party types or custom framing.
+//!
+//! ## `#[oxicode(encode_with = "path::to::fn")]` / `#[oxicode(decode_with = "path::to::fn")]`
+//!
+//! Like `with`, but specify the encode and/or decode function independently.
+//! `encode_with` signature: `fn<E: Encoder>(&T, &mut E) -> Result<(), Error>`;
+//! `decode_with` signature: `fn<D: Decoder>(&mut D) -> Result<T, Error>`.
+//!
+//! ## `#[oxicode(default_value = "expr")]`
+//!
+//! An inline expression used as the decode-side value when the field is skipped (via `skip` or
+//! `default`). Takes precedence over `Default::default()` and over the `default` function path.
+//! Only affects decode, never encode.
+//!
+//! ## `#[oxicode(rename = "name")]`
+//!
+//! Accepted for serde-migration source compatibility. Because oxicode's binary format is
+//! positional (fields carry no names on the wire), this is a **no-op on the wire**. It is
+//! retained so serde-annotated structs compile unchanged; it has no runtime effect.
 //!
 //! ## `#[oxicode(flatten)]`
 //!
@@ -118,6 +165,44 @@
 //! ## `#[oxicode(crate = "my_oxicode")]`
 //!
 //! Override the path used to reference OxiCode items in generated code. Default is `::oxicode`.
+//!
+//! ## `#[oxicode(transparent)]`
+//!
+//! On a struct with exactly one field, encode/decode as that inner field directly with no
+//! additional framing. A compile error is emitted for structs with a different field count and
+//! for enums/unions.
+//!
+//! ## `#[oxicode(tag_type = "u8" | "u16" | "u32" | "u64")]`
+//!
+//! Width of the enum discriminant tag written before each variant's payload. Defaults to `u32`
+//! (bincode-compatible). Narrower widths save space for small enums; `u64` allows explicit
+//! discriminants above `u32::MAX`. **Non-default widths are wire-incompatible with bincode.**
+//! A supplied `#[oxicode(variant = N)]` value that does not fit the configured width is a
+//! compile error. Only meaningful on enums; ignored on structs.
+//!
+//! # Variant Attributes
+//!
+//! Applied to individual enum variants via `#[oxicode(...)]`:
+//!
+//! ## `#[oxicode(variant = N)]`
+//!
+//! Assign the explicit discriminant `N` to the variant instead of its declaration-order index.
+//! `N` may be up to `u64::MAX` when `tag_type = "u64"` is set on the enum (otherwise it must fit
+//! the configured tag width). Note that native Rust explicit discriminants (`enum E { A = 5 }`)
+//! are **ignored** by the derive — use this attribute to control the wire discriminant.
+//!
+//! ## `#[oxicode(rename = "name")]`
+//!
+//! Accepted for serde-migration source compatibility; a **no-op on the wire** (variants are
+//! positional in the binary format).
+//!
+//! ## `#[oxicode(skip)]` (variant-level)
+//!
+//! Exclude the variant from the discriminant space. On **encode** the skipped variant is
+//! assigned the same discriminant as the next non-skipped variant in declaration order (so it
+//! aliases that successor on the wire). On **decode** no arm is generated for it, so that
+//! discriminant decodes into the successor. A skipped variant with **no** following non-skipped
+//! variant has nothing to alias onto and is a compile error (it could never round-trip).
 //!
 //! # Supported Types
 //!

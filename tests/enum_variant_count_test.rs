@@ -4,6 +4,7 @@
 //! styles (unit, tuple, struct), various tag_type widths, recursive types,
 //! and zero-copy BorrowDecode.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

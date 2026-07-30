@@ -1,201 +1,135 @@
-//! SIMD-accelerated array encoding example
+//! SIMD-accelerated array codec example.
 //!
-//! This example demonstrates how oxicode can use SIMD instructions
-//! to accelerate encoding and decoding of large arrays.
+//! `oxicode::simd` is a small, **explicit opt-in** codec for contiguous
+//! arrays of `f32`/`f64`/`i32`/`i64`/`u8`. It is *not* wired into
+//! [`oxicode::encode_to_vec`], `#[derive(Encode, Decode)]`, or the `Encode`/
+//! `Decode` traits — a `Vec<f64>` field in a derived struct is encoded by the
+//! ordinary (non-SIMD) length-prefixed varint path, exactly as it would be
+//! without the `simd` feature enabled. To get the vectorized path you must
+//! call `oxicode::simd::encode_simd_array` / `decode_simd_array` (or the
+//! per-type `encode_f64_array` etc.) directly, and the result uses the
+//! module's own framing (an 8-byte little-endian element count followed by
+//! the little-endian element bytes) — it is a different byte layout from
+//! `encode_to_vec`'s output for the same `Vec<f64>` and the two are not
+//! interchangeable.
 //!
-//! Run with: cargo run --example simd_arrays --features simd
+//! What the "SIMD" actually is: on little-endian targets each array's
+//! payload is a byte image of the element slice, so encoding/decoding reduce
+//! to a bulk memory copy. That copy is performed with real hardware kernels
+//! (AVX2 or the SSE2 baseline on x86_64, NEON on aarch64), selected at
+//! runtime via `detect_capability()`. On big-endian targets each element is
+//! byte-swapped individually on a scalar fallback path. The serialized bytes
+//! are identical on every architecture; only throughput differs. Because
+//! the operation is a bulk copy, it is memory-bandwidth bound rather than
+//! compute bound — do not expect large speedups over a well-optimized
+//! scalar `to_le_bytes` loop, which the compiler can already vectorize on
+//! its own in a release build.
+//!
+//! The `oxicode::simd` module only exists when the `simd` feature is
+//! enabled, so (like `examples/async_streaming.rs`) this file gates its
+//! real body behind `#[cfg(feature = "simd")]` and falls back to a short
+//! notice otherwise.
+//!
+//! Run with: cargo run --release --example simd_arrays --features simd
 
-use oxicode::{config, Decode, Encode};
-use std::time::Instant;
+#[cfg(feature = "simd")]
+mod simd_demo {
+    use oxicode::simd::{
+        decode_simd_array, detect_capability, encode_simd_array, is_simd_available,
+    };
+    use oxicode::Error;
+    use std::hint::black_box;
+    use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
-struct SensorData {
-    timestamp: u64,
-    temperature_readings: Vec<f64>,
-    pressure_readings: Vec<f32>,
-    accelerometer: Vec<i32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
-struct LargeDataset {
-    id: u64,
-    values_i32: Vec<i32>,
-    values_u32: Vec<u32>,
-    values_i64: Vec<i64>,
-    values_u64: Vec<u64>,
-    values_f32: Vec<f32>,
-    values_f64: Vec<f64>,
-}
-
-fn main() -> Result<(), oxicode::Error> {
-    println!("OxiCode SIMD Acceleration Example\n");
-    println!("This example shows performance improvements for large arrays.");
-    println!(
-        "SIMD feature is: {}\n",
-        if cfg!(feature = "simd") {
-            "ENABLED ✓"
-        } else {
-            "DISABLED"
+    /// Encode `data` element-by-element via `f64::to_le_bytes`, matching the
+    /// framing `encode_simd_array` produces (8-byte LE count + LE element
+    /// bytes), but without going through the vectorized bulk-copy kernel.
+    /// Used only as a scalar baseline for the timing comparison below.
+    fn encode_f64_scalar(data: &[f64]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(8 + data.len() * 8);
+        out.extend_from_slice(&(data.len() as u64).to_le_bytes());
+        for value in data {
+            out.extend_from_slice(&value.to_le_bytes());
         }
-    );
+        out
+    }
 
-    // Example 1: Sensor data with multiple array types
-    println!("1. Encoding sensor data:");
-    let sensor_data = SensorData {
-        timestamp: 1234567890,
-        temperature_readings: (0..10_000).map(|i| 20.0 + (i as f64) * 0.01).collect(),
-        pressure_readings: (0..10_000).map(|i| 1013.25 + (i as f32) * 0.1).collect(),
-        accelerometer: (0..10_000).map(|i| i * 123).collect(),
-    };
-
-    let start = Instant::now();
-    let bytes = oxicode::encode_to_vec(&sensor_data)?;
-    let encode_time = start.elapsed();
-
-    println!(
-        "   Encoded {} items in {:?}",
-        sensor_data.temperature_readings.len() * 3,
-        encode_time
-    );
-    println!("   Total size: {} bytes", bytes.len());
-
-    let start = Instant::now();
-    let (decoded, _): (SensorData, _) = oxicode::decode_from_slice(&bytes)?;
-    let decode_time = start.elapsed();
-
-    println!("   Decoded in {:?}", decode_time);
-    assert_eq!(sensor_data, decoded);
-    println!("   ✓ Round-trip successful\n");
-
-    // Example 2: Large dataset with all SIMD-optimized types
-    println!("2. Encoding large dataset:");
-    let dataset = LargeDataset {
-        id: 42,
-        values_i32: (0..50_000).collect(),
-        values_u32: (0..50_000).map(|i| i as u32).collect(),
-        values_i64: (0..50_000).map(|i| i as i64 * 1000).collect(),
-        values_u64: (0..50_000).map(|i| i as u64 * 1000).collect(),
-        values_f32: (0..50_000).map(|i| (i as f32) * 0.1).collect(),
-        values_f64: (0..50_000).map(|i| (i as f64) * 0.1).collect(),
-    };
-
-    let start = Instant::now();
-    let bytes = oxicode::encode_to_vec(&dataset)?;
-    let encode_time = start.elapsed();
-
-    println!("   Encoded 300,000 numeric values in {:?}", encode_time);
-    println!("   Total size: {} bytes", bytes.len());
-
-    let start = Instant::now();
-    let (decoded, _): (LargeDataset, _) = oxicode::decode_from_slice(&bytes)?;
-    let decode_time = start.elapsed();
-
-    println!("   Decoded in {:?}", decode_time);
-    assert_eq!(dataset, decoded);
-    println!("   ✓ Round-trip successful\n");
-
-    // Example 3: Comparison with different array sizes
-    println!("3. Performance scaling with array size:");
-    for size in [1_000, 10_000, 100_000] {
-        let data: Vec<f64> = (0..size).map(|i| i as f64).collect();
-
+    /// Runs `f` `iterations` times (plus one untimed warm-up call) and
+    /// returns the average per-call duration and the last result.
+    fn time_it<T>(
+        iterations: u32,
+        mut f: impl FnMut() -> Result<T, Error>,
+    ) -> Result<(Duration, T), Error> {
+        let warm = f()?;
         let start = Instant::now();
-        let bytes = oxicode::encode_to_vec(&data)?;
-        let encode_time = start.elapsed();
+        let mut last = warm;
+        for _ in 0..iterations {
+            last = black_box(f()?);
+        }
+        Ok((start.elapsed() / iterations, last))
+    }
 
-        let start = Instant::now();
-        let (decoded, _): (Vec<f64>, _) = oxicode::decode_from_slice(&bytes)?;
-        let decode_time = start.elapsed();
+    pub fn run() -> Result<(), Error> {
+        println!("OxiCode SIMD Array Codec Example\n");
+        println!("detected CPU capability: {:?}", detect_capability());
+        println!("is_simd_available(): {}\n", is_simd_available());
 
+        // --- 1. Round-trip via the opt-in codec ---
+        println!("1. Round-trip via oxicode::simd (its own framing, not encode_to_vec):");
+        let data: Vec<f64> = (0..10_000).map(|i| i as f64 * 0.5).collect();
+
+        let encoded = encode_simd_array(&data)?;
+        let decoded: Vec<f64> = decode_simd_array(&encoded)?;
         assert_eq!(data, decoded);
+        println!(
+            "   {} f64 values -> {} bytes (8-byte count header + 8 bytes/element), round-trip verified\n",
+            data.len(),
+            encoded.len()
+        );
+
+        // --- 2. Honest throughput comparison ---
+        println!("2. Measured throughput: simd bulk-copy path vs a scalar to_le_bytes loop");
+        println!("   (memory-bandwidth bound; run with --release for a meaningful number)\n");
+
+        for size in [10_000usize, 100_000, 1_000_000] {
+            let data: Vec<f64> = (0..size).map(|i| i as f64).collect();
+            let iterations = if size >= 1_000_000 { 20 } else { 200 };
+
+            let (simd_time, simd_bytes) = time_it(iterations, || encode_simd_array(&data))?;
+            let (scalar_time, scalar_bytes) = time_it(iterations, || Ok(encode_f64_scalar(&data)))?;
+            assert_eq!(simd_bytes, scalar_bytes, "framing must match byte-for-byte");
+
+            let simd_gbps = (size * 8) as f64 / simd_time.as_secs_f64() / 1e9;
+            let scalar_gbps = (size * 8) as f64 / scalar_time.as_secs_f64() / 1e9;
+
+            println!(
+                "   {:>9} elements: simd {:>7.2?} ({:>5.2} GB/s)  scalar {:>7.2?} ({:>5.2} GB/s)  ratio {:.2}x",
+                size,
+                simd_time,
+                simd_gbps,
+                scalar_time,
+                scalar_gbps,
+                scalar_time.as_secs_f64() / simd_time.as_secs_f64().max(f64::EPSILON),
+            );
+        }
 
         println!(
-            "   Size {:>6}: encode {:>8.2?}, decode {:>8.2?}, total {} bytes",
-            size,
-            encode_time,
-            decode_time,
-            bytes.len()
+            "\n   Ratios vary by CPU, allocator, and build profile — treat the numbers above as a\n   \
+             local measurement, not a portability guarantee. This crate does not ship a fixed\n   \
+             \"2-4x\" (or any other) speedup claim; measure on your own target hardware."
         );
+
+        Ok(())
     }
-    println!();
+}
 
-    // Example 4: SIMD-optimized types
-    println!("4. SIMD-optimized types (when feature enabled):");
-    println!("   - i32, u32, i64, u64");
-    println!("   - f32, f64");
-    println!("   - Requires CPU with SSE2, AVX2, or AVX-512 support");
-    println!("   - Auto-detects and uses best available SIMD instructions");
-    println!("   - Typical speedup: 2-4x for large arrays (>1000 elements)\n");
+#[cfg(feature = "simd")]
+fn main() -> Result<(), oxicode::Error> {
+    simd_demo::run()
+}
 
-    // Example 5: Configuration with SIMD
-    println!("5. Using SIMD with different configurations:");
-    let data: Vec<i64> = (0..10_000).collect();
-
-    // Standard config (varint + SIMD)
-    let cfg_standard = config::standard();
-    let bytes_standard = oxicode::encode_to_vec_with_config(&data, cfg_standard)?;
-    println!(
-        "   Standard config (varint): {} bytes",
-        bytes_standard.len()
-    );
-
-    // Legacy config (fixed-int + SIMD)
-    let cfg_legacy = config::legacy();
-    let bytes_legacy = oxicode::encode_to_vec_with_config(&data, cfg_legacy)?;
-    println!("   Legacy config (fixed-int): {} bytes", bytes_legacy.len());
-
-    println!("   Note: SIMD optimizations apply to both configurations!\n");
-
-    // Example 6: Real-world use case - Time series data
-    println!("6. Real-world use case - Time series data:");
-
-    #[allow(dead_code)]
-    #[derive(Debug, Encode, Decode)]
-    struct TimeSeriesPoint {
-        timestamp: u64,
-        value: f64,
-    }
-
-    #[derive(Debug, Encode, Decode)]
-    struct TimeSeries {
-        name: String,
-        timestamps: Vec<u64>,
-        values: Vec<f64>,
-    }
-
-    let time_series = TimeSeries {
-        name: "CPU Usage".to_string(),
-        timestamps: (0..100_000).map(|i| 1_600_000_000 + i * 60).collect(),
-        values: (0..100_000)
-            .map(|i| 50.0 + ((i as f64) * 0.01).sin() * 30.0)
-            .collect(),
-    };
-
-    let start = Instant::now();
-    let bytes = oxicode::encode_to_vec(&time_series)?;
-    let encode_time = start.elapsed();
-
-    println!("   Encoded 100,000 data points in {:?}", encode_time);
-    println!(
-        "   Size: {} bytes ({:.2} bytes/point)",
-        bytes.len(),
-        bytes.len() as f64 / 100_000.0
-    );
-
-    let start = Instant::now();
-    let (_decoded, _): (TimeSeries, _) = oxicode::decode_from_slice(&bytes)?;
-    let decode_time = start.elapsed();
-
-    println!("   Decoded in {:?}", decode_time);
-    println!("   ✓ Time series round-trip successful\n");
-
-    println!("All SIMD examples completed successfully!");
-
-    if !cfg!(feature = "simd") {
-        println!("\n⚠️  SIMD feature is not enabled.");
-        println!("   Run with: cargo run --example simd_arrays --features simd");
-        println!("   to see SIMD-accelerated performance!");
-    }
-
-    Ok(())
+#[cfg(not(feature = "simd"))]
+fn main() {
+    println!("This example requires the \"simd\" feature.");
+    println!("Run with: cargo run --release --example simd_arrays --features simd");
 }

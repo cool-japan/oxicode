@@ -4,6 +4,7 @@
 //! BorrowDecode, sequential stress, and error paths — all distinct from the
 //! coverage already present in option_result_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

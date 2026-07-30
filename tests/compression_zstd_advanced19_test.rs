@@ -7,7 +7,7 @@
 //! loudness metering, plugin preset banks, studio calibration, session musician
 //! credits, streaming codec configs, and vinyl mastering specs.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

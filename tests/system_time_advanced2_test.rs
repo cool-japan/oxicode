@@ -2,6 +2,7 @@
 //! 22 tests covering UNIX_EPOCH roundtrips, config variants, Vec/Option wrappers,
 //! byte-size guarantees, consistency, and subsecond precision.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

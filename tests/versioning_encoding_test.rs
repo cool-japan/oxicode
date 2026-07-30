@@ -1,5 +1,10 @@
 //! Encoding/decoding-focused tests for the versioning module (split from versioning_test.rs).
 
+#![cfg(all(
+    feature = "compression-lz4",
+    feature = "compression-zstd",
+    feature = "versioning"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

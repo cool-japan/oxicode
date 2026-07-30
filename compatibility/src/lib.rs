@@ -2,6 +2,9 @@
 //!
 //! This crate verifies that oxicode produces binary-compatible output with bincode.
 
+/// Committed golden-vector corpus (see module docs for details).
+pub mod golden_vectors;
+
 #[cfg(test)]
 mod tests {
 

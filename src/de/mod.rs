@@ -132,6 +132,24 @@ pub trait Decoder: Sealed {
         let size = core::mem::size_of::<T>().saturating_mul(len);
         self.claim_bytes_read(size)
     }
+
+    /// Enter one level of nested decoding (container, box, or enum variant).
+    ///
+    /// Returns an error once the current nesting depth exceeds the decoder's
+    /// configured recursion limit, so that a crafted deeply-nested payload
+    /// cannot drive unbounded recursion and abort the process via stack
+    /// overflow. The default implementation is a no-op (no limit).
+    #[inline]
+    fn enter_recursion(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    /// Leave one level of nested decoding previously entered with
+    /// [`enter_recursion`](Decoder::enter_recursion).
+    #[inline]
+    fn leave_recursion(&mut self) {
+        // Default implementation does nothing.
+    }
 }
 
 /// BorrowDecoder trait for zero-copy decoding
@@ -194,6 +212,14 @@ where
     fn unclaim_bytes_read(&mut self, n: usize) {
         T::unclaim_bytes_read(self, n)
     }
+
+    fn enter_recursion(&mut self) -> Result<(), Error> {
+        T::enter_recursion(self)
+    }
+
+    fn leave_recursion(&mut self) {
+        T::leave_recursion(self)
+    }
 }
 
 impl<'de, T> BorrowDecoder<'de> for &mut T
@@ -223,11 +249,35 @@ pub(crate) fn decode_option_variant<D: Decoder<Context = ()>>(
     }
 }
 
-/// Decode the length of a slice/container
+/// Decode the length of a slice/container.
+///
+/// The length is stored on the wire as a `u64`; on targets where `usize` is
+/// narrower than 64 bits (e.g. 32-bit or wasm32) a value that does not fit is
+/// rejected with [`Error::OutsideUsizeRange`] rather than silently truncated.
 #[inline]
 #[allow(dead_code)]
 pub(crate) fn decode_slice_len<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<usize, Error> {
-    u64::decode(decoder).map(|len| len as usize)
+    let len = u64::decode(decoder)?;
+    usize::try_from(len).map_err(|_| Error::OutsideUsizeRange(len))
+}
+
+/// Run `f` inside one level of the decoder's recursion-depth guard.
+///
+/// Calls [`Decoder::enter_recursion`] before invoking `f` and
+/// [`Decoder::leave_recursion`] afterwards regardless of whether `f` succeeds,
+/// so the depth counter stays balanced even on the error path. Used by the
+/// recursive container/box decoders to bound nesting on untrusted input.
+#[inline]
+#[allow(dead_code)]
+pub(crate) fn decode_with_depth_guard<D, T, F>(decoder: &mut D, f: F) -> Result<T, Error>
+where
+    D: Decoder,
+    F: FnOnce(&mut D) -> Result<T, Error>,
+{
+    decoder.enter_recursion()?;
+    let result = f(decoder);
+    decoder.leave_recursion();
+    result
 }
 
 /// Helper macro to implement BorrowDecode for types that implement Decode.

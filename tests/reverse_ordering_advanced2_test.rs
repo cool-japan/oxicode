@@ -1,5 +1,6 @@
 //! Tests for std::cmp::Reverse<T>, std::cmp::Ordering, and std::num::Wrapping<T> encoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

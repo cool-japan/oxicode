@@ -1,5 +1,6 @@
 //! Extended tuple tests: mixed types, nested tuples, structs, collections, and BorrowDecode.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

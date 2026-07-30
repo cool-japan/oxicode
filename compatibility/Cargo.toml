@@ -14,9 +14,11 @@ categories = ["encoding", "development-tools::testing"]
 publish = false
 
 [dependencies]
-oxicode = { path = "..", version = "0.2.4" }
+oxicode = { path = "..", version = "0.2.5", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 
 
 [dev-dependencies]
-bincode = "=2.0.1" # Never upgrade to 3.0 (3.x has incompatible API)
+# Compatibility oracle: never upgrade to 3.0 (3.x has an incompatible API).
+# Pinned in [workspace.dependencies] at the repo root; inherited here per workspace policy.
+bincode = { workspace = true }

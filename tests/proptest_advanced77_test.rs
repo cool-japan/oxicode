@@ -7,6 +7,7 @@
 //! counter readings, train detection sections, ATP interventions, level crossing
 //! barriers, speed restriction orders, and energy consumption profiles.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

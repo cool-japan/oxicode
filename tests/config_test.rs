@@ -3,6 +3,7 @@
 //! Verifies that different configs produce distinct byte representations,
 //! that each config roundtrips correctly, and that byte/size limits are enforced.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

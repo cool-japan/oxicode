@@ -1,5 +1,6 @@
 //! Tests for generic type constraints and bounded generics in encoding/decoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

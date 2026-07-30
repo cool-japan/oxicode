@@ -4,6 +4,7 @@
 //! Vec collections, Option, fixed-int config, big-endian config, consumed bytes,
 //! and encoded size comparisons.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

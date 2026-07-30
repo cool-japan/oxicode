@@ -27,6 +27,7 @@
 //! 21.  Struct with array field [u32; 8]
 //! 22.  Deeply nested Option<Vec<Option<String>>>
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

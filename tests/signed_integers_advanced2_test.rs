@@ -1,5 +1,6 @@
 //! Advanced signed integer encoding tests: zigzag, boundary values, wire format.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Space exploration / mission control domain tests for oxicode enum and struct encoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

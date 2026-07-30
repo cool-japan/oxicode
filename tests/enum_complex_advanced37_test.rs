@@ -4,6 +4,7 @@
 //! evaluation logs, production separators, pipeline pigging, flare systems,
 //! HSE incidents, well interventions, reservoir simulation, and artificial lift.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

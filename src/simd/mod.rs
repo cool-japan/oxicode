@@ -1,14 +1,28 @@
-//! SIMD-optimized encoding and decoding for oxicode.
+//! Opt-in vectorized array encoding and decoding for oxicode.
 //!
-//! This module provides hardware-accelerated encoding and decoding for numerical arrays,
-//! leveraging SIMD instructions (AVX2, AVX-512, NEON, SSE4.2) when available.
+//! This module is an **explicit, opt-in** codec for contiguous arrays of a few
+//! fixed-width primitive types (`f32`, `f64`, `i32`, `i64`, `u8`). It is *not*
+//! wired into [`crate::encode_to_vec`], the derive macro, or the `Encode` /
+//! `Decode` traits — callers must invoke these functions directly. It has its
+//! own self-describing framing (an 8-byte little-endian element count followed
+//! by the little-endian element bytes) that is independent of the crate's main
+//! wire format.
 //!
-//! ## Features
+//! ## What the "SIMD" actually is
 //!
-//! - **Auto-detection**: Automatically detects CPU capabilities at runtime
-//! - **4-8x speedup**: Significant performance improvement for numerical data
-//! - **Zero-copy alignment**: Optimized memory access patterns
-//! - **Fallback**: Graceful degradation to scalar path when SIMD unavailable
+//! Each array's payload is, on little-endian targets, a byte image of the
+//! element slice. Encoding and decoding therefore reduce to a bulk memory copy,
+//! which this module performs with real hardware SIMD kernels (see the
+//! internal `copy` module): AVX2 or the SSE2 baseline on x86_64, NEON on aarch64, and a
+//! portable `copy_from_slice` fallback everywhere else (and under Miri). On
+//! big-endian targets each element is byte-swapped individually on the scalar
+//! path. The serialized bytes are identical on every architecture — only
+//! throughput differs.
+//!
+//! Under `std`, the widest usable instruction set is detected at runtime via
+//! [`detect_capability`]. Under `no_std` (the `simd` feature without `std`),
+//! runtime feature detection is unavailable, so dispatch falls back to
+//! compile-time `target_feature` selection.
 //!
 //! ## Example
 //!
@@ -16,19 +30,19 @@
 //! use oxicode::simd;
 //!
 //! let data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
-//!
-//! // Encode with SIMD optimization
-//! let encoded = simd::encode_array(&data)?;
-//!
-//! // Decode with SIMD optimization
-//! let decoded: Vec<f32> = simd::decode_array(&encoded)?;
+//! let encoded = simd::encode_simd_array(&data)?;
+//! let decoded: Vec<f32> = simd::decode_simd_array(&encoded)?;
 //! ```
 
 mod aligned;
 mod array;
+mod copy;
 mod detect;
 
-pub use aligned::{AlignedBuffer, AlignedVec, SIMD_ALIGNMENT};
+#[cfg(feature = "alloc")]
+pub use aligned::AlignedVec;
+pub use aligned::{AlignedBuffer, SIMD_ALIGNMENT};
+#[cfg(feature = "alloc")]
 pub use array::{
     decode_f32_array, decode_f64_array, decode_i32_array, decode_i64_array, decode_u8_array,
     encode_f32_array, encode_f64_array, encode_i32_array, encode_i64_array, encode_u8_array,

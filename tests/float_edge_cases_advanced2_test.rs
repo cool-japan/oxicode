@@ -4,6 +4,7 @@
 //! and mathematical constants, verifying bit-exact roundtrip behaviour as well
 //! as encoded size expectations under the fixed-int configuration.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

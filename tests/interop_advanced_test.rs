@@ -4,6 +4,7 @@
 //! f64 endianness invariance, config cloning, debug output, file I/O, and
 //! single-byte u8 array encoding.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

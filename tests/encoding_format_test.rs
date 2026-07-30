@@ -15,6 +15,7 @@
 //!   - u64=1 with fixed_int config (8 bytes LE)
 //!   - u32=1 with big_endian + fixed_int config (4 bytes BE)
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

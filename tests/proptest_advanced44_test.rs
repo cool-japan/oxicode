@@ -1,5 +1,6 @@
 //! Property-based tests for OxiCode using the compiler / programming language domain.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

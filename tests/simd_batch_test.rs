@@ -4,6 +4,7 @@
 //! with large primitive arrays to hit SIMD-optimized code paths internally.
 //! All tests verify correctness of encoded/decoded output.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

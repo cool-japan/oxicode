@@ -5,6 +5,7 @@
 //! `Range::from_bounds`, `FieldValidation`, boundary values not previously hit,
 //! and encode/decode-integrated validation workflows.
 
+#![cfg(all(feature = "alloc", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

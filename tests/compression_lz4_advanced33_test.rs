@@ -1,4 +1,4 @@
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 
 //! Advanced LZ4 compression tests for the computational fluid dynamics (CFD) domain.
 //!

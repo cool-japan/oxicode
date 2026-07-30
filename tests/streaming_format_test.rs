@@ -4,6 +4,7 @@
 //! configurations, and edge cases. Uses both the buffer-backed API
 //! (no std required) and the IO-backed API (std feature).
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

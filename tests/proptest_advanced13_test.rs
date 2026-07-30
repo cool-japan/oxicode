@@ -4,6 +4,7 @@
 //! proptest! macro block, verifying roundtrip and encoding invariants for
 //! Matrix, Expr, and various collection types.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

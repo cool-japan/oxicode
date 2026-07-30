@@ -2,6 +2,7 @@
 //! 22 test functions covering deeply nested enums, enums with named fields,
 //! and enums containing other enums.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced string encoding tests covering edge cases, Unicode categories,
 //! length-prefix correctness, and struct-level derive roundtrips.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

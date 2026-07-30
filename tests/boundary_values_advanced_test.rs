@@ -6,6 +6,7 @@
 //! They do NOT duplicate the basic MIN/MAX roundtrip coverage already present in
 //! `numeric_boundary_test.rs`; instead each test targets a distinct encoding property.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

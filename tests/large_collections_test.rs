@@ -3,6 +3,7 @@
 //! Focuses on scale correctness, varint length-prefix boundaries, multi-level
 //! nesting at realistic sizes, and error behaviour when data is truncated.
 
+#![cfg(all(feature = "std", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

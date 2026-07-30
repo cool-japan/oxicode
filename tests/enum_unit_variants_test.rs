@@ -1,6 +1,7 @@
 //! Tests for OxiCode enum serialization focusing on unit variants,
 //! discriminants, and encoding details.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

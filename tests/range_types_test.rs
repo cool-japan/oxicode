@@ -1,6 +1,7 @@
 //! Comprehensive tests for RangeFull, RangeFrom<T>, RangeTo<T>, RangeToInclusive<T>
 //! encode/decode/borrow_decode implementations.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -3,6 +3,7 @@
 //! These tests verify round-trip correctness, byte-count accuracy, config variants,
 //! writer/reader adapters, checksum-gated paths, and borrow-decode zero-copy behaviour.
 
+#![cfg(all(feature = "derive", feature = "simd", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

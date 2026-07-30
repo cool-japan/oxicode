@@ -1,6 +1,7 @@
 //! Advanced tests for ManuallyDrop<T> encoding in OxiCode.
 //! ManuallyDrop<T> is a transparent wrapper — encodes identically to T.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

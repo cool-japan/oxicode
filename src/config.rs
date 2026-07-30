@@ -127,7 +127,21 @@ impl<E, I, L> Configuration<E, I, L> {
 
     /// Sets the byte limit to `limit`.
     ///
-    /// Encoding or decoding more than `N` bytes will return an error.
+    /// This bounds **decoding** only: the [`crate::de::DecoderImpl`] tracks a
+    /// running total of bytes claimed via `claim_bytes_read` — every
+    /// primitive (integers, floats, `char`, fixed-size arrays) and every
+    /// collection/string length prefix claims its byte cost — and returns
+    /// [`crate::error::Error::LimitExceeded`] once that total would exceed
+    /// `N`, before the corresponding bytes are actually read from the input.
+    /// This mirrors bincode's `Limit<N>` guarantee: a value that would
+    /// require reading more than `N` bytes from the wire fails fast instead
+    /// of allocating or reading unbounded attacker-controlled data.
+    ///
+    /// The limit is **not** enforced when encoding: `encode_to_vec_with_config`
+    /// and the other `encode_*_with_config` functions do not consult this
+    /// limit at all, so a value larger than `N` bytes encodes successfully
+    /// with this configuration — only a subsequent decode using the same
+    /// (or an equivalently limited) configuration would be rejected.
     ///
     /// # Examples
     ///

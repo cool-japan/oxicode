@@ -1,5 +1,6 @@
 //! Advanced tests for VecDeque and LinkedList encoding in OxiCode (set 3)
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

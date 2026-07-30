@@ -1,5 +1,6 @@
 //! Advanced tests (set 2) for std::ops::Bound<T> serialization in OxiCode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

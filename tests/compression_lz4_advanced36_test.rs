@@ -6,7 +6,7 @@
 //! sequences, color fastness ratings, fiber blend compositions, quality grade
 //! assignments, and related textile engineering data.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

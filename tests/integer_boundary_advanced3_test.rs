@@ -4,6 +4,7 @@
 //! zigzag encoding for signed types, fixed-int and big-endian configs, mixed
 //! structs, negative i64 roundtrips, and u128/i128 boundary values.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

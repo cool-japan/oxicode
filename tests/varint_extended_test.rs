@@ -4,6 +4,7 @@
 //! decode consumed-bytes tracking, roundtrip for all boundary values,
 //! little-endian byte order, and sequential encoding size composition.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

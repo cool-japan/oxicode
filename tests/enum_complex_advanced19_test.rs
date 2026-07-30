@@ -1,6 +1,7 @@
 //! Industrial automation / PLC domain tests for oxicode encode/decode.
 //! Covers PLCs, SCADA, sensor types, alarm states, and production lines.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

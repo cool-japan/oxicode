@@ -1,5 +1,6 @@
 //! Tests for network and time type encode/decode implementations.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

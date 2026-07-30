@@ -2,6 +2,7 @@
 //!
 //! Theme, Language, UserPreferences encode/decode to/from files.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

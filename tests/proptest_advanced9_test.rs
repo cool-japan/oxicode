@@ -3,6 +3,7 @@
 //! Each test is a top-level #[test] function containing exactly one
 //! proptest! macro block, verifying encode/decode roundtrip invariants.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -3,6 +3,7 @@
 //! Tests cover primitive types, compound types, nested boxes, config variants,
 //! and byte-size invariants.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

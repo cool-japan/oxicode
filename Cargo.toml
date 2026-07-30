@@ -3,7 +3,7 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.4"
+version = "0.2.5"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
 rust-version = "1.81.0"
@@ -21,12 +21,21 @@ proc-macro2 = "1.0"
 # Core dependencies
 serde = { version = "1.0", default-features = false }
 crc32fast = { version = "1.5" }
+unty = "0.0.5"
+
+# Optional backend dependencies (compression / async)
+oxiarc-lz4 = "0.4.0"
+oxiarc-zstd = "0.4.0"
+tokio = "1.53"
 
 # Dev dependencies
 criterion = "0.8.2"
 tempfile = "3.27"
 serde_json = { version = "1.0", default-features = false }
 proptest = "1.11"
+trybuild = "1.0"
+# Compatibility oracle: never upgrade to 3.0 (3.x has an incompatible API).
+bincode = { version = "=2.0.1", features = ["serde"] }
 
 [package]
 name = "oxicode"
@@ -45,52 +54,58 @@ categories = ["encoding", "network-programming"]
 publish = true
 
 [features]
-default = ["std", "derive"]
+default = ["std", "derive", "validation", "versioning"]
 std = ["alloc", "serde?/std"]
 alloc = ["serde?/alloc"]
 derive = ["oxicode_derive"]
 serde = ["dep:serde", "alloc"]  # Serde integration (optional)
 simd = []  # SIMD-optimized array encoding (auto-detects CPU capabilities)
-compression-lz4 = ["oxiarc-lz4"]  # LZ4 compression (fast, pure Rust)
-compression-zstd = ["oxiarc-zstd"]    # Zstd compression (better ratio, pure Rust)
+compression-lz4 = ["alloc", "oxiarc-lz4"]  # LZ4 compression (fast, pure Rust)
+compression-zstd = ["alloc", "oxiarc-zstd"]    # Zstd compression (better ratio, pure Rust)
 compression = ["compression-lz4"]  # Default compression feature
-async-tokio = ["tokio"]  # Async streaming with tokio
+async-tokio = ["std", "tokio"]  # Async streaming with tokio (streaming module needs alloc, transitively pulled in by std; async_io.rs also uses std::io/std::sync directly)
 checksum = ["dep:crc32fast"]  # CRC32 integrity checking for encoded data
-validation = []               # Enable validation trait implementations in tests
-versioning = []               # Enable versioning API tests
+validation = []               # Gates the `oxicode::validation` post-decode constraint module (on by default)
+versioning = []               # Gates the `oxicode::versioning` schema-version-header module (on by default)
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.2.4", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.5", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
-oxiarc-lz4 = { version = "0.3.2", optional = true }
-oxiarc-zstd = { version = "0.3.2", optional = true }
-tokio = { version = "1.52", features = ["io-util"], optional = true }
+oxiarc-lz4 = { workspace = true, optional = true }
+oxiarc-zstd = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["io-util"], optional = true }
 crc32fast = { workspace = true, optional = true }
+unty = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true }
-bincode = { version = "=2.0.1", features = ["serde"] } # Never upgrade to 3.0 (3.x has incompatible API)
-tokio = { version = "1.52", features = ["rt", "macros", "io-util", "fs", "time"] }
+bincode = { workspace = true } # Compatibility oracle — never upgrade to 3.0 (3.x has incompatible API)
+tokio = { workspace = true, features = ["rt", "macros", "io-util", "fs", "time"] }
 proptest = { workspace = true }
+trybuild = { workspace = true }
 
 [[bench]]
 name = "encoding_bench"
 harness = false
+required-features = ["std", "derive"]
 
 [[bench]]
 name = "decoding_bench"
 harness = false
+required-features = ["std", "derive"]
 
 [[bench]]
 name = "comparison_bench"
 harness = false
+required-features = ["std", "derive"]
 
 [[bench]]
 name = "config_matrix_bench"
 harness = false
+required-features = ["std", "derive"]
 
 [[bench]]
 name = "serde_bench"
@@ -100,7 +115,65 @@ required-features = ["serde"]
 [[bench]]
 name = "api_surface_bench"
 harness = false
+required-features = ["std", "derive"]
+
+# Examples are gated by the oxicode library features they exercise so that
+# `cargo check --all-targets` under reduced feature sets (e.g.
+# --no-default-features [--features alloc]) skips the ones whose required
+# APIs (derive macros, `alloc` collection codecs, `std`-only `Error` impl,
+# the `validation`/`versioning` modules) are not compiled in. `async_streaming`
+# and `simd_arrays` self-gate their bodies with an oxicode-free fallback `main`,
+# so they need no entry here.
+[[example]]
+name = "basic_usage"
+required-features = ["alloc", "derive"]
+
+[[example]]
+name = "binary_format"
+required-features = ["std", "derive"]
+
+[[example]]
+name = "compression"
+required-features = ["std", "derive"]
+
+[[example]]
+name = "configuration"
+required-features = ["alloc", "derive"]
+
+[[example]]
+name = "derive_attrs"
+required-features = ["std", "derive"]
+
+[[example]]
+name = "streaming"
+required-features = ["std", "derive"]
+
+[[example]]
+name = "validation"
+required-features = ["std", "derive", "validation"]
+
+[[example]]
+name = "versioning"
+required-features = ["std", "derive", "versioning"]
+
+[[example]]
+name = "zero_copy"
+required-features = ["alloc"]
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+# `AsyncEncoder`/`AsyncDecoder` were renamed to `AsyncStreamingEncoder`/
+# `AsyncStreamingDecoder`; backward-compatible `pub type` aliases were kept
+# in src/streaming/mod.rs so old-name imports keep compiling (proven by
+# tests/async_backcompat_names_test.rs). cargo-semver-checks' rustdoc-based
+# analysis (trustfall-rustdoc-adapter) does not treat a type alias as
+# satisfying "struct still importable at its prior path", so it reports a
+# `struct_missing` false positive for oxicode::streaming::{AsyncEncoder,
+# AsyncDecoder} against the 0.2.4 baseline even though nothing broke.
+# Downgrade only this lint to a warning so CI keeps checking every other
+# semver rule at `deny`; revisit if a future cargo-semver-checks release
+# recognizes alias-based re-exports.
+[package.metadata.cargo-semver-checks.lints]
+struct_missing = "warn"

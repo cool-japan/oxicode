@@ -1,5 +1,6 @@
 //! Tests for `encode_to_vec_with_config` and `decode_from_slice_with_config` APIs.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

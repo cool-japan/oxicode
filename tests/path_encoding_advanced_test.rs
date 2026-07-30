@@ -2,6 +2,7 @@
 //!
 //! These tests cover edge cases and scenarios not already covered in pathbuf_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

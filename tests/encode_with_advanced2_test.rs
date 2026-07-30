@@ -3,6 +3,7 @@
 //! string transformations, numeric remapping, Vec manipulation, multi-field
 //! structs, roundtrip verification, and config-variant usage.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

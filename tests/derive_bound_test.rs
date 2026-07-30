@@ -10,6 +10,7 @@
 //!  - The `where` clause is replaced entirely by the user-supplied predicates.
 //!  - An empty bound string (`bound = ""`) produces an impl with no where clause at all.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

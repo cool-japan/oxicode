@@ -1,5 +1,6 @@
 //! Advanced tests for alloc crate types: String, Vec, Box, Rc, Arc, BTreeMap, BTreeSet, VecDeque, LinkedList.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

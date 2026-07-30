@@ -1,5 +1,6 @@
 //! Predictive-maintenance/asset-lifecycle/OPC-UA-focused tests for nested_structs_advanced5 (split from nested_structs_advanced5_test.rs).
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

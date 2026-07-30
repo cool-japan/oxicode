@@ -1,5 +1,6 @@
 //! Tests for Duration and SystemTime encode/decode implementations.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

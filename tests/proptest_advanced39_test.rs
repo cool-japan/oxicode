@@ -4,6 +4,7 @@
 //! proptest! macro block, verifying roundtrip and encoding invariants for
 //! PhysicsShape, RigidBody, Collision, and PhysicsWorld types.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

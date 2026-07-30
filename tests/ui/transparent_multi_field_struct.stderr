@@ -1,0 +1,7 @@
+error: #[oxicode(transparent)] requires exactly one field, but found 2
+ --> tests/ui/transparent_multi_field_struct.rs:8:10
+  |
+8 | #[derive(Encode)]
+  |          ^^^^^^
+  |
+  = note: this error originates in the derive macro `Encode` (in Nightly builds, run with -Z macro-backtrace for more info)

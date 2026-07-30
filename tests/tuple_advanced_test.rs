@@ -2,6 +2,7 @@
 //! Focuses on: mixed signed/unsigned, bytes, Result, big-endian config, fixed-int config,
 //! char, unit type, i128/u128, fixed arrays, HashMap-key semantics, struct fields, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

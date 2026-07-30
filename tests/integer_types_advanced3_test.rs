@@ -3,6 +3,7 @@
 //! Covers varint encoding boundaries, zigzag signed encoding, fixed-int config,
 //! and big-endian byte verification across all integer primitive types.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

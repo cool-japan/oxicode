@@ -3,6 +3,7 @@
 //! Covers 22 scenarios using DocumentStatus, DocumentV1, DocumentV2, DocumentV3
 //! via encode_versioned_value / decode_versioned_value and related APIs.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

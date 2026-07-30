@@ -1,6 +1,7 @@
 //! Advanced tests for Range, RangeInclusive, and Bound serialization – second set.
 //! Covers new angles: large/boundary values, configs, struct composition, and size invariants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

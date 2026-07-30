@@ -2,6 +2,7 @@
 //! Exactly 22 top-level #[test] functions covering roundtrips, edge cases,
 //! configs, and composite types for std::time::Duration.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

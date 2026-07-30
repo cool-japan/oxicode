@@ -4,6 +4,7 @@
 //! properties for all primitive integer types at their extreme values using
 //! both the standard varint configuration and the fixed-int configuration.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

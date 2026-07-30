@@ -77,6 +77,7 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
+#[cfg(feature = "derive")]
 use oxicode::{Decode, Encode};
 
 // ── versioning + checksum ─────────────────────────────────────────────────────

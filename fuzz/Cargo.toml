@@ -12,7 +12,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
-oxicode = { path = "..", features = ["std", "derive", "checksum", "compression-lz4"] }
+oxicode = { path = "..", features = ["std", "derive", "checksum", "compression-lz4", "compression-zstd"] }
 
 # Optimize for fuzzing
 [profile.release]
@@ -40,5 +40,17 @@ doc = false
 [[bin]]
 name = "fuzz_versioned"
 path = "fuzz_targets/fuzz_versioned.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_decompress"
+path = "fuzz_targets/fuzz_decompress.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_streaming_std_reader"
+path = "fuzz_targets/fuzz_streaming_std_reader.rs"
 test = false
 doc = false

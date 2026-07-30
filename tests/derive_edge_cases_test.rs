@@ -1,6 +1,7 @@
 //! Derive macro edge case tests: lifetimes, all-variant enums, large structs,
 //! nested generics, unit-only enums, newtype wrappers, nested Option.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

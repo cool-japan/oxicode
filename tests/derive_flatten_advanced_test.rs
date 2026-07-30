@@ -4,6 +4,7 @@
 //! of the outer struct, producing byte-for-byte identical output to a manually
 //! flattened struct (no wrapper overhead).
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

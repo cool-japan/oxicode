@@ -1,5 +1,6 @@
 //! Tests for standard library type implementations: Ordering, Infallible, ControlFlow
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

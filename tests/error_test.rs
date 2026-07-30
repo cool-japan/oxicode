@@ -1,5 +1,11 @@
 //! Error handling and edge case tests
 
+#![cfg(all(
+    feature = "alloc",
+    feature = "checksum",
+    feature = "derive",
+    feature = "simd"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

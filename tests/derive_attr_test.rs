@@ -9,6 +9,7 @@
 //! - The attributes work on named-field structs, tuple structs, and enum variants.
 //! - BorrowDecode respects the same attributes.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

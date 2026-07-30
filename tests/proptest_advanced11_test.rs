@@ -4,6 +4,7 @@
 //! proptest! macro block, verifying non-trivial invariants for structs,
 //! enums, configs, and encoding properties.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

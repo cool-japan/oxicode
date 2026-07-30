@@ -90,6 +90,12 @@ pub enum Error {
     },
 
     /// Invalid duration (nanos >= 1_000_000_000)
+    ///
+    /// Reserved: this variant is not yet constructed by the current decoding
+    /// paths (which report out-of-range `Duration` values via
+    /// [`Error::InvalidData`] instead). It is kept public and documented so
+    /// that future wire-compatibility work can switch those call sites to a
+    /// structured error without a breaking enum change.
     #[cfg(feature = "std")]
     InvalidDuration {
         /// Seconds component
@@ -99,6 +105,12 @@ pub enum Error {
     },
 
     /// Invalid SystemTime (before UNIX_EPOCH)
+    ///
+    /// Reserved: this variant is not yet constructed by the current decoding
+    /// paths (which report out-of-range `SystemTime` values via
+    /// [`Error::InvalidData`] instead). It is kept public and documented so
+    /// that future wire-compatibility work can switch those call sites to a
+    /// structured error without a breaking enum change.
     #[cfg(feature = "std")]
     InvalidSystemTime {
         /// Duration before UNIX_EPOCH
@@ -258,7 +270,16 @@ impl fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            // `std` implies `alloc` (see Cargo.toml), so the `Utf8` variant
+            // is always available whenever this impl is compiled.
+            Error::Utf8 { inner } => Some(inner),
+            _ => None,
+        }
+    }
+}
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
@@ -283,5 +304,46 @@ impl From<core::str::Utf8Error> for Error {
                 message: "UTF-8 decoding error",
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+    use std::error::Error as StdError;
+
+    #[test]
+    fn test_source_chains_utf8_inner_error() {
+        // The Utf8 variant wraps a real core::str::Utf8Error; source() must
+        // surface it so downstream `?`/anyhow users can walk the chain.
+        // Build the invalid bytes through `black_box` so the compiler cannot
+        // const-evaluate the slice (which would trip the `invalid_from_utf8`
+        // lint on a literal); these bytes are not valid UTF-8.
+        let bytes = [core::hint::black_box(0xFFu8), 0xFFu8];
+        let utf8_err = core::str::from_utf8(&bytes).expect_err("invalid utf-8");
+        let err: Error = utf8_err.into();
+        assert!(matches!(err, Error::Utf8 { .. }));
+
+        let source = StdError::source(&err);
+        assert!(source.is_some(), "Utf8 variant must expose its inner error");
+
+        // The surfaced source downcasts back to the original Utf8Error.
+        let downcast = source
+            .expect("source present")
+            .downcast_ref::<core::str::Utf8Error>();
+        assert!(downcast.is_some(), "source must be the wrapped Utf8Error");
+    }
+
+    #[test]
+    fn test_source_none_for_non_wrapping_variants() {
+        // Variants that carry no inner std::error::Error report no source.
+        let io = Error::from(std::io::Error::other("boom"));
+        assert!(StdError::source(&io).is_none());
+
+        let invalid = Error::InvalidData { message: "nope" };
+        assert!(StdError::source(&invalid).is_none());
+
+        let outside = Error::OutsideUsizeRange(u64::MAX);
+        assert!(StdError::source(&outside).is_none());
     }
 }

@@ -3,6 +3,7 @@
 //! Covers 22 distinct test scenarios exercising OxiCode config variants:
 //! standard, legacy, fixed-int, big-endian, little-endian, with_limit, and combinations.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

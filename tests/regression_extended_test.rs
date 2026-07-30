@@ -3,6 +3,7 @@
 //! Covers edge cases not present in regression_test.rs, decode_resilience_test.rs,
 //! or the prior contents of this file. All 22 tests are new and non-duplicate.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

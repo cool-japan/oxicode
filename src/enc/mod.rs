@@ -87,22 +87,8 @@ where
     }
 }
 
-/// Encode the variant of the given option (0 for None, 1 for Some)
-#[inline]
-#[allow(dead_code)]
-pub(crate) fn encode_option_variant<E: Encoder, T>(
-    encoder: &mut E,
-    value: &Option<T>,
-) -> Result<(), Error> {
-    match value {
-        None => 0u8.encode(encoder),
-        Some(_) => 1u8.encode(encoder),
-    }
-}
-
 /// Encode the length of a slice/container
 #[inline]
-#[allow(dead_code)]
 pub(crate) fn encode_slice_len<E: Encoder>(encoder: &mut E, len: usize) -> Result<(), Error> {
     (len as u64).encode(encoder)
 }

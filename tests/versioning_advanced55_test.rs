@@ -1,5 +1,6 @@
 //! Advanced/large-payload-focused tests for the versioning module (split from versioning_test.rs).
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

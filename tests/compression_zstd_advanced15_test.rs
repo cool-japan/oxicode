@@ -4,7 +4,7 @@
 //! model real-world intrusion detection and SIEM data: network flows, security
 //! alerts, firewall rules, TLS certificates, and IDS signatures.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

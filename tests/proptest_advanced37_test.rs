@@ -5,6 +5,7 @@
 //! Tests verify encode → decode roundtrips, consumed bytes, determinism, boundary values,
 //! nested structs, Vec types, and all PacketType variants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

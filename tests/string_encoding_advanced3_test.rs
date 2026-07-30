@@ -1,5 +1,6 @@
 //! Advanced string encoding edge case tests (set 3) — 22 tests.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

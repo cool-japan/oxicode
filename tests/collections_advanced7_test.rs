@@ -1,5 +1,6 @@
 //! Advanced collection encoding tests: Graph/network data structures
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

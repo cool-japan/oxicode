@@ -10,6 +10,7 @@
 //! parameters, thermal infrared readings, water body delineation, and
 //! multi-sensor fusion records.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

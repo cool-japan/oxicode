@@ -2,6 +2,7 @@
 //! 22 tests covering Ipv4Addr, Ipv6Addr, IpAddr, SocketAddrV4, SocketAddrV6,
 //! SocketAddr, collections, Option, structs, config variants, and tuples.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

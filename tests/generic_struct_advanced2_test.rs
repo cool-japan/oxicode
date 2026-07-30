@@ -1,5 +1,6 @@
 //! Advanced generic struct encoding tests for OxiCode
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

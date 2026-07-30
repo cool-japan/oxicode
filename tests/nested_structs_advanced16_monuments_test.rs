@@ -1,5 +1,6 @@
 //! Monuments/genealogy-focused tests for nested_structs_advanced16 (split from nested_structs_advanced16_test.rs).
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

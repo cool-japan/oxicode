@@ -2,6 +2,7 @@
 //! Focuses on specific chars and encoding properties not covered in char_test.rs,
 //! char_advanced_test.rs, or char_advanced2_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

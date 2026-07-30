@@ -3,6 +3,7 @@
 //! Covers 22 scenarios exercising schema evolution, wire format stability,
 //! prefix compatibility between struct versions, enum encoding, and collections.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

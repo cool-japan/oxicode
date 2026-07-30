@@ -22,6 +22,7 @@
 //! - builder-pattern chain returning Self
 //! - after-decode check via post-decode validator
 
+#![cfg(all(feature = "alloc", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

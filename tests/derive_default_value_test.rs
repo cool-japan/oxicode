@@ -7,6 +7,7 @@
 //! The `#[oxicode(skip)]` attribute (without a custom path) uses `Default::default()`
 //! when decoding. Both forms exclude the field from the binary wire format.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

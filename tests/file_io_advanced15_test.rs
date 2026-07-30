@@ -3,6 +3,7 @@
 //! 22 `#[test]` functions exercising `encode_to_file` / `decode_from_file`
 //! and the slice-based helpers with realistic scientific simulation types.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

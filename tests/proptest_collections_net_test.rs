@@ -1,6 +1,7 @@
 //! Collections and network types property-based roundtrip tests using proptest
 //! (split from proptest_test.rs).
 //!
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,6 +4,7 @@
 //! is required. For Borrowed tests we verify that encoding Borrowed produces
 //! identical bytes to encoding Owned.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -8,7 +8,7 @@
 //! viral spread cascades, creator monetization, community health scores, and
 //! misinformation detection flags.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

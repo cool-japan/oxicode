@@ -8,6 +8,7 @@
 //! scheduling, collision avoidance grids, throughput monitoring, and warehouse
 //! slotting optimization.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

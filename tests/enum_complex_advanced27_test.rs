@@ -1,6 +1,7 @@
 //! Advanced tests for geospatial analysis and GIS domain types.
 //! 22 test functions covering complex enums, nested enums, and struct/enum compositions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

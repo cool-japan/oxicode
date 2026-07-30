@@ -35,9 +35,7 @@ where
 {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
         let serializer = super::ser::Serializer::new(encoder);
-        self.0
-            .serialize(serializer)
-            .map_err(|e| Error::OwnedCustom { message: e.msg })
+        self.0.serialize(serializer).map_err(Error::from)
     }
 }
 
@@ -49,7 +47,7 @@ where
         let deserializer = super::de::Deserializer::new(decoder);
         T::deserialize(deserializer)
             .map(Compat)
-            .map_err(|e| Error::OwnedCustom { message: e.msg })
+            .map_err(Error::from)
     }
 }
 
@@ -65,9 +63,7 @@ where
 {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), Error> {
         let serializer = super::ser::Serializer::new(encoder);
-        self.0
-            .serialize(serializer)
-            .map_err(|e| Error::OwnedCustom { message: e.msg })
+        self.0.serialize(serializer).map_err(Error::from)
     }
 }
 
@@ -76,9 +72,9 @@ where
     T: serde::Deserialize<'de>,
 {
     fn borrow_decode<D: BorrowDecoder<'de, Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        let deserializer = super::de::Deserializer::new(decoder);
+        let deserializer = super::de_borrowed::BorrowedDeserializer::new(decoder);
         T::deserialize(deserializer)
             .map(BorrowCompat)
-            .map_err(|e| Error::OwnedCustom { message: e.msg })
+            .map_err(Error::from)
     }
 }

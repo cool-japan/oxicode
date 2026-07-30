@@ -45,6 +45,7 @@ impl Decode for bool {
 
 impl Decode for u8 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(1)?;
         let mut bytes = [0u8; 1];
         decoder.reader().read(&mut bytes)?;
         Ok(bytes[0])
@@ -53,6 +54,7 @@ impl Decode for u8 {
 
 impl Decode for u16 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(2)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_u16(decoder.reader(), D::C::ENDIAN)
@@ -71,6 +73,7 @@ impl Decode for u16 {
 
 impl Decode for u32 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(4)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_u32(decoder.reader(), D::C::ENDIAN)
@@ -89,6 +92,7 @@ impl Decode for u32 {
 
 impl Decode for u64 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(8)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_u64(decoder.reader(), D::C::ENDIAN)
@@ -107,6 +111,7 @@ impl Decode for u64 {
 
 impl Decode for u128 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(16)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_u128(decoder.reader(), D::C::ENDIAN)
@@ -125,6 +130,7 @@ impl Decode for u128 {
 
 impl Decode for usize {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(8)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_usize(decoder.reader(), D::C::ENDIAN)
@@ -136,7 +142,7 @@ impl Decode for usize {
                     Endianness::Big => u64::from_be_bytes(bytes),
                     Endianness::Little => u64::from_le_bytes(bytes),
                 };
-                Ok(value as usize)
+                usize::try_from(value).map_err(|_| Error::OutsideUsizeRange(value))
             }
         }
     }
@@ -146,6 +152,7 @@ impl Decode for usize {
 
 impl Decode for i8 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(1)?;
         let mut bytes = [0u8; 1];
         decoder.reader().read(&mut bytes)?;
         Ok(bytes[0] as i8)
@@ -154,6 +161,7 @@ impl Decode for i8 {
 
 impl Decode for i16 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(2)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_i16(decoder.reader(), D::C::ENDIAN)
@@ -172,6 +180,7 @@ impl Decode for i16 {
 
 impl Decode for i32 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(4)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_i32(decoder.reader(), D::C::ENDIAN)
@@ -190,6 +199,7 @@ impl Decode for i32 {
 
 impl Decode for i64 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(8)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_i64(decoder.reader(), D::C::ENDIAN)
@@ -208,6 +218,7 @@ impl Decode for i64 {
 
 impl Decode for i128 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(16)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_i128(decoder.reader(), D::C::ENDIAN)
@@ -226,6 +237,7 @@ impl Decode for i128 {
 
 impl Decode for isize {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(8)?;
         match D::C::INT_ENCODING {
             IntEncoding::Variable => {
                 crate::varint::varint_decode_isize(decoder.reader(), D::C::ENDIAN)
@@ -237,7 +249,7 @@ impl Decode for isize {
                     Endianness::Big => i64::from_be_bytes(bytes),
                     Endianness::Little => i64::from_le_bytes(bytes),
                 };
-                Ok(value as isize)
+                isize::try_from(value).map_err(|_| Error::OutsideUsizeRange(value as u64))
             }
         }
     }
@@ -247,6 +259,7 @@ impl Decode for isize {
 
 impl Decode for f32 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(4)?;
         let mut bytes = [0u8; 4];
         decoder.reader().read(&mut bytes)?;
         Ok(match D::C::ENDIAN {
@@ -258,6 +271,7 @@ impl Decode for f32 {
 
 impl Decode for f64 {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        decoder.claim_bytes_read(8)?;
         let mut bytes = [0u8; 8];
         decoder.reader().read(&mut bytes)?;
         Ok(match D::C::ENDIAN {
@@ -269,19 +283,81 @@ impl Decode for f64 {
 
 // ===== Arrays =====
 
+/// Decode `N` elements into an array using `decode_elem`, dropping any
+/// already-initialized elements if a later element fails.
+///
+/// This mirrors bincode 2.0.1's `impl_core::collect_into_array` drop guard:
+/// on an early return (element decode error) the initialized prefix is dropped
+/// via `ptr::drop_in_place`, preventing a memory leak for element types with a
+/// non-trivial `Drop`. On full success the guard is forgotten and the array is
+/// moved out.
+#[inline]
+fn decode_array_with<T, const N: usize, F>(mut decode_elem: F) -> Result<[T; N], Error>
+where
+    F: FnMut() -> Result<T, Error>,
+{
+    use core::mem::MaybeUninit;
+
+    struct Guard<'a, T, const N: usize> {
+        array: &'a mut [MaybeUninit<T>; N],
+        initialized: usize,
+    }
+
+    impl<T, const N: usize> Drop for Guard<'_, T, N> {
+        fn drop(&mut self) {
+            // SAFETY: the first `initialized` slots are guaranteed initialized,
+            // and `initialized <= N`, so this slice reference is in bounds and
+            // points only at live `T` values.
+            for slot in self.array[..self.initialized].iter_mut() {
+                unsafe { core::ptr::drop_in_place(slot.as_mut_ptr()) };
+            }
+        }
+    }
+
+    // SAFETY: an array of `MaybeUninit<T>` requires no initialization.
+    let mut array: [MaybeUninit<T>; N] =
+        unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() };
+    let mut guard = Guard {
+        array: &mut array,
+        initialized: 0,
+    };
+
+    while guard.initialized < N {
+        let value = decode_elem()?;
+        guard.array[guard.initialized].write(value);
+        guard.initialized += 1;
+    }
+
+    // All N elements initialized: defuse the guard so it does not drop them,
+    // then move the array out.
+    core::mem::forget(guard);
+    // SAFETY: every slot was initialized by the loop above. `transmute_copy`
+    // bit-copies the `[MaybeUninit<T>; N]` into `[T; N]`; the source is not
+    // dropped (MaybeUninit has no drop glue), so no double-free occurs.
+    Ok(unsafe { core::mem::transmute_copy::<_, [T; N]>(&array) })
+}
+
 impl<T: Decode, const N: usize> Decode for [T; N] {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        // Arrays don't have length prefix (compile-time known)
-        // Use array::try_from_fn when stabilized, for now use unsafe
-        let mut result: [core::mem::MaybeUninit<T>; N] =
-            unsafe { core::mem::MaybeUninit::uninit().assume_init() };
-
-        for item in result.iter_mut() {
-            item.write(T::decode(decoder)?);
+        // Arrays have no length prefix (compile-time known length).
+        // Reserve the full array's worth of bytes up front, then reclaim one
+        // element's reservation before each element decode so the per-element
+        // `claim_bytes_read` calls do not double-count (mirrors bincode 2.0.1).
+        decoder.claim_bytes_read(core::mem::size_of::<[T; N]>())?;
+        if unty::type_equal::<T, u8>() {
+            let mut buf = [0u8; N];
+            decoder.reader().read(&mut buf)?;
+            // SAFETY: `unty::type_equal::<T, u8>()` proved that `T` is exactly
+            // `u8`, so `[u8; N]` and `[T; N]` have identical layout. Reading
+            // through the cast pointer moves the bytes out as `[T; N]`.
+            let ptr = (&mut buf as *mut [u8; N]).cast::<[T; N]>();
+            Ok(unsafe { ptr.read() })
+        } else {
+            decode_array_with::<T, N, _>(|| {
+                decoder.unclaim_bytes_read(core::mem::size_of::<T>());
+                T::decode(decoder)
+            })
         }
-
-        // SAFETY: All elements have been initialized
-        Ok(unsafe { core::mem::transmute_copy::<_, [T; N]>(&result) })
     }
 }
 
@@ -319,7 +395,7 @@ impl<T: Decode, U: Decode> Decode for Result<T, U> {
 
 use core::cell::{Cell, RefCell};
 
-impl<T: Decode + Copy> Decode for Cell<T> {
+impl<T: Decode> Decode for Cell<T> {
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(Cell::new(T::decode(decoder)?))
     }
@@ -498,71 +574,76 @@ impl<T: Decode> Decode for RangeToInclusive<T> {
 
 // ===== Character =====
 
-// UTF-8 decoding constants
-const CONT_MASK: u8 = 0b0011_1111;
+/// UTF-8 first-byte width table (a copy of `core::str::UTF8_CHAR_WIDTH`).
+///
+/// A width of `0` marks a byte that can never legally start a UTF-8 sequence
+/// (continuation bytes `0x80..=0xBF`, the overlong-only leads `0xC0`/`0xC1`,
+/// and `0xF5..=0xFF`). This mirrors bincode 2.0.1 exactly so that the same
+/// malformed byte streams are rejected.
+const UTF8_CHAR_WIDTH: [u8; 256] = [
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, // 0x1F
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, // 0x3F
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, // 0x5F
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, // 0x7F
+    // Continuation bytes 0x80..=0xBF are invalid as a leading byte (width 0).
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, // 0x9F
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, // 0xBF
+    // 0xC0/0xC1 are overlong-only leads (width 0); 0xC2..=0xDF are 2-byte leads.
+    0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, // 0xDF
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // 0xEF
+    // 0xF5..=0xFF are invalid (width 0).
+    4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xFF
+];
+
+/// Return the number of bytes a UTF-8 sequence starting with `byte` occupies,
+/// or `0` if `byte` is not a valid UTF-8 leading byte.
+#[inline]
+const fn utf8_char_width(byte: u8) -> usize {
+    UTF8_CHAR_WIDTH[byte as usize] as usize
+}
 
 impl Decode for char {
     /// Decode a char from UTF-8 (bincode compatible)
     ///
-    /// UTF-8 encoding uses variable 1-4 bytes:
-    /// - 0xxxxxxx: 1 byte (ASCII)
-    /// - 110xxxxx 10xxxxxx: 2 bytes
-    /// - 1110xxxx 10xxxxxx 10xxxxxx: 3 bytes
-    /// - 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx: 4 bytes
+    /// The first byte selects the sequence width via the internal `UTF8_CHAR_WIDTH`
+    /// lookup table. A width of `0` (continuation byte, overlong lead `0xC0`/`0xC1`, or
+    /// `0xF5..=0xFF`) is rejected immediately, and the assembled bytes are
+    /// validated with [`core::str::from_utf8`], which rejects overlong and
+    /// ill-formed sequences that a naive bit-assembly would accept.
     fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
-        // Read the first byte to determine the length
-        let first = u8::decode(decoder)?;
+        let mut array = [0u8; 4];
 
-        let code = if first < 0x80 {
-            // 1-byte: ASCII
-            first as u32
-        } else if first < 0xE0 {
-            // 2-byte: 110xxxxx 10xxxxxx
-            let second = u8::decode(decoder)?;
-            if !is_continuation_byte(second) {
-                return Err(Error::InvalidCharEncoding([first, second, 0, 0]));
-            }
-            ((first as u32 & 0x1F) << 6) | (second as u32 & CONT_MASK as u32)
-        } else if first < 0xF0 {
-            // 3-byte: 1110xxxx 10xxxxxx 10xxxxxx
-            let second = u8::decode(decoder)?;
-            let third = u8::decode(decoder)?;
-            if !is_continuation_byte(second) || !is_continuation_byte(third) {
-                return Err(Error::InvalidCharEncoding([first, second, third, 0]));
-            }
-            ((first as u32 & 0x0F) << 12)
-                | ((second as u32 & CONT_MASK as u32) << 6)
-                | (third as u32 & CONT_MASK as u32)
-        } else {
-            // 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-            let second = u8::decode(decoder)?;
-            let third = u8::decode(decoder)?;
-            let fourth = u8::decode(decoder)?;
-            if !is_continuation_byte(second)
-                || !is_continuation_byte(third)
-                || !is_continuation_byte(fourth)
-            {
-                return Err(Error::InvalidCharEncoding([first, second, third, fourth]));
-            }
-            ((first as u32 & 0x07) << 18)
-                | ((second as u32 & CONT_MASK as u32) << 12)
-                | ((third as u32 & CONT_MASK as u32) << 6)
-                | (fourth as u32 & CONT_MASK as u32)
-        };
+        // Read the first byte to determine the sequence width.
+        decoder.reader().read(&mut array[..1])?;
 
-        char::from_u32(code).ok_or(Error::InvalidCharEncoding([
-            (code >> 24) as u8,
-            (code >> 16) as u8,
-            (code >> 8) as u8,
-            code as u8,
-        ]))
+        let width = utf8_char_width(array[0]);
+        if width == 0 {
+            return Err(Error::InvalidCharEncoding(array));
+        }
+        // Normally we claim before reading, but the number of bytes a `char`
+        // consumes varies (1..=4), so we claim the resolved width here after
+        // inspecting the leading byte. This mirrors bincode 2.0.1.
+        decoder.claim_bytes_read(width)?;
+        if width == 1 {
+            return Ok(array[0] as char);
+        }
+
+        // Read the remaining continuation bytes, then validate the whole
+        // slice as UTF-8. `str::from_utf8` rejects overlong encodings and any
+        // ill-formed continuation bytes.
+        decoder.reader().read(&mut array[1..width])?;
+        core::str::from_utf8(&array[..width])
+            .ok()
+            .and_then(|s| s.chars().next())
+            .ok_or(Error::InvalidCharEncoding(array))
     }
-}
-
-/// Check if a byte is a UTF-8 continuation byte (10xxxxxx)
-#[inline]
-const fn is_continuation_byte(byte: u8) -> bool {
-    (byte & 0b1100_0000) == 0b1000_0000
 }
 
 // ===== Duration =====
@@ -780,9 +861,7 @@ impl<'de, T: crate::de::BorrowDecode<'de>> crate::de::BorrowDecode<'de> for Rang
 
 // ===== BorrowDecode for Cell & RefCell =====
 
-impl<'de, T: crate::de::BorrowDecode<'de> + Copy> crate::de::BorrowDecode<'de>
-    for core::cell::Cell<T>
-{
+impl<'de, T: crate::de::BorrowDecode<'de>> crate::de::BorrowDecode<'de> for core::cell::Cell<T> {
     fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
         decoder: &mut D,
     ) -> Result<Self, crate::error::Error> {
@@ -817,5 +896,219 @@ where
                 found: other,
             }),
         }
+    }
+}
+
+// ===== BorrowDecode for arrays =====
+
+impl<'de, T, const N: usize> crate::de::BorrowDecode<'de> for [T; N]
+where
+    T: crate::de::BorrowDecode<'de>,
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, crate::error::Error> {
+        // Arrays have no length prefix (compile-time known length).
+        decoder.claim_bytes_read(core::mem::size_of::<[T; N]>())?;
+        if unty::type_equal::<T, u8>() {
+            let mut buf = [0u8; N];
+            decoder.reader().read(&mut buf)?;
+            // SAFETY: `unty::type_equal::<T, u8>()` proved that `T` is exactly
+            // `u8`, so `[u8; N]` and `[T; N]` have identical layout. Reading
+            // through the cast pointer moves the bytes out as `[T; N]`.
+            let ptr = (&mut buf as *mut [u8; N]).cast::<[T; N]>();
+            Ok(unsafe { ptr.read() })
+        } else {
+            decode_array_with::<T, N, _>(|| {
+                decoder.unclaim_bytes_read(core::mem::size_of::<T>());
+                T::borrow_decode(decoder)
+            })
+        }
+    }
+}
+
+// ===== BorrowDecode for Result =====
+
+impl<'de, T, U> crate::de::BorrowDecode<'de> for Result<T, U>
+where
+    T: crate::de::BorrowDecode<'de>,
+    U: crate::de::BorrowDecode<'de>,
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, crate::error::Error> {
+        let variant = u32::decode(decoder)?;
+        match variant {
+            0 => Ok(Ok(T::borrow_decode(decoder)?)),
+            1 => Ok(Err(U::borrow_decode(decoder)?)),
+            _ => Err(Error::InvalidData {
+                message: "Invalid Result variant",
+            }),
+        }
+    }
+}
+
+// ===== Allocation-free zero-copy BorrowDecode impls =====
+//
+// These impls perform no allocation, so they live in the core `de::impls`
+// module (compiled even for `no_std` without the `alloc` feature) rather than
+// in `features::impl_alloc`. That keeps zero-copy borrowing of `&str`, `&[u8]`,
+// `&[i8]`, `&[T]` and `Option<T>` available in a `no_std`-without-`alloc` build,
+// matching the availability of their `Decode`/`Encode` counterparts.
+
+// ----- BorrowDecode for Option<T> -----
+
+impl<'de, T> crate::de::BorrowDecode<'de> for Option<T>
+where
+    T: crate::de::BorrowDecode<'de>,
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        let variant = u8::decode(decoder)?;
+        match variant {
+            0 => Ok(None),
+            1 => Ok(Some(T::borrow_decode(decoder)?)),
+            _ => Err(Error::InvalidData {
+                message: "Invalid Option variant",
+            }),
+        }
+    }
+}
+
+// ----- BorrowDecode for &[u8] (zero-copy) -----
+
+impl<'de> crate::de::BorrowDecode<'de> for &'de [u8] {
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        use crate::de::BorrowReader;
+        let len = crate::de::decode_slice_len(decoder)?;
+        decoder.claim_bytes_read(len)?;
+
+        let bytes = decoder.borrow_reader().take_bytes(len)?;
+        Ok(bytes)
+    }
+}
+
+// ----- BorrowDecode for &str (zero-copy) -----
+
+impl<'de> crate::de::BorrowDecode<'de> for &'de str {
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        use crate::de::BorrowReader;
+        let len = crate::de::decode_slice_len(decoder)?;
+        decoder.claim_bytes_read(len)?;
+
+        let bytes = decoder.borrow_reader().take_bytes(len)?;
+
+        // Validate UTF-8. Use the `From<Utf8Error>` conversion (not the
+        // alloc-gated `Error::Utf8` variant directly) so this core impl also
+        // compiles for `no_std` without the `alloc` feature.
+        core::str::from_utf8(bytes).map_err(Error::from)
+    }
+}
+
+// ----- BorrowDecode for &[i8] (zero-copy signed bytes) -----
+
+/// Zero-copy decode for `&[i8]`.
+///
+/// Since `i8` and `u8` have identical bit patterns, we can reinterpret
+/// the `&[u8]` taken from the input buffer as `&[i8]` using a safe transmute.
+/// This is valid because:
+/// 1. `i8` has the same size and alignment as `u8`
+/// 2. All bit patterns are valid for `i8`
+impl<'de> crate::de::BorrowDecode<'de> for &'de [i8] {
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        use crate::de::BorrowReader;
+        let len = crate::de::decode_slice_len(decoder)?;
+        decoder.claim_bytes_read(len)?;
+
+        let bytes: &'de [u8] = decoder.borrow_reader().take_bytes(len)?;
+
+        // SAFETY: &[u8] and &[i8] have the same size, alignment, and all bit
+        // patterns are valid. The lifetime 'de is preserved correctly.
+        let signed_bytes: &'de [i8] =
+            unsafe { core::slice::from_raw_parts(bytes.as_ptr() as *const i8, bytes.len()) };
+        Ok(signed_bytes)
+    }
+}
+
+// ----- BorrowDecode for &[T] where T: BorrowableSliceElement (zero-copy Pod) -----
+
+/// Zero-copy borrow-decode for `&'de [T]` where `T` is a Pod-like primitive.
+///
+/// Reinterprets a contiguous byte slice from the input buffer as `&'de [T]`
+/// without copying. Three runtime guards ensure soundness:
+///
+/// 1. **Encoding gate** — `IntEncoding::Fixed` only; Varint compresses
+///    elements and breaks the in-memory layout identity.
+/// 2. **Endianness gate** — decoder endianness must match the host's native
+///    byte order for any `T` wider than one byte.
+/// 3. **Alignment gate** — `take_bytes`'s result must be aligned to
+///    `align_of::<T>()`.
+///
+/// All gates produce `Error::InvalidData` with a descriptive message on
+/// failure, making the error actionable (switch to `Vec<T>`, fix config, etc.).
+impl<'de, T> crate::de::BorrowDecode<'de> for &'de [T]
+where
+    T: crate::de::BorrowableSliceElement,
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, Error> {
+        use crate::config::Config;
+        use crate::de::BorrowReader;
+
+        let len = crate::de::decode_slice_len(decoder)?;
+        decoder.claim_container_read::<T>(len)?;
+
+        // Encoding gate: only Fixint produces verbatim in-memory layout per element.
+        let cfg = decoder.config();
+        if cfg.int_encoding() != IntEncoding::Fixed {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T] requires IntEncoding::Fixed; \
+                          varint-encoded payloads do not match in-memory layout",
+            });
+        }
+
+        // Endianness gate: the buffer bytes must match the host's native byte order.
+        if !T::endianness_compatible(cfg.endianness()) {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T] requires native endianness; \
+                          use Vec<T> for cross-endian decoding",
+            });
+        }
+
+        let elem_size = core::mem::size_of::<T>();
+        let byte_count = len.checked_mul(elem_size).ok_or(Error::InvalidData {
+            message: "borrow-decode of &[T]: length × element-size overflows usize",
+        })?;
+
+        let bytes = decoder.borrow_reader().take_bytes(byte_count)?;
+
+        // Alignment gate: pointer must satisfy align_of::<T>().
+        let align = core::mem::align_of::<T>();
+        if (bytes.as_ptr() as usize) % align != 0 {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T]: buffer is not aligned to align_of::<T>(); \
+                          use Vec<T> instead",
+            });
+        }
+
+        // SAFETY:
+        // - `bytes` is `&'de [u8]` with length exactly `len * size_of::<T>()`.
+        // - `bytes.as_ptr()` is aligned to `align_of::<T>()` (checked above).
+        // - Encoding is Fixed and endianness is native (checked above), so
+        //   the bytes are a verbatim copy of `[T; len]` in host memory.
+        // - `T: BorrowableSliceElement` guarantees: `T: Copy + Sized + 'static`,
+        //   all bit patterns are valid, layout is fixed and known.
+        // - Lifetime `'de` of `bytes` is correctly propagated.
+        let slice: &'de [T] =
+            unsafe { core::slice::from_raw_parts(bytes.as_ptr() as *const T, len) };
+        Ok(slice)
     }
 }

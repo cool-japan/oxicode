@@ -1,5 +1,6 @@
 //! Advanced plain-tuple encoding tests for OxiCode — 22 top-level #[test] functions.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

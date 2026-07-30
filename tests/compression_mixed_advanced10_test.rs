@@ -1,4 +1,9 @@
-#![cfg(all(feature = "compression-lz4", feature = "compression-zstd"))]
+#![cfg(all(
+    feature = "compression-lz4",
+    feature = "compression-zstd",
+    feature = "derive",
+    feature = "std"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

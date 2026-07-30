@@ -1,5 +1,6 @@
 //! Roundtrip and error tests for all 12 NonZero integer types.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

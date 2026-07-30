@@ -4,6 +4,7 @@
 //! VTS zones, bunker fuel grades, classification surveys, ISPS security levels,
 //! and marine weather routing decisions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

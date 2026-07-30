@@ -7,6 +7,7 @@
 //! tropical cyclone advisories, precipitation accumulation, visibility/ceiling,
 //! wind shear alerts, air quality indices, and frost/freeze predictions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

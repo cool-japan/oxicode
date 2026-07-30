@@ -16,6 +16,7 @@
 //! - Large and empty string/slice borrow-decode
 //! - Re-encode after borrow-decode produces identical bytes
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

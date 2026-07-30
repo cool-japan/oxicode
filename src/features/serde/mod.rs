@@ -23,6 +23,7 @@
 
 mod compat;
 mod de;
+mod de_borrowed;
 mod ser;
 
 pub use compat::{BorrowCompat, Compat};
@@ -45,9 +46,7 @@ where
     let writer = crate::enc::VecWriter::new();
     let mut encoder = crate::enc::EncoderImpl::new(writer, config);
     let serializer = ser::Serializer::new(&mut encoder);
-    value
-        .serialize(serializer)
-        .map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    value.serialize(serializer).map_err(Error::from)?;
     Ok(encoder.into_writer().into_vec())
 }
 
@@ -69,9 +68,7 @@ where
     let writer = crate::enc::SliceWriter::new(dst);
     let mut encoder = crate::enc::EncoderImpl::new(writer, config);
     let serializer = ser::Serializer::new(&mut encoder);
-    value
-        .serialize(serializer)
-        .map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    value.serialize(serializer).map_err(Error::from)?;
     Ok(encoder.into_writer().bytes_written())
 }
 
@@ -92,8 +89,11 @@ where
 {
     let reader = crate::de::SliceReader::new(src);
     let mut decoder = crate::de::DecoderImpl::new(reader, config);
-    let deserializer = de::Deserializer::new(&mut decoder);
-    let value = T::deserialize(deserializer).map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    // Route through the borrowed deserializer so that `&str`/`&[u8]`/`Cow` fields
+    // decode zero-copy against `src` (via `visit_borrowed_str`/`visit_borrowed_bytes`).
+    // Owned types still decode correctly, falling back to `visit_string`/`visit_byte_buf`.
+    let deserializer = de_borrowed::BorrowedDeserializer::new(&mut decoder);
+    let value = T::deserialize(deserializer).map_err(Error::from)?;
     let bytes_read = src.len() - decoder.reader().slice.len();
     Ok((value, bytes_read))
 }
@@ -117,7 +117,7 @@ where
     let reader = crate::de::SliceReader::new(src);
     let mut decoder = crate::de::DecoderImpl::new(reader, config);
     let deserializer = de::Deserializer::new(&mut decoder);
-    let value = T::deserialize(deserializer).map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    let value = T::deserialize(deserializer).map_err(Error::from)?;
     let bytes_read = src.len() - decoder.reader().slice.len();
     Ok((value, bytes_read))
 }
@@ -144,9 +144,7 @@ where
     let io_writer = crate::enc::IoWriter::new(writer);
     let mut encoder = crate::enc::EncoderImpl::new(io_writer, config);
     let serializer = ser::Serializer::new(&mut encoder);
-    value
-        .serialize(serializer)
-        .map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    value.serialize(serializer).map_err(Error::from)?;
     Ok(encoder.into_writer().bytes_written())
 }
 
@@ -207,7 +205,7 @@ where
     let io_reader = crate::de::IoReader::new(counting);
     let mut decoder = crate::de::DecoderImpl::new(io_reader, config);
     let deserializer = de::Deserializer::new(&mut decoder);
-    let value = T::deserialize(deserializer).map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    let value = T::deserialize(deserializer).map_err(Error::from)?;
     let bytes_read = decoder.reader().inner().bytes_read();
     Ok((value, bytes_read))
 }
@@ -338,8 +336,6 @@ where
     let writer = crate::enc::SizeWriter::new();
     let mut encoder = crate::enc::EncoderImpl::new(writer, crate::config::standard());
     let serializer = ser::Serializer::new(&mut encoder);
-    value
-        .serialize(serializer)
-        .map_err(|e| Error::OwnedCustom { message: e.msg })?;
+    value.serialize(serializer).map_err(Error::from)?;
     Ok(encoder.into_writer().bytes_written())
 }

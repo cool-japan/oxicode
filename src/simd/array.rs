@@ -1,917 +1,299 @@
-//! SIMD-optimized array encoding and decoding.
+//! Array encoding and decoding for fixed-width primitive types.
 //!
-//! This module provides high-performance encoding/decoding for arrays of primitive types
-//! using SIMD instructions when available.
+//! Each array is serialized as an 8-byte little-endian element count followed
+//! by the elements in little-endian byte order. On little-endian targets that
+//! payload is a byte image of the element slice, so encoding and decoding are
+//! performed with the vectorized bulk-copy kernels in [`super::copy`] (AVX2 /
+//! SSE2 on x86_64, NEON on aarch64, portable copy elsewhere). On big-endian
+//! targets each element is byte-swapped individually via the scalar path.
+//!
+//! The serialized bytes are identical regardless of which path runs, so this
+//! module never changes the wire format — it only changes throughput. These
+//! functions are an explicit opt-in API; the crate's `encode_to_vec` / derive
+//! machinery does not route through them automatically.
 
-#![allow(clippy::manual_slice_size_calculation)]
-
-use super::detect::detect_capability;
 use crate::{Error, Result};
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-/// Format header for SIMD-encoded arrays.
-/// First 8 bytes: element count as u64 (little-endian)
+/// Format header for encoded arrays: element count as u64 (little-endian).
 const HEADER_SIZE: usize = 8;
 
-// =============================================================================
-// f32 Array Encoding/Decoding
-// =============================================================================
+/// Generate the four public entry points (Vec encode/decode and buffer
+/// encode/decode) plus the shared endianness-aware body helpers for a
+/// fixed-width primitive type.
+macro_rules! impl_numeric_array_codec {
+    (
+        elem: $elem:ty,
+        zero: $zero:expr,
+        encode_vec: $encode_vec:ident,
+        encode_into: $encode_into:ident,
+        decode_vec: $decode_vec:ident,
+        decode_into: $decode_into:ident,
+        encode_body: $encode_body:ident,
+        decode_body: $decode_body:ident,
+    ) => {
+        /// Write `data` into `dst` as little-endian bytes.
+        ///
+        /// `dst` must be at least `data.len() * size_of::<$elem>()` bytes; extra
+        /// bytes are left untouched.
+        fn $encode_body(data: &[$elem], dst: &mut [u8]) {
+            const ELEM: usize = core::mem::size_of::<$elem>();
 
-/// Encode an f32 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn encode_f32_array(data: &[f32]) -> Result<alloc::vec::Vec<u8>> {
-    let byte_len = data.len() * core::mem::size_of::<f32>();
-    let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + byte_len);
+            #[cfg(target_endian = "little")]
+            {
+                let byte_len = data.len().saturating_mul(ELEM);
+                // SAFETY: reinterpreting a `$elem` slice as bytes is always
+                // valid — `u8` has alignment 1 and no invalid bit patterns, and
+                // the reinterpreted length matches the source in bytes. The
+                // slice is only read.
+                let src = unsafe {
+                    core::slice::from_raw_parts(data.as_ptr() as *const u8, byte_len)
+                };
+                crate::simd::copy::copy_bytes(src, dst);
+            }
 
-    // Write header (element count)
-    output.extend_from_slice(&(data.len() as u64).to_le_bytes());
+            #[cfg(target_endian = "big")]
+            {
+                for (index, value) in data.iter().enumerate() {
+                    let start = index * ELEM;
+                    dst[start..start + ELEM].copy_from_slice(&value.to_le_bytes());
+                }
+            }
+        }
 
-    // Write data
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 8 {
-        encode_f32_simd(data, &mut output);
-    } else {
-        encode_f32_scalar(data, &mut output);
-    }
+        /// Read little-endian bytes from `src` into `dst`.
+        ///
+        /// `src` must be at least `dst.len() * size_of::<$elem>()` bytes.
+        fn $decode_body(src: &[u8], dst: &mut [$elem]) {
+            const ELEM: usize = core::mem::size_of::<$elem>();
 
-    Ok(output)
-}
+            #[cfg(target_endian = "little")]
+            {
+                let byte_len = dst.len().saturating_mul(ELEM);
+                // SAFETY: `dst` holds initialized `$elem` values; reinterpreting
+                // it as a mutable byte slice is sound because every bit pattern
+                // is valid for `$elem` and `u8` has alignment 1. The length in
+                // bytes matches `dst`.
+                let out = unsafe {
+                    core::slice::from_raw_parts_mut(dst.as_mut_ptr() as *mut u8, byte_len)
+                };
+                crate::simd::copy::copy_bytes(src, out);
+            }
 
-/// Encode f32 array into a destination buffer, returning bytes written.
-pub fn encode_f32_array_into(data: &[f32], dst: &mut [u8]) -> Result<usize> {
-    let byte_len = data.len() * core::mem::size_of::<f32>();
-    let total_len = HEADER_SIZE + byte_len;
+            #[cfg(target_endian = "big")]
+            {
+                for (index, value) in dst.iter_mut().enumerate() {
+                    let start = index * ELEM;
+                    let mut bytes = [0u8; ELEM];
+                    bytes.copy_from_slice(&src[start..start + ELEM]);
+                    *value = <$elem>::from_le_bytes(bytes);
+                }
+            }
+        }
 
-    if dst.len() < total_len {
-        return Err(Error::UnexpectedEnd {
-            additional: total_len - dst.len(),
-        });
-    }
+        #[doc = concat!("Encode a `", stringify!($elem), "` array into a new `Vec<u8>`.")]
+        #[cfg(feature = "alloc")]
+        pub fn $encode_vec(data: &[$elem]) -> Result<alloc::vec::Vec<u8>> {
+            const ELEM: usize = core::mem::size_of::<$elem>();
 
-    // Write header
-    dst[..HEADER_SIZE].copy_from_slice(&(data.len() as u64).to_le_bytes());
+            let byte_len = data.len().checked_mul(ELEM).ok_or(Error::InvalidData {
+                message: "array length x element-size overflows usize",
+            })?;
+            let total = HEADER_SIZE.checked_add(byte_len).ok_or(Error::InvalidData {
+                message: "array header length overflows usize",
+            })?;
 
-    // Write data
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 8 {
-        encode_f32_simd_into(data, &mut dst[HEADER_SIZE..]);
-    } else {
-        encode_f32_scalar_into(data, &mut dst[HEADER_SIZE..]);
-    }
+            let mut output = alloc::vec::Vec::with_capacity(total);
+            output.extend_from_slice(&(data.len() as u64).to_le_bytes());
+            output.resize(total, 0u8);
+            $encode_body(data, &mut output[HEADER_SIZE..total]);
+            Ok(output)
+        }
 
-    Ok(total_len)
-}
+        #[doc = concat!("Encode a `", stringify!($elem), "` array into `dst`, returning bytes written.")]
+        pub fn $encode_into(data: &[$elem], dst: &mut [u8]) -> Result<usize> {
+            const ELEM: usize = core::mem::size_of::<$elem>();
 
-/// Decode an f32 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn decode_f32_array(data: &[u8]) -> Result<alloc::vec::Vec<f32>> {
-    if data.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - data.len(),
-        });
-    }
+            let byte_len = data.len().checked_mul(ELEM).ok_or(Error::InvalidData {
+                message: "array length x element-size overflows usize",
+            })?;
+            let total = HEADER_SIZE.checked_add(byte_len).ok_or(Error::InvalidData {
+                message: "array header length overflows usize",
+            })?;
 
-    // Read header
-    let count =
-        u64::from_le_bytes(
-            data[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
+            if dst.len() < total {
+                return Err(Error::UnexpectedEnd {
+                    additional: total - dst.len(),
+                });
+            }
+
+            dst[..HEADER_SIZE].copy_from_slice(&(data.len() as u64).to_le_bytes());
+            $encode_body(data, &mut dst[HEADER_SIZE..total]);
+            Ok(total)
+        }
+
+        #[doc = concat!("Decode a `", stringify!($elem), "` array from `data` into a new `Vec`.")]
+        #[cfg(feature = "alloc")]
+        pub fn $decode_vec(data: &[u8]) -> Result<alloc::vec::Vec<$elem>> {
+            const ELEM: usize = core::mem::size_of::<$elem>();
+
+            if data.len() < HEADER_SIZE {
+                return Err(Error::UnexpectedEnd {
+                    additional: HEADER_SIZE - data.len(),
+                });
+            }
+
+            let raw = u64::from_le_bytes(data[..HEADER_SIZE].try_into().map_err(|_| {
+                Error::InvalidData {
                     message: "invalid header bytes",
-                })?,
-        );
-    let count = count as usize;
+                }
+            })?);
+            let count = usize::try_from(raw).map_err(|_| Error::OutsideUsizeRange(raw))?;
 
-    let byte_len = count * core::mem::size_of::<f32>();
-    if data.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - data.len(),
-        });
-    }
+            let byte_len = count.checked_mul(ELEM).ok_or(Error::InvalidData {
+                message: "array length x element-size overflows usize",
+            })?;
+            let needed = HEADER_SIZE.checked_add(byte_len).ok_or(Error::InvalidData {
+                message: "array header length overflows usize",
+            })?;
 
-    let mut output = alloc::vec![0.0f32; count];
-    let cap = detect_capability();
+            if data.len() < needed {
+                return Err(Error::UnexpectedEnd {
+                    additional: needed - data.len(),
+                });
+            }
 
-    if cap.is_simd() && count >= 8 {
-        decode_f32_simd(&data[HEADER_SIZE..], &mut output);
-    } else {
-        decode_f32_scalar(&data[HEADER_SIZE..], &mut output);
-    }
+            let mut output = alloc::vec![$zero; count];
+            $decode_body(&data[HEADER_SIZE..needed], &mut output);
+            Ok(output)
+        }
 
-    Ok(output)
-}
+        #[doc = concat!("Decode a `", stringify!($elem), "` array from `src` into `dst`, returning elements decoded.")]
+        pub fn $decode_into(src: &[u8], dst: &mut [$elem]) -> Result<usize> {
+            const ELEM: usize = core::mem::size_of::<$elem>();
 
-/// Decode f32 array into a destination buffer, returning elements decoded.
-pub fn decode_f32_array_into(src: &[u8], dst: &mut [f32]) -> Result<usize> {
-    if src.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - src.len(),
-        });
-    }
+            if src.len() < HEADER_SIZE {
+                return Err(Error::UnexpectedEnd {
+                    additional: HEADER_SIZE - src.len(),
+                });
+            }
 
-    let count =
-        u64::from_le_bytes(
-            src[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
+            let raw = u64::from_le_bytes(src[..HEADER_SIZE].try_into().map_err(|_| {
+                Error::InvalidData {
                     message: "invalid header bytes",
-                })?,
-        );
-    let count = count as usize;
+                }
+            })?);
+            let count = usize::try_from(raw).map_err(|_| Error::OutsideUsizeRange(raw))?;
 
-    if dst.len() < count {
-        return Err(Error::Custom {
-            message: "destination buffer too small",
-        });
-    }
+            if dst.len() < count {
+                return Err(Error::Custom {
+                    message: "destination buffer too small",
+                });
+            }
 
-    let byte_len = count * core::mem::size_of::<f32>();
-    if src.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - src.len(),
-        });
-    }
+            let byte_len = count.checked_mul(ELEM).ok_or(Error::InvalidData {
+                message: "array length x element-size overflows usize",
+            })?;
+            let needed = HEADER_SIZE.checked_add(byte_len).ok_or(Error::InvalidData {
+                message: "array header length overflows usize",
+            })?;
 
-    let cap = detect_capability();
-    if cap.is_simd() && count >= 8 {
-        decode_f32_simd(&src[HEADER_SIZE..], &mut dst[..count]);
-    } else {
-        decode_f32_scalar(&src[HEADER_SIZE..], &mut dst[..count]);
-    }
+            if src.len() < needed {
+                return Err(Error::UnexpectedEnd {
+                    additional: needed - src.len(),
+                });
+            }
 
-    Ok(count)
-}
-
-// SIMD-optimized f32 encoding
-#[cfg(feature = "alloc")]
-fn encode_f32_simd(data: &[f32], output: &mut alloc::vec::Vec<u8>) {
-    // Process 8 floats at a time (256 bits for AVX2)
-    let chunks = data.len() / 8;
-    let remainder = data.len() % 8;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 8;
-        // Unrolled loop for better pipelining
-        for i in 0..8 {
-            output.extend_from_slice(&data[base + i].to_le_bytes());
+            $decode_body(&src[HEADER_SIZE..needed], &mut dst[..count]);
+            Ok(count)
         }
-    }
-
-    // Handle remainder
-    let remainder_start = chunks * 8;
-    for i in 0..remainder {
-        output.extend_from_slice(&data[remainder_start + i].to_le_bytes());
-    }
+    };
 }
 
-fn encode_f32_simd_into(data: &[f32], dst: &mut [u8]) {
-    let chunks = data.len() / 8;
-    let remainder = data.len() % 8;
-    let mut offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 8;
-        for i in 0..8 {
-            dst[offset..offset + 4].copy_from_slice(&data[base + i].to_le_bytes());
-            offset += 4;
-        }
-    }
-
-    let remainder_start = chunks * 8;
-    for i in 0..remainder {
-        dst[offset..offset + 4].copy_from_slice(&data[remainder_start + i].to_le_bytes());
-        offset += 4;
-    }
+impl_numeric_array_codec! {
+    elem: f32,
+    zero: 0.0f32,
+    encode_vec: encode_f32_array,
+    encode_into: encode_f32_array_into,
+    decode_vec: decode_f32_array,
+    decode_into: decode_f32_array_into,
+    encode_body: encode_f32_body,
+    decode_body: decode_f32_body,
 }
 
-#[cfg(feature = "alloc")]
-fn encode_f32_scalar(data: &[f32], output: &mut alloc::vec::Vec<u8>) {
-    for &value in data {
-        output.extend_from_slice(&value.to_le_bytes());
-    }
+impl_numeric_array_codec! {
+    elem: f64,
+    zero: 0.0f64,
+    encode_vec: encode_f64_array,
+    encode_into: encode_f64_array_into,
+    decode_vec: decode_f64_array,
+    decode_into: decode_f64_array_into,
+    encode_body: encode_f64_body,
+    decode_body: decode_f64_body,
 }
 
-fn encode_f32_scalar_into(data: &[f32], dst: &mut [u8]) {
-    let mut offset = 0;
-    for &value in data {
-        dst[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-        offset += 4;
-    }
+impl_numeric_array_codec! {
+    elem: i32,
+    zero: 0i32,
+    encode_vec: encode_i32_array,
+    encode_into: encode_i32_array_into,
+    decode_vec: decode_i32_array,
+    decode_into: decode_i32_array_into,
+    encode_body: encode_i32_body,
+    decode_body: decode_i32_body,
 }
 
-// SIMD-optimized f32 decoding
-fn decode_f32_simd(src: &[u8], dst: &mut [f32]) {
-    let chunks = dst.len() / 8;
-    let remainder = dst.len() % 8;
-    let mut src_offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 8;
-        // Unrolled loop
-        for i in 0..8 {
-            dst[base + i] = f32::from_le_bytes([
-                src[src_offset],
-                src[src_offset + 1],
-                src[src_offset + 2],
-                src[src_offset + 3],
-            ]);
-            src_offset += 4;
-        }
-    }
-
-    let remainder_start = chunks * 8;
-    for i in 0..remainder {
-        dst[remainder_start + i] = f32::from_le_bytes([
-            src[src_offset],
-            src[src_offset + 1],
-            src[src_offset + 2],
-            src[src_offset + 3],
-        ]);
-        src_offset += 4;
-    }
-}
-
-fn decode_f32_scalar(src: &[u8], dst: &mut [f32]) {
-    let mut offset = 0;
-    for value in dst.iter_mut() {
-        *value = f32::from_le_bytes([
-            src[offset],
-            src[offset + 1],
-            src[offset + 2],
-            src[offset + 3],
-        ]);
-        offset += 4;
-    }
+impl_numeric_array_codec! {
+    elem: i64,
+    zero: 0i64,
+    encode_vec: encode_i64_array,
+    encode_into: encode_i64_array_into,
+    decode_vec: decode_i64_array,
+    decode_into: decode_i64_array_into,
+    encode_body: encode_i64_body,
+    decode_body: decode_i64_body,
 }
 
 // =============================================================================
-// f64 Array Encoding/Decoding
+// u8 Array Encoding/Decoding (raw byte copy with header)
 // =============================================================================
 
-/// Encode an f64 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn encode_f64_array(data: &[f64]) -> Result<alloc::vec::Vec<u8>> {
-    let byte_len = data.len() * core::mem::size_of::<f64>();
-    let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + byte_len);
-
-    output.extend_from_slice(&(data.len() as u64).to_le_bytes());
-
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 4 {
-        encode_f64_simd(data, &mut output);
-    } else {
-        encode_f64_scalar(data, &mut output);
-    }
-
-    Ok(output)
-}
-
-/// Encode f64 array into a destination buffer.
-pub fn encode_f64_array_into(data: &[f64], dst: &mut [u8]) -> Result<usize> {
-    let byte_len = data.len() * core::mem::size_of::<f64>();
-    let total_len = HEADER_SIZE + byte_len;
-
-    if dst.len() < total_len {
-        return Err(Error::UnexpectedEnd {
-            additional: total_len - dst.len(),
-        });
-    }
-
-    dst[..HEADER_SIZE].copy_from_slice(&(data.len() as u64).to_le_bytes());
-
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 4 {
-        encode_f64_simd_into(data, &mut dst[HEADER_SIZE..]);
-    } else {
-        encode_f64_scalar_into(data, &mut dst[HEADER_SIZE..]);
-    }
-
-    Ok(total_len)
-}
-
-/// Decode an f64 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn decode_f64_array(data: &[u8]) -> Result<alloc::vec::Vec<f64>> {
-    if data.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - data.len(),
-        });
-    }
-
-    let count =
-        u64::from_le_bytes(
-            data[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
-                    message: "invalid header bytes",
-                })?,
-        ) as usize;
-    let byte_len = count * core::mem::size_of::<f64>();
-
-    if data.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - data.len(),
-        });
-    }
-
-    let mut output = alloc::vec![0.0f64; count];
-    let cap = detect_capability();
-
-    if cap.is_simd() && count >= 4 {
-        decode_f64_simd(&data[HEADER_SIZE..], &mut output);
-    } else {
-        decode_f64_scalar(&data[HEADER_SIZE..], &mut output);
-    }
-
-    Ok(output)
-}
-
-/// Decode f64 array into a destination buffer.
-pub fn decode_f64_array_into(src: &[u8], dst: &mut [f64]) -> Result<usize> {
-    if src.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - src.len(),
-        });
-    }
-
-    let count =
-        u64::from_le_bytes(
-            src[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
-                    message: "invalid header bytes",
-                })?,
-        ) as usize;
-
-    if dst.len() < count {
-        return Err(Error::Custom {
-            message: "destination buffer too small",
-        });
-    }
-
-    let byte_len = count * core::mem::size_of::<f64>();
-    if src.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - src.len(),
-        });
-    }
-
-    let cap = detect_capability();
-    if cap.is_simd() && count >= 4 {
-        decode_f64_simd(&src[HEADER_SIZE..], &mut dst[..count]);
-    } else {
-        decode_f64_scalar(&src[HEADER_SIZE..], &mut dst[..count]);
-    }
-
-    Ok(count)
-}
-
-#[cfg(feature = "alloc")]
-fn encode_f64_simd(data: &[f64], output: &mut alloc::vec::Vec<u8>) {
-    let chunks = data.len() / 4;
-    let remainder = data.len() % 4;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 4;
-        for i in 0..4 {
-            output.extend_from_slice(&data[base + i].to_le_bytes());
-        }
-    }
-
-    let remainder_start = chunks * 4;
-    for i in 0..remainder {
-        output.extend_from_slice(&data[remainder_start + i].to_le_bytes());
-    }
-}
-
-fn encode_f64_simd_into(data: &[f64], dst: &mut [u8]) {
-    let chunks = data.len() / 4;
-    let remainder = data.len() % 4;
-    let mut offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 4;
-        for i in 0..4 {
-            dst[offset..offset + 8].copy_from_slice(&data[base + i].to_le_bytes());
-            offset += 8;
-        }
-    }
-
-    let remainder_start = chunks * 4;
-    for i in 0..remainder {
-        dst[offset..offset + 8].copy_from_slice(&data[remainder_start + i].to_le_bytes());
-        offset += 8;
-    }
-}
-
-#[cfg(feature = "alloc")]
-fn encode_f64_scalar(data: &[f64], output: &mut alloc::vec::Vec<u8>) {
-    for &value in data {
-        output.extend_from_slice(&value.to_le_bytes());
-    }
-}
-
-fn encode_f64_scalar_into(data: &[f64], dst: &mut [u8]) {
-    let mut offset = 0;
-    for &value in data {
-        dst[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
-        offset += 8;
-    }
-}
-
-fn decode_f64_simd(src: &[u8], dst: &mut [f64]) {
-    let chunks = dst.len() / 4;
-    let remainder = dst.len() % 4;
-    let mut src_offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 4;
-        for i in 0..4 {
-            let mut bytes = [0u8; 8];
-            bytes.copy_from_slice(&src[src_offset..src_offset + 8]);
-            dst[base + i] = f64::from_le_bytes(bytes);
-            src_offset += 8;
-        }
-    }
-
-    let remainder_start = chunks * 4;
-    for i in 0..remainder {
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&src[src_offset..src_offset + 8]);
-        dst[remainder_start + i] = f64::from_le_bytes(bytes);
-        src_offset += 8;
-    }
-}
-
-fn decode_f64_scalar(src: &[u8], dst: &mut [f64]) {
-    let mut offset = 0;
-    for value in dst.iter_mut() {
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&src[offset..offset + 8]);
-        *value = f64::from_le_bytes(bytes);
-        offset += 8;
-    }
-}
-
-// =============================================================================
-// i32 Array Encoding/Decoding
-// =============================================================================
-
-/// Encode an i32 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn encode_i32_array(data: &[i32]) -> Result<alloc::vec::Vec<u8>> {
-    let byte_len = data.len() * core::mem::size_of::<i32>();
-    let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + byte_len);
-
-    output.extend_from_slice(&(data.len() as u64).to_le_bytes());
-
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 8 {
-        encode_i32_simd(data, &mut output);
-    } else {
-        encode_i32_scalar(data, &mut output);
-    }
-
-    Ok(output)
-}
-
-/// Encode i32 array into a destination buffer.
-pub fn encode_i32_array_into(data: &[i32], dst: &mut [u8]) -> Result<usize> {
-    let byte_len = data.len() * core::mem::size_of::<i32>();
-    let total_len = HEADER_SIZE + byte_len;
-
-    if dst.len() < total_len {
-        return Err(Error::UnexpectedEnd {
-            additional: total_len - dst.len(),
-        });
-    }
-
-    dst[..HEADER_SIZE].copy_from_slice(&(data.len() as u64).to_le_bytes());
-
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 8 {
-        encode_i32_simd_into(data, &mut dst[HEADER_SIZE..]);
-    } else {
-        encode_i32_scalar_into(data, &mut dst[HEADER_SIZE..]);
-    }
-
-    Ok(total_len)
-}
-
-/// Decode an i32 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn decode_i32_array(data: &[u8]) -> Result<alloc::vec::Vec<i32>> {
-    if data.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - data.len(),
-        });
-    }
-
-    let count =
-        u64::from_le_bytes(
-            data[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
-                    message: "invalid header bytes",
-                })?,
-        ) as usize;
-    let byte_len = count * core::mem::size_of::<i32>();
-
-    if data.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - data.len(),
-        });
-    }
-
-    let mut output = alloc::vec![0i32; count];
-    let cap = detect_capability();
-
-    if cap.is_simd() && count >= 8 {
-        decode_i32_simd(&data[HEADER_SIZE..], &mut output);
-    } else {
-        decode_i32_scalar(&data[HEADER_SIZE..], &mut output);
-    }
-
-    Ok(output)
-}
-
-/// Decode i32 array into a destination buffer.
-pub fn decode_i32_array_into(src: &[u8], dst: &mut [i32]) -> Result<usize> {
-    if src.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - src.len(),
-        });
-    }
-
-    let count =
-        u64::from_le_bytes(
-            src[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
-                    message: "invalid header bytes",
-                })?,
-        ) as usize;
-
-    if dst.len() < count {
-        return Err(Error::Custom {
-            message: "destination buffer too small",
-        });
-    }
-
-    let byte_len = count * core::mem::size_of::<i32>();
-    if src.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - src.len(),
-        });
-    }
-
-    let cap = detect_capability();
-    if cap.is_simd() && count >= 8 {
-        decode_i32_simd(&src[HEADER_SIZE..], &mut dst[..count]);
-    } else {
-        decode_i32_scalar(&src[HEADER_SIZE..], &mut dst[..count]);
-    }
-
-    Ok(count)
-}
-
-#[cfg(feature = "alloc")]
-fn encode_i32_simd(data: &[i32], output: &mut alloc::vec::Vec<u8>) {
-    let chunks = data.len() / 8;
-    let remainder = data.len() % 8;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 8;
-        for i in 0..8 {
-            output.extend_from_slice(&data[base + i].to_le_bytes());
-        }
-    }
-
-    let remainder_start = chunks * 8;
-    for i in 0..remainder {
-        output.extend_from_slice(&data[remainder_start + i].to_le_bytes());
-    }
-}
-
-fn encode_i32_simd_into(data: &[i32], dst: &mut [u8]) {
-    let chunks = data.len() / 8;
-    let remainder = data.len() % 8;
-    let mut offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 8;
-        for i in 0..8 {
-            dst[offset..offset + 4].copy_from_slice(&data[base + i].to_le_bytes());
-            offset += 4;
-        }
-    }
-
-    let remainder_start = chunks * 8;
-    for i in 0..remainder {
-        dst[offset..offset + 4].copy_from_slice(&data[remainder_start + i].to_le_bytes());
-        offset += 4;
-    }
-}
-
-#[cfg(feature = "alloc")]
-fn encode_i32_scalar(data: &[i32], output: &mut alloc::vec::Vec<u8>) {
-    for &value in data {
-        output.extend_from_slice(&value.to_le_bytes());
-    }
-}
-
-fn encode_i32_scalar_into(data: &[i32], dst: &mut [u8]) {
-    let mut offset = 0;
-    for &value in data {
-        dst[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-        offset += 4;
-    }
-}
-
-fn decode_i32_simd(src: &[u8], dst: &mut [i32]) {
-    let chunks = dst.len() / 8;
-    let remainder = dst.len() % 8;
-    let mut src_offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 8;
-        for i in 0..8 {
-            dst[base + i] = i32::from_le_bytes([
-                src[src_offset],
-                src[src_offset + 1],
-                src[src_offset + 2],
-                src[src_offset + 3],
-            ]);
-            src_offset += 4;
-        }
-    }
-
-    let remainder_start = chunks * 8;
-    for i in 0..remainder {
-        dst[remainder_start + i] = i32::from_le_bytes([
-            src[src_offset],
-            src[src_offset + 1],
-            src[src_offset + 2],
-            src[src_offset + 3],
-        ]);
-        src_offset += 4;
-    }
-}
-
-fn decode_i32_scalar(src: &[u8], dst: &mut [i32]) {
-    let mut offset = 0;
-    for value in dst.iter_mut() {
-        *value = i32::from_le_bytes([
-            src[offset],
-            src[offset + 1],
-            src[offset + 2],
-            src[offset + 3],
-        ]);
-        offset += 4;
-    }
-}
-
-// =============================================================================
-// i64 Array Encoding/Decoding
-// =============================================================================
-
-/// Encode an i64 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn encode_i64_array(data: &[i64]) -> Result<alloc::vec::Vec<u8>> {
-    let byte_len = data.len() * core::mem::size_of::<i64>();
-    let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + byte_len);
-
-    output.extend_from_slice(&(data.len() as u64).to_le_bytes());
-
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 4 {
-        encode_i64_simd(data, &mut output);
-    } else {
-        encode_i64_scalar(data, &mut output);
-    }
-
-    Ok(output)
-}
-
-/// Encode i64 array into a destination buffer.
-pub fn encode_i64_array_into(data: &[i64], dst: &mut [u8]) -> Result<usize> {
-    let byte_len = data.len() * core::mem::size_of::<i64>();
-    let total_len = HEADER_SIZE + byte_len;
-
-    if dst.len() < total_len {
-        return Err(Error::UnexpectedEnd {
-            additional: total_len - dst.len(),
-        });
-    }
-
-    dst[..HEADER_SIZE].copy_from_slice(&(data.len() as u64).to_le_bytes());
-
-    let cap = detect_capability();
-    if cap.is_simd() && data.len() >= 4 {
-        encode_i64_simd_into(data, &mut dst[HEADER_SIZE..]);
-    } else {
-        encode_i64_scalar_into(data, &mut dst[HEADER_SIZE..]);
-    }
-
-    Ok(total_len)
-}
-
-/// Decode an i64 array using SIMD optimization when available.
-#[cfg(feature = "alloc")]
-pub fn decode_i64_array(data: &[u8]) -> Result<alloc::vec::Vec<i64>> {
-    if data.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - data.len(),
-        });
-    }
-
-    let count =
-        u64::from_le_bytes(
-            data[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
-                    message: "invalid header bytes",
-                })?,
-        ) as usize;
-    let byte_len = count * core::mem::size_of::<i64>();
-
-    if data.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - data.len(),
-        });
-    }
-
-    let mut output = alloc::vec![0i64; count];
-    let cap = detect_capability();
-
-    if cap.is_simd() && count >= 4 {
-        decode_i64_simd(&data[HEADER_SIZE..], &mut output);
-    } else {
-        decode_i64_scalar(&data[HEADER_SIZE..], &mut output);
-    }
-
-    Ok(output)
-}
-
-/// Decode i64 array into a destination buffer.
-pub fn decode_i64_array_into(src: &[u8], dst: &mut [i64]) -> Result<usize> {
-    if src.len() < HEADER_SIZE {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE - src.len(),
-        });
-    }
-
-    let count =
-        u64::from_le_bytes(
-            src[..HEADER_SIZE]
-                .try_into()
-                .map_err(|_| Error::InvalidData {
-                    message: "invalid header bytes",
-                })?,
-        ) as usize;
-
-    if dst.len() < count {
-        return Err(Error::Custom {
-            message: "destination buffer too small",
-        });
-    }
-
-    let byte_len = count * core::mem::size_of::<i64>();
-    if src.len() < HEADER_SIZE + byte_len {
-        return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + byte_len - src.len(),
-        });
-    }
-
-    let cap = detect_capability();
-    if cap.is_simd() && count >= 4 {
-        decode_i64_simd(&src[HEADER_SIZE..], &mut dst[..count]);
-    } else {
-        decode_i64_scalar(&src[HEADER_SIZE..], &mut dst[..count]);
-    }
-
-    Ok(count)
-}
-
-#[cfg(feature = "alloc")]
-fn encode_i64_simd(data: &[i64], output: &mut alloc::vec::Vec<u8>) {
-    let chunks = data.len() / 4;
-    let remainder = data.len() % 4;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 4;
-        for i in 0..4 {
-            output.extend_from_slice(&data[base + i].to_le_bytes());
-        }
-    }
-
-    let remainder_start = chunks * 4;
-    for i in 0..remainder {
-        output.extend_from_slice(&data[remainder_start + i].to_le_bytes());
-    }
-}
-
-fn encode_i64_simd_into(data: &[i64], dst: &mut [u8]) {
-    let chunks = data.len() / 4;
-    let remainder = data.len() % 4;
-    let mut offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 4;
-        for i in 0..4 {
-            dst[offset..offset + 8].copy_from_slice(&data[base + i].to_le_bytes());
-            offset += 8;
-        }
-    }
-
-    let remainder_start = chunks * 4;
-    for i in 0..remainder {
-        dst[offset..offset + 8].copy_from_slice(&data[remainder_start + i].to_le_bytes());
-        offset += 8;
-    }
-}
-
-#[cfg(feature = "alloc")]
-fn encode_i64_scalar(data: &[i64], output: &mut alloc::vec::Vec<u8>) {
-    for &value in data {
-        output.extend_from_slice(&value.to_le_bytes());
-    }
-}
-
-fn encode_i64_scalar_into(data: &[i64], dst: &mut [u8]) {
-    let mut offset = 0;
-    for &value in data {
-        dst[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
-        offset += 8;
-    }
-}
-
-fn decode_i64_simd(src: &[u8], dst: &mut [i64]) {
-    let chunks = dst.len() / 4;
-    let remainder = dst.len() % 4;
-    let mut src_offset = 0;
-
-    for chunk_idx in 0..chunks {
-        let base = chunk_idx * 4;
-        for i in 0..4 {
-            let mut bytes = [0u8; 8];
-            bytes.copy_from_slice(&src[src_offset..src_offset + 8]);
-            dst[base + i] = i64::from_le_bytes(bytes);
-            src_offset += 8;
-        }
-    }
-
-    let remainder_start = chunks * 4;
-    for i in 0..remainder {
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&src[src_offset..src_offset + 8]);
-        dst[remainder_start + i] = i64::from_le_bytes(bytes);
-        src_offset += 8;
-    }
-}
-
-fn decode_i64_scalar(src: &[u8], dst: &mut [i64]) {
-    let mut offset = 0;
-    for value in dst.iter_mut() {
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&src[offset..offset + 8]);
-        *value = i64::from_le_bytes(bytes);
-        offset += 8;
-    }
-}
-
-// =============================================================================
-// u8 Array Encoding/Decoding (memcpy optimized)
-// =============================================================================
-
-/// Encode a u8 array (essentially a memcpy with header).
+/// Encode a `u8` array (a raw byte copy prefixed with an element-count header).
 #[cfg(feature = "alloc")]
 pub fn encode_u8_array(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
-    let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + data.len());
+    let total = HEADER_SIZE
+        .checked_add(data.len())
+        .ok_or(Error::InvalidData {
+            message: "array header length overflows usize",
+        })?;
+    let mut output = alloc::vec::Vec::with_capacity(total);
     output.extend_from_slice(&(data.len() as u64).to_le_bytes());
     output.extend_from_slice(data);
     Ok(output)
 }
 
-/// Encode u8 array into a destination buffer.
+/// Encode a `u8` array into `dst`, returning bytes written.
 pub fn encode_u8_array_into(data: &[u8], dst: &mut [u8]) -> Result<usize> {
-    let total_len = HEADER_SIZE + data.len();
+    let total = HEADER_SIZE
+        .checked_add(data.len())
+        .ok_or(Error::InvalidData {
+            message: "array header length overflows usize",
+        })?;
 
-    if dst.len() < total_len {
+    if dst.len() < total {
         return Err(Error::UnexpectedEnd {
-            additional: total_len - dst.len(),
+            additional: total - dst.len(),
         });
     }
 
     dst[..HEADER_SIZE].copy_from_slice(&(data.len() as u64).to_le_bytes());
-    dst[HEADER_SIZE..total_len].copy_from_slice(data);
-
-    Ok(total_len)
+    crate::simd::copy::copy_bytes(data, &mut dst[HEADER_SIZE..total]);
+    Ok(total)
 }
 
-/// Decode a u8 array.
+/// Decode a `u8` array from `data` into a new `Vec`.
 #[cfg(feature = "alloc")]
 pub fn decode_u8_array(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
     if data.len() < HEADER_SIZE {
@@ -920,25 +302,30 @@ pub fn decode_u8_array(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
         });
     }
 
-    let count =
+    let raw =
         u64::from_le_bytes(
             data[..HEADER_SIZE]
                 .try_into()
                 .map_err(|_| Error::InvalidData {
                     message: "invalid header bytes",
                 })?,
-        ) as usize;
+        );
+    let count = usize::try_from(raw).map_err(|_| Error::OutsideUsizeRange(raw))?;
 
-    if data.len() < HEADER_SIZE + count {
+    let needed = HEADER_SIZE.checked_add(count).ok_or(Error::InvalidData {
+        message: "array header length overflows usize",
+    })?;
+
+    if data.len() < needed {
         return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + count - data.len(),
+            additional: needed - data.len(),
         });
     }
 
-    Ok(data[HEADER_SIZE..HEADER_SIZE + count].to_vec())
+    Ok(data[HEADER_SIZE..needed].to_vec())
 }
 
-/// Decode u8 array into a destination buffer.
+/// Decode a `u8` array from `src` into `dst`, returning bytes decoded.
 pub fn decode_u8_array_into(src: &[u8], dst: &mut [u8]) -> Result<usize> {
     if src.len() < HEADER_SIZE {
         return Err(Error::UnexpectedEnd {
@@ -946,14 +333,15 @@ pub fn decode_u8_array_into(src: &[u8], dst: &mut [u8]) -> Result<usize> {
         });
     }
 
-    let count =
+    let raw =
         u64::from_le_bytes(
             src[..HEADER_SIZE]
                 .try_into()
                 .map_err(|_| Error::InvalidData {
                     message: "invalid header bytes",
                 })?,
-        ) as usize;
+        );
+    let count = usize::try_from(raw).map_err(|_| Error::OutsideUsizeRange(raw))?;
 
     if dst.len() < count {
         return Err(Error::Custom {
@@ -961,13 +349,17 @@ pub fn decode_u8_array_into(src: &[u8], dst: &mut [u8]) -> Result<usize> {
         });
     }
 
-    if src.len() < HEADER_SIZE + count {
+    let needed = HEADER_SIZE.checked_add(count).ok_or(Error::InvalidData {
+        message: "array header length overflows usize",
+    })?;
+
+    if src.len() < needed {
         return Err(Error::UnexpectedEnd {
-            additional: HEADER_SIZE + count - src.len(),
+            additional: needed - src.len(),
         });
     }
 
-    dst[..count].copy_from_slice(&src[HEADER_SIZE..HEADER_SIZE + count]);
+    crate::simd::copy::copy_bytes(&src[HEADER_SIZE..needed], &mut dst[..count]);
     Ok(count)
 }
 
@@ -1049,5 +441,29 @@ mod tests {
         let count = decode_f32_array_into(&buffer[..written], &mut output).expect("decode failed");
         assert_eq!(count, 4);
         assert_eq!(output, data);
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_decode_rejects_overflowing_count() {
+        // A count near usize::MAX must be rejected by the checked multiply,
+        // not trigger an unchecked-arithmetic panic or a huge allocation.
+        let mut header = [0u8; 8];
+        header.copy_from_slice(&(u64::MAX).to_le_bytes());
+        assert!(decode_f32_array(&header).is_err());
+        assert!(decode_f64_array(&header).is_err());
+        assert!(decode_i32_array(&header).is_err());
+        assert!(decode_i64_array(&header).is_err());
+        assert!(decode_u8_array(&header).is_err());
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_decode_rejects_power_of_two_wrap() {
+        // count = 2^62 makes count * size_of::<f32>() wrap to 0 under a naive
+        // (unchecked) multiply; the checked path must reject it.
+        let mut header = [0u8; 8];
+        header.copy_from_slice(&(1u64 << 62).to_le_bytes());
+        assert!(decode_f32_array(&header).is_err());
     }
 }

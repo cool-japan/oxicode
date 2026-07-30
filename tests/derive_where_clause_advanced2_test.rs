@@ -1,5 +1,6 @@
 //! Advanced tests for OxiCode derive macro with where clauses and generic bounds
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

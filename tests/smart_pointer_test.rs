@@ -1,5 +1,6 @@
 //! Tests for smart pointer types: Box<T>, Rc<T>, Arc<T>.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

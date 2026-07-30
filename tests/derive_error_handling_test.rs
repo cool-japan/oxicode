@@ -4,6 +4,7 @@
 //! fields, slice-too-small encoding, varint variant boundary, Option field
 //! encodings, and discriminant-out-of-range decoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

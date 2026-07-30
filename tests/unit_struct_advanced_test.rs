@@ -4,6 +4,7 @@
 //! Structs that contain unit struct fields treat those fields as contributing nothing
 //! to the encoded size.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -20,6 +20,7 @@
 //!   17. Skip on enum unit variant (variant-level skip)
 //!   18. Verify encoded bytes of struct-with-skip match struct-without-that-field
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

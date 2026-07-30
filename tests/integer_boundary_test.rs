@@ -13,6 +13,7 @@
 //!   n >= 0 → 2*n
 //!   n <  0 → 2*|n| - 1
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

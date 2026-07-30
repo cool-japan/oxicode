@@ -3,6 +3,7 @@
 //! Covers complex enum patterns: mixed variants, large discriminants, nested enums,
 //! recursive types, generics, custom tags, and attribute-driven behaviour.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

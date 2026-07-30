@@ -4,6 +4,7 @@
 //! These tests verify encoding correctness, byte-level identity with the inner
 //! type, roundtrip fidelity, and various composition patterns.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

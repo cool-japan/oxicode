@@ -1,17 +1,36 @@
-//! Validation middleware for oxicode.
+//! Post-decode validation constraints for oxicode.
 //!
-//! This module provides validation constraints for deserialization,
-//! ensuring data integrity and security during decoding.
+//! This module provides a standalone constraint/validator API for checking
+//! already-decoded values. **It is not decode-time middleware**: nothing in
+//! this module hooks into [`crate::Decode`] or the [`crate::de::Decoder`]
+//! trait, and constructing a [`Validator`] does not change how encoding or
+//! decoding behaves. Instead, the typical flow is:
+//!
+//! 1. Decode a value normally (e.g. with [`crate::decode_from_slice`], or,
+//!    when the `checksum` feature is enabled, [`crate::checksum::decode_with_checksum`]).
+//! 2. Explicitly call [`Validator::validate`] (or one of its variants) on the
+//!    decoded value, at a point of the caller's choosing.
+//!
+//! [`Validator::decode_and_validate`] (available with the `checksum` feature)
+//! bundles both steps for convenience, but it is still an explicit call the
+//! application makes after obtaining the raw bytes — not an automatic hook
+//! invoked by the core encode/decode path.
 //!
 //! ## Features
 //!
 //! - **Size Limits**: Limit string/collection lengths via [`Constraints::max_len`] /
-//!   [`Constraints::min_len`]
-//! - **Range Constraints**: Validate numeric values with [`Constraints::range`]
+//!   [`Constraints::min_len`]. For `str`/`String`, lengths are counted in
+//!   **UTF-8 bytes**, not chars — see [`constraints::MaxLength`] for details.
+//! - **Range Constraints**: Validate numeric values with [`Constraints::range`],
+//!   including half-open Rust ranges via [`Range::from_bounds`] (exclusive
+//!   bounds are preserved faithfully, not silently dropped).
 //! - **Non-empty**: Reject empty strings or collections via [`Constraints::non_empty`]
 //! - **ASCII enforcement**: Require ASCII-only content with [`Constraints::ascii_only`]
 //! - **Custom Validators**: User-defined logic via [`Constraints::custom`]
 //! - **Collect or fail-fast**: Control error accumulation through [`ValidationConfig`]
+//! - **Depth-limited recursive validation**: Guard hand-rolled recursive
+//!   validators against excessive nesting with
+//!   [`Validator::validate_at_depth`] and [`ValidationConfig::max_depth`]
 //! - **Default fallbacks**: Recover gracefully with [`Validator::validate_or_default`]
 //!
 //! ## Examples
@@ -73,10 +92,9 @@
 //! validator.add_constraint("field", Constraints::min_len(10));
 //! validator.add_constraint("field", Constraints::max_len(5));
 //!
-//! // "hi" is too short (min_len 10) AND below max_len 5 is satisfied, but
-//! // actually "hi".len() < 10 fails the first, and "hi".len() <= 5 passes the second.
-//! // Use a value that fails both: "hello world" is > 5 and < 10 is false (len 11 >= 10).
-//! // Simplest: "ab" fails min_len(10).
+//! // "ab" is 2 bytes, so it fails the min_len(10) constraint. With
+//! // fail-fast disabled the validator reports every failing constraint at
+//! // once rather than stopping at the first.
 //! let result = validator.validate(&"ab".to_string());
 //! assert!(result.is_err());
 //! ```
@@ -90,16 +108,40 @@ pub use validator::{CollectionValidator, NumericValidator, ValidationError};
 #[cfg(feature = "alloc")]
 pub use validator::{FieldValidation, StringValidator, Validator};
 
+#[cfg(all(feature = "alloc", feature = "checksum"))]
+pub use validator::ValidatedDecodeError;
+
 /// Configuration for validation behavior.
 #[derive(Debug, Clone)]
 pub struct ValidationConfig {
     /// Whether to fail fast on the first validation error.
+    ///
+    /// Enforced by [`Validator::validate`].
     pub fail_fast: bool,
 
-    /// Maximum depth for nested structure validation.
+    /// Maximum recursion depth allowed when validating nested structures.
+    ///
+    /// [`Validator`] itself only validates a single flat value against its
+    /// registered constraints — it has no built-in notion of "nesting".
+    /// This limit is therefore enforced by
+    /// [`Validator::validate_at_depth`], which callers use as the
+    /// recursive entry point when they hand-write validation over
+    /// nested/tree-shaped data (e.g. a validator for `Vec<Vec<T>>` that
+    /// recurses one level per `Vec` layer). Passing a `depth` greater than
+    /// `max_depth` fails immediately with a dedicated error instead of
+    /// recursing further, guarding against stack exhaustion on deeply
+    /// nested or adversarially crafted input.
     pub max_depth: usize,
 
-    /// Whether to enable checksum verification.
+    /// Whether to verify a CRC32 checksum before decoding.
+    ///
+    /// Only consulted by [`Validator::decode_and_validate`], which is
+    /// available when the crate's `checksum` feature is enabled. When
+    /// `true`, the input bytes passed to `decode_and_validate` are expected
+    /// to be wrapped with [`crate::checksum::wrap_with_checksum`]; the
+    /// checksum is verified via [`crate::checksum::decode_with_checksum`]
+    /// before the payload is decoded. When `false`, the bytes are decoded
+    /// directly with no checksum framing.
     pub verify_checksum: bool,
 }
 

@@ -2,6 +2,7 @@
 //! 22 tests covering struct/enum roundtrips, collections, Option wrappers,
 //! wire-byte identity, fixed-int config, and multi-record scenarios.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

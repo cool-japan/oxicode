@@ -3,6 +3,7 @@
 //! Exactly 22 top-level `#[test]` functions covering `decode_from_slice`,
 //! `encode_into_slice`, `decode_from_slice_with_config`, and `encode_to_vec_with_config`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

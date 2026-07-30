@@ -1,5 +1,6 @@
 //! Advanced boundary value tests for integer types with varint encoding behavior.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

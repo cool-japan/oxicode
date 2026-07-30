@@ -1,6 +1,7 @@
 //! Advanced tuple encoding tests — 22 test cases for OxiCode tuple roundtrips,
 //! config variations, struct embedding, Vec/Option containers, and byte-layout checks.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -3,7 +3,7 @@
 //! 22 top-level `#[test]` functions covering new scenarios not exercised by
 //! the existing suites.  All tests are gated on `compression-lz4`.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

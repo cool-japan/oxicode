@@ -4,6 +4,12 @@
 //! they exercise the same code paths used by benchmarks but assert on
 //! functional correctness rather than wall-clock time.
 
+#![cfg(all(
+    feature = "checksum",
+    feature = "compression-lz4",
+    feature = "derive",
+    feature = "std"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -2,6 +2,7 @@
 //! 22 test functions covering deeply nested enums, enums with Vec/Option fields, and enums
 //! containing other enums across reactor operations, safety systems, and monitoring.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

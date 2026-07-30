@@ -4,6 +4,7 @@
 //! Vec collections, Option<SocketAddr>, fixed-int encoding, string-parsed addresses,
 //! wire size assertions, and mixed-variant collections.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

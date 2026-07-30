@@ -41,14 +41,32 @@ use oxicode::{Encode, Decode};
 
 ### Step 3: Update Function Calls
 
-Most bincode functions have direct equivalents in OxiCode:
+Most bincode functions have direct equivalents in OxiCode. Note that
+`bincode::serialize`/`bincode::deserialize` are the **bincode 1.x** API — if
+you are migrating from `bincode = "1"`, that's the case that applies to you:
 
 ```rust
-// Before (bincode)
+// Before (bincode 1.x — Cargo.toml: bincode = "1")
 let encoded = bincode::serialize(&value)?;
 let decoded: T = bincode::deserialize(&encoded)?;
 
-// After (oxicode)
+// After (oxicode) — config::legacy() matches bincode 1.x's default wire format
+let encoded = oxicode::encode_to_vec_with_config(&value, oxicode::config::legacy())?;
+let (decoded, _len): (T, usize) = oxicode::decode_from_slice_with_config(&encoded, oxicode::config::legacy())?;
+```
+
+If you are migrating from **bincode 2.x** (`bincode = "2.0"`), there is no
+`serialize`/`deserialize` in that API at all — bincode 2 already uses
+`encode_to_vec`/`decode_from_slice` with an explicit config, and the
+migration is a near-identical rename:
+
+```rust
+// Before (bincode 2.x — Cargo.toml: bincode = "2.0")
+use bincode::config;
+let encoded = bincode::encode_to_vec(&value, config::standard())?;
+let (decoded, _len): (T, usize) = bincode::decode_from_slice(&encoded, config::standard())?;
+
+// After (oxicode) — same shape; the *_with_config suffix is oxicode's naming
 let encoded = oxicode::encode_to_vec_with_config(&value, oxicode::config::standard())?;
 let (decoded, _len): (T, usize) = oxicode::decode_from_slice_with_config(&encoded, oxicode::config::standard())?;
 ```
@@ -114,7 +132,10 @@ let bytes = encode_to_vec(&value, oxicode::config::standard())?;
 let (decoded, _) = decode_from_slice(&bytes, oxicode::config::standard())?;
 ```
 
-**Important**: Unlike bincode, oxicode requires explicit `features = ["serde"]` in Cargo.toml.
+**Important**: like bincode 2.x (which also gates its serde integration behind
+a `serde` Cargo feature), oxicode requires explicit `features = ["serde"]` in
+Cargo.toml — this is not a divergence from bincode 2, only from bincode 1.x,
+which bundled serde support unconditionally.
 
 ### Why is serde optional?
 
@@ -146,20 +167,28 @@ fn process() -> Result<T, bincode::error::EncodeError> { ... }
 fn process() -> oxicode::Result<T> { ... }
 ```
 
-## Compatibility Layer
+## Compatibility Test Suite
 
-OxiCode provides a compatibility crate for gradual migration:
+Reading data encoded with bincode does **not** require any extra dependency:
+oxicode's own `Decode`/`decode_from_slice` (with a matching `Config`) reads
+bincode-produced bytes directly (subject to the
+[Known compatibility caveats](README.md#known-compatibility-caveats)). There
+is no runtime "compatibility layer" crate to add.
 
-```toml
-[dependencies]
-oxicode = "0.2"
-oxicode_compatibility = "0.2"
+The repository does ship an internal `oxicode_compatibility` crate
+(`compatibility/`), but it is `publish = false` and test-only — it exists to
+assert, via `cargo test`, that oxicode's output is byte-identical to
+bincode's for a battery of types and configs; it is never published to
+crates.io and exports no runtime API. If you want to run that same
+assertion suite against your own oxicode checkout:
+
+```bash
+git clone https://github.com/cool-japan/oxicode
+cd oxicode
+cargo test -p oxicode_compatibility
 ```
 
-This allows you to:
-1. Read data encoded with bincode
-2. Gradually migrate your codebase
-3. Ensure data format compatibility
+This is a development-time check, not something your project depends on.
 
 ## Common Patterns
 
@@ -205,7 +234,12 @@ struct MyStruct {
 
 ## Data Format Compatibility
 
-By default, OxiCode uses a slightly different encoding format optimized for modern use cases. For exact bincode compatibility, use:
+OxiCode's default, `oxicode::config::standard()` (little-endian + varint), is
+verified byte-identical to bincode 2.x's own `config::standard()` for the
+types covered by the `oxicode_compatibility` test suite — you do not need to
+change configs just to match bincode 2's default. If you're migrating from
+**bincode 1.x** instead (which used fixed-width integers, not varint), match
+that wire format with:
 
 ```rust
 let config = oxicode::config::legacy();
@@ -215,6 +249,14 @@ This ensures:
 - Same fixed-int encoding
 - Same byte ordering (little-endian)
 - Wire-format compatible with bincode 1.x default (equivalent to bincode 2.0's `config::legacy()` preset)
+
+Both `standard()` and `legacy()` are subject to the same small list of
+standard-library-type divergences — see
+[Known compatibility caveats in the README](README.md#known-compatibility-caveats)
+(`SystemTime`, `SocketAddrV6`, `IpAddr`/`SocketAddr`/`Bound<T>` tag width,
+`Path`/`PathBuf`, `Ordering`, `Duration`). These are known, tracked gaps
+rather than a general "slightly different format" — everything else that the
+compatibility suite exercises round-trips byte-for-byte.
 
 ## Testing Your Migration
 

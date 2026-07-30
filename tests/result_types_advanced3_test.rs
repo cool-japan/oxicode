@@ -1,5 +1,6 @@
 //! Tests for Result<T, E> encoding with Service/API result types
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

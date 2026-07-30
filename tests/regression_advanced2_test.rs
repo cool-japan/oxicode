@@ -4,6 +4,7 @@
 //! These tests verify specific known behaviors and edge cases with hardcoded
 //! expected byte sequences to detect any inadvertent format changes.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

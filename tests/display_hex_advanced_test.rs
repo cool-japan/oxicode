@@ -4,6 +4,7 @@
 //! `encode_to_display()`, `encode_to_hex()`, `decode_from_hex()`,
 //! and `hex_dump_bytes()`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

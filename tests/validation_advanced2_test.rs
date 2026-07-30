@@ -22,6 +22,7 @@
 //! - `MaxLength` / `MinLength` applied to slice `[T]`
 //! - `Validator::default()` (Default trait impl)
 
+#![cfg(all(feature = "alloc", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

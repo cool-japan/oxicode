@@ -2,6 +2,7 @@
 //! Covers Ipv4Addr, Ipv6Addr, SocketAddr variants, Duration, SystemTime,
 //! composite struct, and Vec<SocketAddr> roundtrips.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

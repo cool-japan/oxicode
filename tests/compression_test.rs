@@ -3,6 +3,7 @@
 //! These tests exercise the public compression API end-to-end, combining
 //! oxicode encode/decode with compression/decompression in round-trip scenarios.
 
+#![cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -80,7 +81,7 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 mod lz4_tests {
     use oxicode::compression::{
         compress, compress_with_stats, decompress, decompress_or_passthrough, detect_compression,

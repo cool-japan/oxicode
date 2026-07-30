@@ -1,5 +1,6 @@
 //! Extended roundtrip tests for all NonZero integer types, collections, Option, and derive.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

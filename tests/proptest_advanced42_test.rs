@@ -5,6 +5,7 @@
 //! encoding, Vec of bodies, Option types, and all enum variants for
 //! CelestialType and SpectralClass with arbitrary inputs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -24,6 +24,7 @@
 //!   A21. Encoding twice produces identical bytes (determinism)
 //!   A22. Single-element vec with seq_len = "u8"
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

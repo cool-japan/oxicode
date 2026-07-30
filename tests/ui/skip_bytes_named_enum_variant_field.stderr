@@ -1,0 +1,5 @@
+error: #[oxicode(bytes)] cannot be combined with skip, default, seq_len, with, encode_with, or decode_with
+  --> tests/ui/skip_bytes_named_enum_variant_field.rs:16:9
+   |
+16 |         #[oxicode(skip, bytes)]
+   |         ^

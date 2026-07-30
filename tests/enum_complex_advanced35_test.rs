@@ -3,6 +3,7 @@
 //! exhibition layout, loan agreements, environmental monitoring, digitization,
 //! accession workflows, authentication, storage, insurance, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

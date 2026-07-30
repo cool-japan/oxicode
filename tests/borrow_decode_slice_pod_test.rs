@@ -3,6 +3,7 @@
 //! Validates zero-copy slice borrowing for Pod-like primitive types under
 //! `IntEncoding::Fixed` + native-endian configuration.
 
+#![cfg(feature = "alloc")]
 /// Build a Fixint + little-endian config for most tests.
 fn fixint_le() -> oxicode::config::Configuration<
     oxicode::config::LittleEndian,

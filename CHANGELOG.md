@@ -5,6 +5,253 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-07-30
+
+A hardening-focused release: a coordinated internal audit found and fixed a
+number of denial-of-service, panic, integer-overflow, and silent-corruption
+issues across decoding, streaming, compression, checksum, the derive macros,
+and serde integration; replaced a fabricated "SIMD" code path with real
+hardware kernels; and overhauled the crate documentation for accuracy. No
+serialized wire-format bytes changed for any input that was already valid —
+every behavior change below is a **new rejection of previously-invalid,
+malicious, or overflow-prone input**, or a bookkeeping/allocation-timing fix
+on the error path. This is called out explicitly per item below because,
+unlike a pure bug fix, "an input that used to decode now returns an error"
+is a compatibility-relevant change for callers who were unknowingly relying
+on the old (unsafe) leniency.
+
+### Security
+
+- **Container/collection allocation-DoS**: `HashMap`, `HashSet`, `BinaryHeap`,
+  `VecDeque`, `BTreeMap`, `BTreeSet`, `LinkedList`, and `PathBuf` (Windows
+  UTF-16 path) decoding now call `decoder.claim_container_read` against the
+  configured decode-size limit *before* allocating, matching `Vec`'s existing
+  behavior. A forged huge length prefix under the configured limit is now
+  rejected up front instead of driving an unbounded allocation.
+- **Streaming allocation-DoS**: `StreamingDecoder`/`AsyncStreamingDecoder`/
+  `BufferStreamingDecoder` now reject any chunk header whose declared payload
+  length exceeds `min(max_chunk_size, configured limit)` *before* allocating a
+  buffer for it. A forged `0xFFFFFFFF` chunk header no longer forces a ~4 GiB
+  allocation attempt.
+- **Streaming truncation detection**: a stream that ends (EOF, or the buffer
+  is exhausted) without a terminal `End` chunk now returns
+  `Error::UnexpectedEnd` instead of being silently treated as a clean,
+  complete stream.
+- **Streaming cancellation safety**: `AsyncStreamingEncoder`/
+  `AsyncStreamingDecoder` now drive I/O through a persisted, resumable
+  fill-cursor using the cancel-safe `AsyncReadExt::read`/`AsyncWriteExt::write`
+  primitives (rather than `read_exact`/`write_all`), so a dropped/cancelled
+  `read_item`/`write_item`/`finish` future no longer loses or duplicates
+  bytes.
+- **Streaming poison-on-error**: once a streaming decoder hits a load,
+  truncation, or limit error, it now latches a poisoned state and returns a
+  deterministic `Error::InvalidData` on any further read, instead of
+  potentially misinterpreting stale payload bytes as a new chunk header.
+- **Zstd decompression-bomb protection**: `compression::decompress`/
+  `decompress_with_limit` now pre-scan the frame header and block table
+  before decompressing, rejecting frames that omit `Frame_Content_Size`,
+  declare a `content_size` above the configured cap, or whose summed
+  per-block regenerated-size upper bound exceeds the declared `content_size`
+  by more than one block. This bounds peak memory to
+  `content_size + ~128 KiB` regardless of what the frame's blocks actually
+  decode to.
+- **LZ4 unbounded-reservation protection**: LZ4 frames that clear the
+  `Content_Size` flag (or use a non-standard magic) are now rejected before
+  the decoder would otherwise make an unbounded up-front output reservation.
+- **Cross-feature codec mismatch**: decompressing a payload tagged as LZ4
+  when only `compression-zstd` is enabled (or vice versa) now returns a clear
+  "codec not enabled" error naming the missing feature, instead of
+  misdispatching.
+- **Checksum length-overflow panic**: `verify_checksum` computed
+  `HEADER_SIZE + stored_len` with an unchecked add on an attacker-controlled
+  length; a forged length near `usize::MAX` could wrap (release builds) and
+  defeat the bounds check, or panic outright (debug builds). Now uses
+  `checked_add`, returning `Error::InvalidData` on overflow.
+- **`char` decode validation**: ported bincode's `UTF8_CHAR_WIDTH` first-byte
+  validation so overlong/invalid multi-byte lead bytes are rejected during
+  `char` decode instead of being accepted and then failing (or succeeding
+  incorrectly) deeper in UTF-8 validation.
+- **Array decode leak fix**: `[T; N]` decode now uses a drop-guard
+  (tracking the initialized-so-far count) so that an error partway through
+  decoding an array's elements drops the already-initialized elements instead
+  of leaking them.
+- **`OsStr::encode` no longer silently lossy-converts**: non-UTF-8 `OsStr`
+  values previously went through `to_string_lossy()` (silently mangling the
+  bytes); `encode` now returns `Error::InvalidData` for non-UTF-8 input.
+  Byte output for valid UTF-8 input is unchanged.
+- **Checked length/index conversions**: every remaining
+  `u64::decode(..)? as usize` (or `as u32`) length read in `impl_std.rs` /
+  `impl_alloc.rs` / derive-generated code (`HashMap`, `HashSet`, `CString`,
+  `PathBuf`, `Vec`, `String`, `BTreeMap`, `BTreeSet`, `BinaryHeap`,
+  `VecDeque`, `LinkedList`, and generated seq/bytes fields) now uses a
+  checked `usize::try_from`, returning `Error::OutsideUsizeRange` instead of
+  silently truncating on 32-bit targets.
+- **Fixed-width integer decode**: `usize`/`isize` decode now uses checked
+  `try_from` against the platform width instead of an unchecked cast.
+- **Decode recursion-depth guard**: `Box`, `Rc`, `Arc`, and the standard
+  collection decoders now enforce a recursion-depth limit (default 128,
+  configurable via `DecoderImpl::set_recursion_limit`), returning
+  `Error::LimitExceeded` for adversarially deep nesting instead of risking
+  stack exhaustion.
+- **Derive: seq_len claim-before-allocate**: the generated `Vec` decode path
+  for `#[oxicode(seq_len = ...)]` fields now calls `claim_container_read`
+  (accounting for the element type) before allocating, and reserves only a
+  capped amount up front, closing an allocation-DoS gap in generated code.
+- **Derive: mutually-exclusive attribute combinations rejected at compile
+  time**: `#[oxicode(bytes)]` combined with `skip`/`default`/`seq_len`/`with`/
+  `encode_with`/`decode_with` (and `skip`/`default` combined with the `with`
+  family) are now compile errors instead of generating confusing or broken
+  code.
+- **Derive: unrepresentable skipped-variant encode fixed**: a skipped enum
+  variant with no following non-skipped variant to alias onto is now a
+  compile error, instead of silently generating an encode arm whose output
+  could never be decoded back.
+- **SIMD fabrication fixed**: `oxicode::simd` previously only exercised its
+  vectorized code paths for some inputs while silently falling through to a
+  scalar path for others without saying so (and shipped a fabricated
+  "2-4x speedup" claim not backed by any measurement). It now always routes
+  through genuine AVX2/SSE2 (x86_64) or NEON (aarch64) hardware kernels on
+  little-endian targets, with runtime CPU-capability detection under `std`
+  and compile-time dispatch under `no_std`. A production `.expect("invalid
+  layout")` in `AlignedVec::layout_for_capacity` was replaced with the
+  sanctioned `alloc::alloc::handle_alloc_error` path.
+- **Serde error preservation**: serde-path decode/encode errors previously
+  collapsed to a generic `"Failed to ..."` string; the real underlying
+  `oxicode::Error` (e.g. `Error::UnexpectedEnd` for truncated input) is now
+  preserved end-to-end.
+
+### Added
+
+- `compression::decompress_with_limit` and `DEFAULT_MAX_DECOMPRESSED_SIZE`
+  for callers who need a decompression-bomb cap other than the 256 MiB
+  default.
+- `new_with_config`/`new_with_configs` constructors (selecting a non-default
+  codec `Config`) across `StreamingEncoder`/`StreamingDecoder`/
+  `BufferStreamingEncoder`/`BufferStreamingDecoder`/`AsyncStreamingEncoder`/
+  `AsyncStreamingDecoder`/`CancellableAsyncEncoder`/`CancellableAsyncDecoder`,
+  plus `end_marker_seen()` observability accessors on the sync and async
+  decoders.
+- Zero-copy borrowed-deserialization support for the `serde` integration
+  (`&'de str`/`&'de [u8]`/`#[serde(borrow)]` fields now actually borrow
+  instead of erroring at runtime).
+- Generic `BorrowDecode` for `Rc<T>`/`Arc<T>`, and relaxed several collection
+  `BorrowDecode` bounds from `T: Decode + 'static` to element-wise
+  `T: BorrowDecode` (`Box<T>`, `Box<[T]>`, `HashMap`, `HashSet`, `BTreeMap`,
+  `BTreeSet`, `VecDeque`, `LinkedList`, `BinaryHeap`, `Rc<[T]>`, `Arc<[T]>`).
+- Blanket `impl<T: Encode + ?Sized> Encode for &T`.
+- `u8`-specialized bulk-copy fast paths for `Vec<u8>`/`[u8; N]`/`[u8]`
+  encode/decode (byte-identical output, faster).
+- Real hardware SIMD kernels in `src/simd/copy.rs` backing the existing
+  opt-in `oxicode::simd` array codec.
+- `examples/async_streaming.rs` (round-trip + cooperative cancellation demo).
+- Enum discriminants wider than `u32` are now supported when
+  `#[oxicode(tag_type = "u64")]` is set, decoded/encoded at native width with
+  no truncating cast.
+- Roughly 40 new `hardening_*` regression tests covering the items above
+  (container claim-before-allocate, streaming DoS/truncation/cancellation,
+  compression bomb/codec-mismatch, checksum overflow, derive attribute
+  conflicts, enum tag width, SIMD equivalence, serde borrowed decode, and
+  more).
+
+### Changed
+
+- `Cow` `Decode` is now generic over `T: ToOwned + ?Sized where T::Owned:
+  Decode` (previously separate concrete `Cow<str>`/`Cow<[u8]>` impls).
+- `rename`/`rename_all` derive attributes are now explicitly documented as
+  no-ops on oxicode's positional binary wire format (accepted only for
+  source compatibility with serde-annotated types); this was already their
+  runtime behavior, only the documentation was misleading before this
+  release.
+- The derive macro's `#[oxicode(bound = "...")]` predicate splitter now
+  parses with `syn`'s `Punctuated` parser (tracking `<>`/`()`/`[]` nesting)
+  instead of a hand-rolled string split, so bounds containing `Fn`-trait
+  syntax (e.g. `T: Fn(u8, u8) -> u8`) parse correctly.
+- `BorrowDecode` derive now skips variants identically to `Decode` (previously
+  could accept a byte sequence that `Decode` would reject, or vice versa).
+- Compile-error spans for union/enum-level derive errors now point at the
+  `union`/`enum` keyword and the specific offending attribute/field/variant,
+  rather than a generic call-site span.
+- Default features now include `validation` and `versioning` (previously
+  `default = ["std", "derive"]`; now `default = ["std", "derive",
+  "validation", "versioning"]`). Both features were mislabeled as
+  test-only opt-ins but actually gate the real `oxicode::validation`
+  (post-decode constraint checking) and `oxicode::versioning`
+  (schema-version-header) public modules; they now ship by default like
+  the rest of the public API.
+- `oxiarc-lz4` and `oxiarc-zstd` optional dependencies updated from 0.3.2 to
+  0.4.0 (six incremental bumps) and moved to `[workspace.dependencies]`.
+- `tokio` optional/dev-dependency updated from 1.52 to 1.53 and moved to
+  `[workspace.dependencies]`.
+
+### Fixed
+
+- `compression-lz4`/`compression-zstd` features now also enable `alloc`,
+  and `async-tokio` now also enables `std` — both were previously
+  under-declared: enabling either without its now-explicit transitive
+  requirement could fail to compile since the streaming/compression code
+  they gate actually needs `alloc`/`std`.
+- Preserved `AsyncEncoder`/`AsyncDecoder` as backward-compatible type
+  aliases for `AsyncStreamingEncoder`/`AsyncStreamingDecoder`, reachable
+  from all three historical import paths; added a regression test
+  (`tests/async_backcompat_names_test.rs`) guarding this.
+- `compression`'s module documentation no longer references a nonexistent
+  `decompress_auto` function or claims compression is "applied globally or
+  per-message"; it now documents the real explicit byte-level API.
+- Removed a production `unreachable!()` and a 4x-duplicated 5-byte-header
+  write in `compression::compress` (output bytes unchanged).
+- Fixed a previously dead/unused `decode_slice_len` helper in `src/de/mod.rs`
+  so it is now the single checked implementation used by length-prefix call
+  sites.
+- `oxicode::compression::is_compressed` now also validates the codec-id byte,
+  shrinking (but not eliminating — this remains a heuristic, documented as
+  such) its false-positive rate against arbitrary payloads that happen to
+  start with the same 5 bytes.
+- All five `map_err(|_| <static message>)` sites in the LZ4/Zstd compression
+  wrappers now preserve the underlying `oxiarc` error text via
+  `Error::OwnedCustom` instead of discarding it.
+
+### Documentation
+
+- Rewrote the README's "Advanced Features" section: replaced the nonexistent
+  `CompressedEncoder`/`CompressedDecoder`/`CompressionType`,
+  `VersionedEncoder::new(writer, version, config)`, and
+  `EncodedBytes::new(&bytes)` API examples with the real
+  `compress`/`decompress`/`Compression`, `VersionedEncoder::new(version)
+  .encode(&bytes)`, and `EncodedBytes(&bytes)` APIs; fixed the
+  `StreamingEncoder`/`StreamingDecoder`/`AsyncStreamingEncoder` constructor
+  signatures (no `config` argument, infallible `new`); rewrote the
+  `Validator<T>` example to match its actual single-type-per-validator
+  design.
+- Rewrote the SIMD documentation and `examples/simd_arrays.rs` to state
+  plainly that `oxicode::simd` is a separate, opt-in codec not used by
+  `encode_to_vec`/derive, and to measure its own speedup at run time instead
+  of printing a fixed, unverified "2-4x" claim.
+- Added a "Known compatibility caveats" section (README, cross-referenced
+  from MIGRATION.md) documenting the standard-library types that currently
+  diverge from bincode 2.0.1 regardless of config: `SystemTime`,
+  `SocketAddrV6` (`flowinfo`/`scope_id`), `IpAddr`/`SocketAddr`/`Bound<T>`
+  (tag width), `Path`/`PathBuf` (platform-dependent byte format), `Ordering`
+  (`i8` vs. a wider enum tag), and `Duration` (strictness). Softened
+  previously unqualified "100% binary compatible" / "100% Bincode Compatible"
+  claims to reference this list; noted that a full versioned wire-format
+  `SPEC.md` remains a deferred follow-up (the `oxicode_compatibility` test
+  suite is the current source of truth).
+- MIGRATION.md: replaced the fictitious `oxicode_compatibility = "0.2"`
+  runtime dependency instructions (the crate is `publish = false` and
+  test-only) with instructions to run its test suite directly; split the
+  bincode "Before" example into bincode 1.x (`serialize`/`deserialize`) and
+  bincode 2.x (`encode_to_vec`/`decode_from_slice`) cases, since the two
+  don't share an API; corrected the claim that oxicode's serde-feature-gating
+  is a divergence from bincode (bincode 2.x gates serde the same way).
+- BENCHMARKS.md: corrected `comparison_bench.rs`'s description — it compares
+  oxicode against bincode 2.0.1 only; the module doc's mention of rkyv,
+  postcard, and borsh does not correspond to any dev-dependency or bench code
+  in the file.
+- Synced the README feature-flag block and examples list with `Cargo.toml`
+  and `examples/` exactly (added `binary_format.rs`, `derive_attrs.rs`, and
+  the new `async_streaming.rs`); added an MSRV badge/line (1.81.0, unchanged
+  from 0.2.4).
+
 ## [0.2.4] - 2026-06-04
 
 ### Added
@@ -144,7 +391,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Core Features - 100% Bincode Compatibility
+#### Core Features - Bincode Compatibility *(originally announced as "100%"; qualified in 0.2.5 — see README §"Known compatibility caveats")*
 - **Binary Serialization**: Compact, efficient binary encoding/decoding
 - **Derive Macros**: Automatic `Encode` and `Decode` trait derivation via `#[derive(Encode, Decode)]`
 - **Configuration System**: Flexible encoding configurations (endianness, int encoding, size limits)
@@ -165,10 +412,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - NonZero types (NonZeroU8, NonZeroI32, etc.)
   - Duration, SystemTime (with `std` feature)
   - Ipv4Addr, Ipv6Addr, SocketAddr (with `std` feature)
-- **100% Binary Compatibility**: Full binary format compatibility with bincode 2.0
-  - Data encoded with bincode can be decoded with oxicode
-  - Data encoded with oxicode can be decoded with bincode
+- **Binary Compatibility**: binary format compatibility with bincode 2.0 for the verified type set
+  - Data encoded with bincode can be decoded with oxicode (for covered types)
+  - Data encoded with oxicode can be decoded with bincode (for covered types)
   - 18/18 binary compatibility tests passing
+  - *(originally claimed as "100% binary compatibility"; qualified in 0.2.5 — known divergences for `SystemTime`, `SocketAddrV6`, `IpAddr`/`SocketAddr`/`Bound` tag widths, `Path`/`PathBuf`, `Ordering`, and `Duration` leniency are documented in README §"Known compatibility caveats")*
 
 #### 150% Enhancement Features - Beyond Bincode
 
@@ -292,7 +540,10 @@ use oxicode::{Encode, Decode, config};
 let bytes = oxicode::encode_to_vec(&value, config::standard())?;
 ```
 
-Binary data is 100% compatible - you can mix libraries during migration.
+Binary data is compatible for the verified type set when both sides use matching
+configs — you can mix libraries during migration for those types. *(Originally
+stated as "100% compatible"; qualified in 0.2.5 — see README §"Known
+compatibility caveats" for the known divergences.)*
 
 See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
@@ -329,6 +580,7 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 ---
 
+[0.2.5]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.5
 [0.2.4]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.4
 [0.2.3]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.3
 [0.2.2]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.2

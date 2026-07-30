@@ -3,6 +3,7 @@
 //! Covers: default type handling, field position variations, size comparisons,
 //! multi-skip combinations, Option/Vec defaults, and custom default functions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

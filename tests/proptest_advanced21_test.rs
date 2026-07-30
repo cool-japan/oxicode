@@ -3,6 +3,7 @@
 //! Tests verify encode → decode is a perfect roundtrip for various types,
 //! including custom derived structs, enums, configs, and nested options.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

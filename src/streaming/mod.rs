@@ -7,8 +7,21 @@
 //!
 //! - **Chunked Encoding**: Encode large collections in chunks
 //! - **Incremental Decoding**: Decode items one at a time
-//! - **Backpressure**: Control memory usage during streaming
+//! - **Backpressure**: [`StreamingConfig::max_buffer_size`] bounds both the
+//!   encoder's pending buffer (soft flush threshold) and the largest chunk a
+//!   decoder will accept before allocating (see [`StreamingConfig`]).
 //! - **Progress Callbacks**: Monitor long operations
+//!
+//! ## Chunk framing
+//!
+//! A stream is a sequence of length-prefixed chunks (see [`ChunkHeader`])
+//! terminated by a mandatory End chunk. This framing is oxicode-specific and
+//! independent of the bincode-compatible item encoding. A data chunk records
+//! its item count separately from its payload length, so chunks made up
+//! entirely of zero-sized items (whose payload is empty) still round-trip:
+//! the item count — not the payload length — drives decoding. Metadata and
+//! zero-item chunks are skipped by decoders, and a stream that ends without the
+//! End chunk is reported as a truncation error rather than a clean finish.
 //!
 //! ## Example
 //!
@@ -75,6 +88,15 @@ pub struct StreamingConfig {
     pub chunk_size: usize,
 
     /// Maximum memory to use for buffering.
+    ///
+    /// On the **encoder** side this is a soft flush threshold: the pending
+    /// buffer is flushed before it would exceed `min(chunk_size, max_buffer_size)`.
+    ///
+    /// On the **decoder** side (when a decoder is constructed with this
+    /// configuration via `new_with_configs` / `with_config`) it bounds the
+    /// largest chunk payload that will be accepted and allocated, capped by the
+    /// hard [`MAX_CHUNK_SIZE`] ceiling — providing backpressure against
+    /// allocation-DoS from a forged chunk-length header.
     pub max_buffer_size: usize,
 
     /// Whether to flush after each item (slower but safer).

@@ -3,6 +3,7 @@
 //! Covers IEEE 754 special values, exact byte-layout verification,
 //! collections, tuples, big-endian configuration, and derive macros.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

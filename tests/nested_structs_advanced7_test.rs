@@ -1,5 +1,6 @@
 //! Advanced nested structs test — additive manufacturing and 3D printing theme, 22 tests.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

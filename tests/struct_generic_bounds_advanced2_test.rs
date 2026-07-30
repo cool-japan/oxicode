@@ -2,6 +2,7 @@
 //! Covers Container<T>, KeyValue<K,V>, TaggedValue<T>, and Pair<A,B> with
 //! various concrete type instantiations, config variations, and nested cases.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

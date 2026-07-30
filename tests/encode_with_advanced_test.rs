@@ -1,6 +1,7 @@
 //! Advanced tests for `#[oxicode(encode_with = "fn")]` and `#[oxicode(decode_with = "fn")]`
 //! field-level attributes. 22 tests covering a wide range of custom serialization patterns.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

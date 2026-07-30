@@ -1,5 +1,6 @@
 //! Extended tests for zero-copy BorrowDecode — 20 comprehensive test cases.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -6,7 +6,7 @@
 //! ground control station commands, swarm coordination protocols, photogrammetry
 //! survey grids, delivery confirmation receipts, maintenance logs, and regulatory
 //! compliance (Part 107/BVLOS).
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

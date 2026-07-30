@@ -4,6 +4,7 @@
 //! wire format prefix relationships, ActionV1 enum encoding, collection round-
 //! trips, size comparisons, and config variants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

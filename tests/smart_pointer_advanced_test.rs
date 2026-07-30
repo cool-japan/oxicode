@@ -4,6 +4,7 @@
 //! Arc<T>, Arc<[T]>, Arc<str>, Cow<str>, Cow<[u8]>, nested pointers,
 //! and wire-format compatibility assertions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

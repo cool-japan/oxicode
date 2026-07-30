@@ -1,5 +1,6 @@
 //! Advanced tests for i128 and u128 encoding in OxiCode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

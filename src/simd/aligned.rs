@@ -3,9 +3,13 @@
 //! This module provides memory-aligned buffers that are optimal for SIMD operations.
 //! Proper alignment can significantly improve SIMD performance by enabling aligned loads/stores.
 
+#[cfg(feature = "alloc")]
 use core::alloc::Layout;
-use core::mem::{align_of, size_of, MaybeUninit};
+use core::mem::MaybeUninit;
+#[cfg(feature = "alloc")]
+use core::mem::{align_of, size_of};
 use core::ops::{Deref, DerefMut};
+#[cfg(feature = "alloc")]
 use core::ptr::NonNull;
 use core::slice;
 
@@ -84,8 +88,19 @@ impl<T> AlignedVec<T> {
     fn layout_for_capacity(capacity: usize) -> Layout {
         let size = capacity.saturating_mul(size_of::<T>());
         let align = SIMD_ALIGNMENT.max(align_of::<T>());
-        // SAFETY: align is a power of two (SIMD_ALIGNMENT is 64, align_of::<T>() is always power of 2)
-        Layout::from_size_align(size, align).expect("invalid layout")
+        // `align` is always a valid power of two (SIMD_ALIGNMENT is 64 and
+        // align_of::<T>() is a power of two), so `from_size_align` only fails
+        // when the alignment-rounded `size` exceeds isize::MAX. That is an
+        // unsatisfiable allocation request, so route it through the standard
+        // allocation-failure handler (which aborts) rather than panicking with
+        // `expect`. This keeps the type free of production `unwrap`/`expect`.
+        match Layout::from_size_align(size, align) {
+            Ok(layout) => layout,
+            Err(_) => {
+                let reported = Layout::from_size_align(0, align).unwrap_or(Layout::new::<u8>());
+                alloc::alloc::handle_alloc_error(reported)
+            }
+        }
     }
 
     /// Returns the number of elements in the vector.

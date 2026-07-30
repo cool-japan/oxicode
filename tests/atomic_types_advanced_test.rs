@@ -1,5 +1,6 @@
 //! Advanced roundtrip and property tests for atomic types in OxiCode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

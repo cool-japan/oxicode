@@ -3,6 +3,7 @@
 //! 22 top-level #[test] functions, each containing exactly one proptest! block.
 //! Covers Invoice roundtrip, collections, numeric types, tuples, and more.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

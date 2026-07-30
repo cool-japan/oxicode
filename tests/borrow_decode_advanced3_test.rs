@@ -4,6 +4,7 @@
 //! nested structs, wire-format equivalence, config variations, edge cases,
 //! Option<&str/&[u8]>, tuples, and consumed-bytes verification.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

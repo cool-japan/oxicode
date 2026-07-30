@@ -11,6 +11,7 @@
 //!   3. Where applicable, the encoded byte sequence is the same as an equivalent
 //!      struct/enum without the attribute (wire-format identity).
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

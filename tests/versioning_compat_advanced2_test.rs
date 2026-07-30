@@ -4,6 +4,7 @@
 //! decode_versioned_value, decode_versioned_with_check, is_versioned, extract_version,
 //! and check_compatibility.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

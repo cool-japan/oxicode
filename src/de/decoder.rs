@@ -3,6 +3,14 @@
 use super::{BorrowDecoder, BorrowReader, Decoder, Reader};
 use crate::{config::Config, error::Error, utils::Sealed};
 
+/// Default maximum decode recursion depth.
+///
+/// Conservative bound (matching common serde/serialization practice) that
+/// prevents a crafted deeply-nested payload from exhausting the stack. Callers
+/// that need a different bound can override it with
+/// [`DecoderImpl::set_recursion_limit`].
+pub const DEFAULT_RECURSION_LIMIT: usize = 128;
+
 /// A Decoder that reads bytes from a given reader `R`.
 ///
 /// This struct should rarely be used directly.
@@ -41,6 +49,10 @@ pub struct DecoderImpl<R: Reader, C: Config, Ctx = ()> {
     context: Ctx,
     /// Tracks how many bytes have been claimed so far (for limit enforcement).
     bytes_claimed: usize,
+    /// Current decode recursion depth (for stack-overflow DoS mitigation).
+    recursion_depth: usize,
+    /// Maximum decode recursion depth allowed before erroring.
+    max_recursion_depth: usize,
 }
 
 impl<R: Reader, C: Config> DecoderImpl<R, C, ()> {
@@ -51,6 +63,8 @@ impl<R: Reader, C: Config> DecoderImpl<R, C, ()> {
             config,
             context: (),
             bytes_claimed: 0,
+            recursion_depth: 0,
+            max_recursion_depth: DEFAULT_RECURSION_LIMIT,
         }
     }
 }
@@ -63,7 +77,24 @@ impl<R: Reader, C: Config, Ctx> DecoderImpl<R, C, Ctx> {
             config,
             context,
             bytes_claimed: 0,
+            recursion_depth: 0,
+            max_recursion_depth: DEFAULT_RECURSION_LIMIT,
         }
+    }
+
+    /// Override the maximum decode recursion depth for this decoder.
+    ///
+    /// The default is `DEFAULT_RECURSION_LIMIT`. Lower it to harden against
+    /// deeply-nested untrusted input, or raise it for legitimately deep data.
+    #[inline]
+    pub fn set_recursion_limit(&mut self, limit: usize) {
+        self.max_recursion_depth = limit;
+    }
+
+    /// Return the currently configured maximum decode recursion depth.
+    #[inline]
+    pub fn recursion_limit(&self) -> usize {
+        self.max_recursion_depth
     }
 
     /// Return the underlying reader
@@ -129,6 +160,23 @@ impl<R: Reader, C: Config, Ctx> Decoder for DecoderImpl<R, C, Ctx> {
     #[inline]
     fn unclaim_bytes_read(&mut self, n: usize) {
         self.bytes_claimed = self.bytes_claimed.saturating_sub(n);
+    }
+
+    #[inline]
+    fn enter_recursion(&mut self) -> Result<(), Error> {
+        self.recursion_depth = self.recursion_depth.saturating_add(1);
+        if self.recursion_depth > self.max_recursion_depth {
+            return Err(Error::LimitExceeded {
+                limit: self.max_recursion_depth as u64,
+                found: self.recursion_depth as u64,
+            });
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn leave_recursion(&mut self) {
+        self.recursion_depth = self.recursion_depth.saturating_sub(1);
     }
 }
 

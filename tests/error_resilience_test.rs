@@ -1,6 +1,7 @@
 //! Error handling and resilience tests — 22 new scenarios not covered by
 //! error_test.rs or decode_resilience_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

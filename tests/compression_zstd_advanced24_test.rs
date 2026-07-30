@@ -8,7 +8,7 @@
 //! inventory management, defect classification, energy/water usage tracking,
 //! garment cut plan optimization, and embroidery digitization parameters.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

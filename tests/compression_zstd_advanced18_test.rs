@@ -8,7 +8,7 @@
 //! GPS position/velocity, link budget calculations, space debris tracking,
 //! payload data downlinks, battery depth of discharge, and eclipse predictions.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

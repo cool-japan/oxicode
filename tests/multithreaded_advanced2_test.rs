@@ -1,5 +1,6 @@
 //! Multi-threaded encoding/decoding tests using std threads and Arc.
 
+#![cfg(all(feature = "derive", feature = "simd", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

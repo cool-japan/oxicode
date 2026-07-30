@@ -3,6 +3,7 @@
 //! Covers discriminant width variants (u8, u16, u32), data-carrying variants, config interactions,
 //! collection wrappers, and byte-level encoding properties.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

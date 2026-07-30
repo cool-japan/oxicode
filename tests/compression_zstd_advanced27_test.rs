@@ -8,7 +8,7 @@
 //! catastrophe model outputs, policyholder demographics, fraud detection scores,
 //! IBNR estimates, Solvency II capital requirements, and more.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

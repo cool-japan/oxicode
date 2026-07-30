@@ -4,6 +4,7 @@
 //! These tests are distinct from error_test.rs, error_handling_advanced_test.rs,
 //! error_resilience_test.rs, and decode_resilience_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

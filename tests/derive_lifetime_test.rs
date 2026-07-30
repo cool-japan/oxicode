@@ -10,6 +10,7 @@
 //! - `Vec<&str>` zero-copy BorrowDecode roundtrip
 //! - Nested structs with BorrowDecode
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

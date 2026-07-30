@@ -1,6 +1,7 @@
 //! Tests for `#[oxicode(encode_with = "fn")]` and `#[oxicode(decode_with = "fn")]`
 //! field-level attributes for asymmetric custom encode/decode functions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -5,6 +5,7 @@
 //! focused unit tests in the other test files by exercising the library as a
 //! whole.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

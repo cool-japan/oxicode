@@ -4,6 +4,7 @@
 //! weather conditions, precipitation types, wind directions, measurements, stations,
 //! and full weather reports with optional 24-hour forecasts.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced enum payload tests for OxiCode — 22 scenarios.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced tests for Range, RangeInclusive, and Bound types in OxiCode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

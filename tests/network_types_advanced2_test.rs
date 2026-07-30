@@ -2,6 +2,7 @@
 //! Covers Ipv4Addr, Ipv6Addr, IpAddr, SocketAddr variants, Vec collections,
 //! Option wrapping, consumed-bytes invariants, and fixed-int config roundtrips.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

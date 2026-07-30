@@ -5,6 +5,7 @@
 //! the basics; this file goes deeper: more types, edge cases, cross-decode,
 //! and byte-level assertions.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced float encoding/decoding tests — bit-exact roundtrips for IEEE 754 special values,
 //! encoding size guarantees, endianness verification, and struct encoding with float fields.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

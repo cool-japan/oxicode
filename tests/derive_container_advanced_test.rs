@@ -12,6 +12,7 @@
 //!  - Field-level rename overrides rename_all (semantic precedence, both no-ops on wire)
 //!  - Tuple structs work with container-level attrs
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(dead_code)]
 #![allow(
     clippy::approx_constant,

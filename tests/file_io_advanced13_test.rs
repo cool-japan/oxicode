@@ -1,6 +1,7 @@
 //! Advanced file I/O tests — configuration management theme
 //! Covers encode/decode to/from files using Environment, ConfigEntry, AppConfig types.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

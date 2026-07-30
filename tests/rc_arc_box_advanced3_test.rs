@@ -4,6 +4,7 @@
 //! All smart pointers are transparent wrappers whose wire format is identical to
 //! encoding the inner value directly.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -3,6 +3,7 @@
 //! Box<T>, Rc<T>, and Arc<T> encode as transparent wrappers — their wire format
 //! is identical to encoding the inner value directly.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

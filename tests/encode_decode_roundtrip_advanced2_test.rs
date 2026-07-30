@@ -4,6 +4,7 @@
 //! OxiCode encoding format: identity after roundtrip, determinism, consumed-bytes
 //! invariants, concrete byte layouts, and structural encoding rules.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced nested struct encoding tests for OxiCode (set 15)
 //! Theme: Theme park operations and ride management systems
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

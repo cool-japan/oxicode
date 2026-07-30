@@ -4,6 +4,7 @@
 //! derived structs, large numbers, truncation errors, and complex generics.
 //! They complement the basic coverage in option_result_test.rs.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

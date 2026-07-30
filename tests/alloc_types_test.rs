@@ -2,6 +2,7 @@
 //! These tests verify correct roundtrip encoding/decoding for heap-allocated
 //! and alloc-based collection types.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

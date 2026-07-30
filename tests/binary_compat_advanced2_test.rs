@@ -3,6 +3,7 @@
 //! These 22 tests verify that hardcoded byte sequences always decode to known values,
 //! ensuring the wire format never accidentally changes between versions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

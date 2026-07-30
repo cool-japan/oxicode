@@ -4,6 +4,7 @@
 //! proptest! macro block, verifying unique properties and invariants
 //! for a variety of Rust standard-library types.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

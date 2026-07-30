@@ -1,0 +1,17 @@
+error: Encode cannot be derived for unions
+ --> tests/ui/union_not_supported.rs:9:1
+  |
+9 | union Overlapped {
+  | ^^^^^
+
+error: Decode cannot be derived for unions
+ --> tests/ui/union_not_supported.rs:9:1
+  |
+9 | union Overlapped {
+  | ^^^^^
+
+error: BorrowDecode cannot be derived for unions
+ --> tests/ui/union_not_supported.rs:9:1
+  |
+9 | union Overlapped {
+  | ^^^^^

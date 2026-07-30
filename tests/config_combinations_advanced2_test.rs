@@ -3,6 +3,7 @@
 //! Covers: standard/legacy configs, fixed-int encoding, big/little endian byte order,
 //! struct roundtrips, Copy config reuse, bool roundtrip, with_limit, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

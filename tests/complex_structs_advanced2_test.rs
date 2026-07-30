@@ -1,5 +1,6 @@
 //! Tests for complex struct layouts with many fields and nested types.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

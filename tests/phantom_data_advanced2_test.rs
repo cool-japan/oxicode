@@ -4,6 +4,7 @@
 //! These tests verify ZST semantics across struct wrappers, tuples, Vecs,
 //! Options, re-encoding, and multi-element collections.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced tests for isize and usize serialization in OxiCode (set 2).
 //! 22 top-level #[test] functions — no #[cfg(test)] wrapper.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

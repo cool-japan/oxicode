@@ -1,6 +1,7 @@
 //! Tests that verify the exact encoding sizes for various types.
 //! These are important for protocol/format documentation.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

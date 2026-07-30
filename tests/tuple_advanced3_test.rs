@@ -1,5 +1,6 @@
 //! Advanced tuple encoding tests for OxiCode (set 3)
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

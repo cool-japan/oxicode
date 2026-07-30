@@ -1,5 +1,6 @@
 //! Regression tests for specific bugs that have been found and fixed.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

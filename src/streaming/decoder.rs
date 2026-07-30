@@ -2,7 +2,9 @@
 
 use super::chunk::ChunkHeader;
 use super::StreamingProgress;
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
+use super::MAX_CHUNK_SIZE;
+#[cfg(feature = "alloc")]
 use crate::config::Config;
 use crate::de::{Decode, DecoderImpl, SliceReader};
 use crate::{config, Error, Result};
@@ -23,6 +25,20 @@ use std::io::Read;
 /// endianness, byte limit).  Use [`StreamingDecoder::new`] to get the default
 /// variable-width integer encoding, or [`StreamingDecoder::new_with_config`]
 /// to select an alternative that matches the encoder's configuration.
+///
+/// # Robustness
+///
+/// * Chunk payloads are bounded before allocation: any header declaring a
+///   payload larger than the acceptance bound (the smaller of [`MAX_CHUNK_SIZE`],
+///   the configured `max_buffer_size`, and any codec byte limit) is rejected
+///   with [`Error::LimitExceeded`] before a single byte is allocated.
+/// * A stream that ends without the mandatory End chunk (truncation) is reported
+///   as [`Error::UnexpectedEnd`], never as a clean end-of-stream.
+/// * Metadata and zero-item chunks are transparently skipped so they cannot
+///   truncate [`read_all`](Self::read_all).
+/// * Once any decode error occurs the decoder is *poisoned*: every subsequent
+///   call returns a deterministic error rather than misinterpreting payload
+///   bytes as a fresh chunk header.
 #[cfg(feature = "std")]
 pub struct StreamingDecoder<R: Read, C: Config = config::Configuration> {
     reader: R,
@@ -30,6 +46,9 @@ pub struct StreamingDecoder<R: Read, C: Config = config::Configuration> {
     current_chunk: Option<ChunkData>,
     progress: StreamingProgress,
     finished: bool,
+    end_seen: bool,
+    poisoned: bool,
+    max_chunk_size: usize,
 }
 
 #[cfg(feature = "std")]
@@ -70,36 +89,68 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
             current_chunk: None,
             progress: StreamingProgress::default(),
             finished: false,
+            end_seen: false,
+            poisoned: false,
+            max_chunk_size: MAX_CHUNK_SIZE,
         }
+    }
+
+    /// Create a streaming decoder selecting both the streaming configuration
+    /// (whose `max_buffer_size` bounds the largest chunk that will be accepted)
+    /// and the codec configuration.
+    pub fn new_with_configs(
+        reader: R,
+        streaming_config: super::StreamingConfig,
+        codec_config: C,
+    ) -> Self {
+        let mut decoder = Self::new_with_config(reader, codec_config);
+        decoder.max_chunk_size = MAX_CHUNK_SIZE.min(streaming_config.max_buffer_size.max(1));
+        decoder
+    }
+
+    /// The maximum chunk payload this decoder will accept before allocating.
+    fn decode_bound(&self) -> usize {
+        let mut bound = self.max_chunk_size;
+        if let Some(limit) = self.codec_config.limit() {
+            bound = bound.min(limit);
+        }
+        bound
     }
 
     /// Read the next item from the stream.
     ///
-    /// Returns `None` when the stream is exhausted.
+    /// Returns `None` only when the stream has been cleanly terminated by an
+    /// End chunk.  Truncation or malformed input yields an error.
     pub fn read_item<T: Decode>(&mut self) -> Result<Option<T>> {
+        if self.poisoned {
+            return Err(Error::InvalidData {
+                message: "streaming decoder in failed state",
+            });
+        }
         if self.finished {
             return Ok(None);
         }
 
-        // Load next chunk if needed
-        let needs_chunk = self.current_chunk.is_none()
-            || self
+        // Load chunks until we reach one that actually contains items, skipping
+        // Metadata / empty (zero-item) chunks so they cannot truncate reads.
+        loop {
+            let has_items = self
                 .current_chunk
                 .as_ref()
-                .map(|c| c.items_remaining == 0)
-                .unwrap_or(true);
-        if needs_chunk && !self.load_next_chunk()? {
-            return Ok(None);
+                .map(|c| c.items_remaining != 0)
+                .unwrap_or(false);
+            if has_items {
+                break;
+            }
+            if !self.load_next_chunk()? {
+                return Ok(None);
+            }
         }
 
         // Decode item from current chunk
         let chunk = self.current_chunk.as_mut().ok_or(Error::InvalidData {
             message: "no chunk available",
         })?;
-
-        if chunk.items_remaining == 0 {
-            return Ok(None);
-        }
 
         // Create reader from remaining chunk data, using the stored codec config.
         let reader = SliceReader::new(&chunk.data[chunk.offset..]);
@@ -128,16 +179,27 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
     }
 
     /// Load the next chunk from the reader.
+    ///
+    /// Returns `Ok(true)` when a chunk was loaded, `Ok(false)` when the stream
+    /// was cleanly terminated by an End chunk, and `Err` on truncation, an
+    /// over-large payload, or an I/O error (which also poisons the decoder).
     fn load_next_chunk(&mut self) -> Result<bool> {
         // Read chunk header
         let mut header_bytes = [0u8; ChunkHeader::SIZE];
         match self.reader.read_exact(&mut header_bytes) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                // EOF before an End chunk: the stream is truncated.  The End
+                // chunk is mandatory, so this is data loss, not a clean finish.
+                self.poisoned = true;
                 self.finished = true;
-                return Ok(false);
+                return Err(Error::UnexpectedEnd {
+                    additional: ChunkHeader::SIZE,
+                });
             }
             Err(e) => {
+                self.poisoned = true;
+                self.finished = true;
                 return Err(Error::Io {
                     kind: e.kind(),
                     message: e.to_string(),
@@ -145,20 +207,49 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
             }
         }
 
-        let header = ChunkHeader::from_bytes(&header_bytes)?;
+        let header = match ChunkHeader::from_bytes(&header_bytes) {
+            Ok(h) => h,
+            Err(e) => {
+                self.poisoned = true;
+                self.finished = true;
+                return Err(e);
+            }
+        };
 
         // Check for end chunk
         if header.is_end() {
             self.finished = true;
+            self.end_seen = true;
             return Ok(false);
         }
 
-        // Read chunk payload
+        // Enforce the chunk-size bound before allocating anything.
+        let bound = self.decode_bound();
+        if header.payload_len as usize > bound {
+            self.poisoned = true;
+            self.finished = true;
+            return Err(Error::LimitExceeded {
+                limit: bound as u64,
+                found: header.payload_len as u64,
+            });
+        }
+
+        // Read chunk payload (payload_len is now bounded by `bound`).
         let mut data = alloc::vec![0u8; header.payload_len as usize];
-        self.reader.read_exact(&mut data).map_err(|e| Error::Io {
-            kind: e.kind(),
-            message: e.to_string(),
-        })?;
+        if let Err(e) = self.reader.read_exact(&mut data) {
+            self.poisoned = true;
+            self.finished = true;
+            let kind = e.kind();
+            if kind == std::io::ErrorKind::UnexpectedEof {
+                return Err(Error::UnexpectedEnd {
+                    additional: header.payload_len as usize,
+                });
+            }
+            return Err(Error::Io {
+                kind,
+                message: e.to_string(),
+            });
+        }
 
         self.current_chunk = Some(ChunkData {
             data,
@@ -181,6 +272,11 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
         self.finished
     }
 
+    /// Whether a valid End chunk terminated the stream.
+    pub fn end_marker_seen(&self) -> bool {
+        self.end_seen
+    }
+
     /// Get a reference to the underlying reader.
     pub fn get_ref(&self) -> &R {
         &self.reader
@@ -188,48 +284,93 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
 }
 
 /// Streaming decoder for in-memory buffers (no std required).
+///
+/// The `C` type parameter selects the codec configuration used to decode items.
 #[cfg(feature = "alloc")]
-pub struct BufferStreamingDecoder<'a> {
+pub struct BufferStreamingDecoder<'a, C: Config = config::Configuration> {
     data: &'a [u8],
+    codec_config: C,
     offset: usize,
     current_chunk_end: usize,
     items_remaining_in_chunk: u32,
     progress: StreamingProgress,
     finished: bool,
+    end_seen: bool,
+    poisoned: bool,
+    max_chunk_size: usize,
 }
 
 #[cfg(feature = "alloc")]
 impl<'a> BufferStreamingDecoder<'a> {
-    /// Create a new buffer streaming decoder.
+    /// Create a new buffer streaming decoder using the standard codec configuration.
     pub fn new(data: &'a [u8]) -> Self {
+        Self::new_with_config(data, config::standard())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, C: Config> BufferStreamingDecoder<'a, C> {
+    /// Create a buffer streaming decoder with a custom codec configuration.
+    pub fn new_with_config(data: &'a [u8], codec_config: C) -> Self {
         Self {
             data,
+            codec_config,
             offset: 0,
             current_chunk_end: 0,
             items_remaining_in_chunk: 0,
             progress: StreamingProgress::default(),
             finished: false,
+            end_seen: false,
+            poisoned: false,
+            max_chunk_size: MAX_CHUNK_SIZE,
         }
+    }
+
+    /// Create a buffer streaming decoder selecting both the streaming
+    /// configuration (whose `max_buffer_size` bounds the largest chunk that will
+    /// be accepted) and the codec configuration.
+    pub fn new_with_configs(
+        data: &'a [u8],
+        streaming_config: super::StreamingConfig,
+        codec_config: C,
+    ) -> Self {
+        let mut decoder = Self::new_with_config(data, codec_config);
+        decoder.max_chunk_size = MAX_CHUNK_SIZE.min(streaming_config.max_buffer_size.max(1));
+        decoder
+    }
+
+    fn decode_bound(&self) -> usize {
+        let mut bound = self.max_chunk_size;
+        if let Some(limit) = self.codec_config.limit() {
+            bound = bound.min(limit);
+        }
+        bound
     }
 
     /// Read the next item from the buffer.
     pub fn read_item<T: Decode>(&mut self) -> Result<Option<T>> {
+        if self.poisoned {
+            return Err(Error::InvalidData {
+                message: "streaming decoder in failed state",
+            });
+        }
         if self.finished {
             return Ok(None);
         }
 
-        // Load next chunk if needed
-        if self.items_remaining_in_chunk == 0 && !self.load_next_chunk()? {
-            return Ok(None);
-        }
-
-        if self.items_remaining_in_chunk == 0 {
-            return Ok(None);
+        // Skip Metadata / zero-item chunks until a chunk with items is found.
+        loop {
+            if self.items_remaining_in_chunk != 0 {
+                break;
+            }
+            if !self.load_next_chunk()? {
+                return Ok(None);
+            }
         }
 
         // Decode item
         let reader = SliceReader::new(&self.data[self.offset..self.current_chunk_end]);
-        let mut decoder = DecoderImpl::new(reader, config::standard());
+        let mut decoder = DecoderImpl::new(reader, self.codec_config);
         let item = T::decode(&mut decoder)?;
 
         let bytes_consumed = (self.current_chunk_end - self.offset) - decoder.reader().slice.len();
@@ -254,25 +395,53 @@ impl<'a> BufferStreamingDecoder<'a> {
     /// Load the next chunk.
     fn load_next_chunk(&mut self) -> Result<bool> {
         if self.offset >= self.data.len() {
+            // Buffer exhausted without an End chunk: truncated stream.
+            self.poisoned = true;
             self.finished = true;
-            return Ok(false);
+            return Err(Error::UnexpectedEnd {
+                additional: ChunkHeader::SIZE,
+            });
         }
 
         let remaining = &self.data[self.offset..];
         if remaining.len() < ChunkHeader::SIZE {
+            // A partial trailing header is a truncation, not a clean end.
+            self.poisoned = true;
             self.finished = true;
-            return Ok(false);
+            return Err(Error::UnexpectedEnd {
+                additional: ChunkHeader::SIZE - remaining.len(),
+            });
         }
 
-        let header = ChunkHeader::from_bytes(remaining)?;
+        let header = match ChunkHeader::from_bytes(remaining) {
+            Ok(h) => h,
+            Err(e) => {
+                self.poisoned = true;
+                self.finished = true;
+                return Err(e);
+            }
+        };
         self.offset += ChunkHeader::SIZE;
 
         if header.is_end() {
             self.finished = true;
+            self.end_seen = true;
             return Ok(false);
         }
 
+        let bound = self.decode_bound();
+        if header.payload_len as usize > bound {
+            self.poisoned = true;
+            self.finished = true;
+            return Err(Error::LimitExceeded {
+                limit: bound as u64,
+                found: header.payload_len as u64,
+            });
+        }
+
         if self.data.len() < self.offset + header.payload_len as usize {
+            self.poisoned = true;
+            self.finished = true;
             return Err(Error::UnexpectedEnd {
                 additional: (self.offset + header.payload_len as usize) - self.data.len(),
             });
@@ -281,6 +450,13 @@ impl<'a> BufferStreamingDecoder<'a> {
         self.current_chunk_end = self.offset + header.payload_len as usize;
         self.items_remaining_in_chunk = header.item_count;
         self.progress.chunks_processed += 1;
+
+        // A zero-item chunk (e.g. Metadata) carries no items to decode, so no
+        // read_item call will advance `offset` past its payload.  Skip the
+        // payload here so the next chunk header is read from the right position.
+        if header.item_count == 0 {
+            self.offset = self.current_chunk_end;
+        }
 
         Ok(true)
     }
@@ -293,6 +469,11 @@ impl<'a> BufferStreamingDecoder<'a> {
     /// Check if finished.
     pub fn is_finished(&self) -> bool {
         self.finished
+    }
+
+    /// Whether a valid End chunk terminated the stream.
+    pub fn end_marker_seen(&self) -> bool {
+        self.end_seen
     }
 }
 

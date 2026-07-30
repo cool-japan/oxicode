@@ -8,7 +8,7 @@
 //! forecasting, inventory reorder points, supplier scorecards, and carbon
 //! footprint per shipment.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

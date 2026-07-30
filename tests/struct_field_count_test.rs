@@ -3,6 +3,7 @@
 //! Tests encoding correctness, roundtrip fidelity, and size verification
 //! across structs ranging from 0 to 20+ fields.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

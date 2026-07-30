@@ -2,6 +2,7 @@
 //! Focuses on BTreeMap, BTreeSet, VecDeque, LinkedList, HashMap, HashSet,
 //! nested structures, config variants, and Option wrappers.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

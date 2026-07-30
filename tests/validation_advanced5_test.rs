@@ -1,6 +1,7 @@
 //! Advanced validation tests — set 5.
 //! 22 top-level #[test] functions, no module wrapper, no #[cfg(test)].
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "validation"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

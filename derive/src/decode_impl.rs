@@ -4,9 +4,13 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::spanned::Spanned;
 use syn::{Data, Fields, LifetimeParam};
 
-use crate::attrs::{parse_field_attrs, parse_variant_attrs, predicates_to_where_clause, TagType};
+use crate::attrs::{
+    discriminant_literal, parse_field_attrs, parse_variant_attrs, predicates_to_where_clause,
+    vec_element_type, TagType,
+};
 
 // ---------------------------------------------------------------------------
 // Shared seq_len decode helper
@@ -15,22 +19,99 @@ use crate::attrs::{parse_field_attrs, parse_variant_attrs, predicates_to_where_c
 /// Generate a seq_len decode block for a Vec/sequence field.
 ///
 /// `len_ty_str` is one of "u8", "u16", "u32", "u64".
-/// Uses type inference so the compiler resolves the element type from the field type.
-pub(crate) fn make_seq_len_decode_expr(len_ty_str: &str, crate_path: &syn::Path) -> TokenStream2 {
+/// `elem_ty` is the sequence element type (extracted from a `Vec<T>` field) when known, so the
+/// decoder can claim the container against the configured memory limit before allocating.
+///
+/// The decoded length is converted with `usize::try_from` (never a lossy `as usize`) so that a
+/// stream carrying a length above `usize::MAX` on a narrow target is rejected rather than
+/// silently truncated. Before touching the allocator the block claims the read against the
+/// decoder's limit — either `claim_container_read::<T>` when the element type is known or the
+/// byte-based `claim_bytes_read` otherwise — and it bounds the initial reservation so an
+/// attacker-supplied length cannot drive an unbounded pre-allocation.
+pub(crate) fn make_seq_len_decode_expr(
+    len_ty_str: &str,
+    crate_path: &syn::Path,
+    elem_ty: Option<&syn::Type>,
+) -> TokenStream2 {
     let len_ty_tokens: TokenStream2 = match len_ty_str {
         "u8" => quote! { u8 },
         "u16" => quote! { u16 },
         "u32" => quote! { u32 },
         _ => quote! { u64 },
     };
+    let claim = match elem_ty {
+        Some(ty) => quote! { decoder.claim_container_read::<#ty>(__seq_len)?; },
+        None => quote! { decoder.claim_bytes_read(__seq_len)?; },
+    };
     quote! {
         {
-            let __seq_len = <#len_ty_tokens as #crate_path::Decode>::decode(decoder)? as usize;
-            let mut __vec = Vec::with_capacity(__seq_len);
+            let __seq_len = ::core::convert::TryInto::<usize>::try_into(
+                <#len_ty_tokens as #crate_path::Decode>::decode(decoder)?
+            ).map_err(|_| #crate_path::Error::InvalidData {
+                message: "seq_len exceeds usize on this platform"
+            })?;
+            #claim
+            let mut __vec = Vec::with_capacity(::core::cmp::min(__seq_len, 4096));
             for _ in 0..__seq_len {
                 __vec.push(<_ as #crate_path::Decode>::decode(decoder)?);
             }
             __vec
+        }
+    }
+}
+
+/// Generate an owned `#[oxicode(bytes)]` decode block.
+///
+/// Reads a length-prefixed byte run and materializes it into the field's declared type via
+/// `TryFrom<Vec<u8>>` rather than hard-coding `Vec<u8>`, so `#[oxicode(bytes)]` also works on
+/// `Box<[u8]>`, `Arc<[u8]>`, `[u8; N]`, `bytes::Bytes`, and any other byte container that
+/// implements the conversion. The length is converted with a checked `try_into` and the read is
+/// claimed against the decode memory limit before any allocation.
+pub(crate) fn make_bytes_decode_expr(field_ty: &syn::Type, crate_path: &syn::Path) -> TokenStream2 {
+    quote! {
+        {
+            let __len = ::core::convert::TryInto::<usize>::try_into(
+                <u64 as #crate_path::de::Decode>::decode(decoder)?
+            ).map_err(|_| #crate_path::Error::InvalidData {
+                message: "byte length exceeds usize on this platform"
+            })?;
+            decoder.claim_bytes_read(__len)?;
+            let mut __buf: Vec<u8> = Vec::with_capacity(__len);
+            __buf.resize(__len, 0u8);
+            <_ as #crate_path::de::read::Reader>::read(decoder.reader(), &mut __buf)?;
+            <#field_ty as ::core::convert::TryFrom<Vec<u8>>>::try_from(__buf)
+                .map_err(|_| #crate_path::Error::InvalidData {
+                    message: "byte field does not fit its declared type"
+                })?
+        }
+    }
+}
+
+/// Generate a borrowing `#[oxicode(bytes)]` decode block for the `BorrowDecode` derive.
+///
+/// Borrows the byte run directly from the input via `take_bytes` and converts it into the field
+/// type with `TryFrom<&'de [u8]>`, giving true zero-copy for `&'de [u8]` fields while still
+/// supporting owned containers (`Vec<u8>`, `Box<[u8]>`, `[u8; N]`, ...). Previously the derive
+/// had no `bytes` branch, so the attribute was silently dropped under `BorrowDecode`.
+pub(crate) fn make_bytes_borrow_decode_expr(
+    field_ty: &syn::Type,
+    de_lifetime: &syn::Lifetime,
+    crate_path: &syn::Path,
+) -> TokenStream2 {
+    quote! {
+        {
+            let __len = ::core::convert::TryInto::<usize>::try_into(
+                <u64 as #crate_path::de::Decode>::decode(decoder)?
+            ).map_err(|_| #crate_path::Error::InvalidData {
+                message: "byte length exceeds usize on this platform"
+            })?;
+            decoder.claim_bytes_read(__len)?;
+            let __bytes: & #de_lifetime [u8] =
+                #crate_path::de::BorrowReader::take_bytes(decoder.borrow_reader(), __len)?;
+            <#field_ty as ::core::convert::TryFrom<& #de_lifetime [u8]>>::try_from(__bytes)
+                .map_err(|_| #crate_path::Error::InvalidData {
+                    message: "byte field does not fit its declared type"
+                })?
         }
     }
 }
@@ -49,12 +130,12 @@ pub(crate) fn derive_decode_body(
     if transparent {
         return match data {
             Data::Struct(data_struct) => derive_decode_transparent(&data_struct.fields, crate_path),
-            Data::Enum(_) => Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
+            Data::Enum(data_enum) => Err(syn::Error::new(
+                data_enum.enum_token.span(),
                 "#[oxicode(transparent)] is not supported on enums",
             )),
-            Data::Union(_) => Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
+            Data::Union(data_union) => Err(syn::Error::new(
+                data_union.union_token.span(),
                 "#[oxicode(transparent)] is not supported on unions",
             )),
         };
@@ -71,24 +152,26 @@ pub(crate) fn derive_decode_body(
                 .enumerate()
                 .filter_map(|(idx, variant)| match parse_variant_attrs(&variant.attrs) {
                     Ok(attrs) if attrs.skip => None,
-                    Ok(_) => Some(derive_decode_variant(idx, variant, crate_path)),
+                    Ok(_) => Some(derive_decode_variant(idx, variant, crate_path, tag_type)),
                     Err(e) => Some(Err(e)),
                 })
                 .collect::<Result<_, _>>()?;
 
-            // Decode the discriminant tag as the appropriate integer width, then widen to u32.
+            // Decode the discriminant tag at its native width. The match arms use literals of the
+            // same width (see `discriminant_literal`), so no lossy `as u32` narrowing is needed:
+            // a `tag_type = "u64"` discriminant above `u32::MAX` is preserved and matched exactly.
             let decode_tag = match tag_type {
                 TagType::U8 => quote! {
-                    let __variant_tag = <u8 as #crate_path::Decode>::decode(decoder)? as u32;
+                    let __variant_tag = <u8 as #crate_path::Decode>::decode(decoder)?;
                 },
                 TagType::U16 => quote! {
-                    let __variant_tag = <u16 as #crate_path::Decode>::decode(decoder)? as u32;
+                    let __variant_tag = <u16 as #crate_path::Decode>::decode(decoder)?;
                 },
                 TagType::U32 => quote! {
                     let __variant_tag = <u32 as #crate_path::Decode>::decode(decoder)?;
                 },
                 TagType::U64 => quote! {
-                    let __variant_tag = <u64 as #crate_path::Decode>::decode(decoder)? as u32;
+                    let __variant_tag = <u64 as #crate_path::Decode>::decode(decoder)?;
                 },
             };
 
@@ -102,8 +185,8 @@ pub(crate) fn derive_decode_body(
                 }
             })
         }
-        Data::Union(_) => Err(syn::Error::new(
-            proc_macro2::Span::call_site(),
+        Data::Union(data_union) => Err(syn::Error::new(
+            data_union.union_token.span(),
             "Decode cannot be derived for unions",
         )),
     }
@@ -178,18 +261,11 @@ fn derive_decode_struct(
                     let field_name = &f.ident;
                     let field_ty = &f.ty;
                     if attrs.bytes {
-                        Ok(quote! {
-                            #field_name: {
-                                let __len = <u64 as #crate_path::de::Decode>::decode(decoder)? as usize;
-                                decoder.claim_bytes_read(__len)?;
-                                let mut __buf: Vec<u8> = Vec::with_capacity(__len);
-                                __buf.resize(__len, 0u8);
-                                <_ as #crate_path::de::read::Reader>::read(decoder.reader(), &mut __buf)?;
-                                __buf
-                            }
-                        })
+                        let decode_expr = make_bytes_decode_expr(field_ty, crate_path);
+                        Ok(quote! { #field_name: #decode_expr })
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        let decode_expr = make_seq_len_decode_expr(len_ty_str, crate_path);
+                        let decode_expr =
+                            make_seq_len_decode_expr(len_ty_str, crate_path, vec_element_type(field_ty));
                         Ok(quote! { #field_name: #decode_expr })
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
@@ -226,18 +302,13 @@ fn derive_decode_struct(
                     let attrs = parse_field_attrs(f)?;
                     let field_ty = &f.ty;
                     if attrs.bytes {
-                        Ok(quote! {
-                            {
-                                let __len = <u64 as #crate_path::de::Decode>::decode(decoder)? as usize;
-                                decoder.claim_bytes_read(__len)?;
-                                let mut __buf: Vec<u8> = Vec::with_capacity(__len);
-                                __buf.resize(__len, 0u8);
-                                <_ as #crate_path::de::read::Reader>::read(decoder.reader(), &mut __buf)?;
-                                __buf
-                            }
-                        })
+                        Ok(make_bytes_decode_expr(field_ty, crate_path))
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_decode_expr(len_ty_str, crate_path))
+                        Ok(make_seq_len_decode_expr(
+                            len_ty_str,
+                            crate_path,
+                            vec_element_type(field_ty),
+                        ))
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
                             Ok(quote! { #expr })
@@ -272,11 +343,12 @@ fn derive_decode_variant(
     idx: usize,
     variant: &syn::Variant,
     crate_path: &syn::Path,
+    tag_type: TagType,
 ) -> Result<TokenStream2, syn::Error> {
     let variant_name = &variant.ident;
     let variant_attrs = parse_variant_attrs(&variant.attrs)?;
-    let discriminant = variant_attrs.tag.unwrap_or(idx as u32);
-    let discriminant_lit = proc_macro2::Literal::u32_suffixed(discriminant);
+    let discriminant = variant_attrs.tag.unwrap_or(idx as u64);
+    let discriminant_lit = discriminant_literal(discriminant, tag_type, variant.ident.span())?;
 
     match &variant.fields {
         Fields::Named(fields) => {
@@ -288,18 +360,11 @@ fn derive_decode_variant(
                     let field_name = &f.ident;
                     let field_ty = &f.ty;
                     if attrs.bytes {
-                        Ok(quote! {
-                            #field_name: {
-                                let __len = <u64 as #crate_path::de::Decode>::decode(decoder)? as usize;
-                                decoder.claim_bytes_read(__len)?;
-                                let mut __buf: Vec<u8> = Vec::with_capacity(__len);
-                                __buf.resize(__len, 0u8);
-                                <_ as #crate_path::de::read::Reader>::read(decoder.reader(), &mut __buf)?;
-                                __buf
-                            }
-                        })
+                        let decode_expr = make_bytes_decode_expr(field_ty, crate_path);
+                        Ok(quote! { #field_name: #decode_expr })
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        let decode_expr = make_seq_len_decode_expr(len_ty_str, crate_path);
+                        let decode_expr =
+                            make_seq_len_decode_expr(len_ty_str, crate_path, vec_element_type(field_ty));
                         Ok(quote! { #field_name: #decode_expr })
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
@@ -334,18 +399,13 @@ fn derive_decode_variant(
                     let attrs = parse_field_attrs(f)?;
                     let field_ty = &f.ty;
                     if attrs.bytes {
-                        Ok(quote! {
-                            {
-                                let __len = <u64 as #crate_path::de::Decode>::decode(decoder)? as usize;
-                                decoder.claim_bytes_read(__len)?;
-                                let mut __buf: Vec<u8> = Vec::with_capacity(__len);
-                                __buf.resize(__len, 0u8);
-                                <_ as #crate_path::de::read::Reader>::read(decoder.reader(), &mut __buf)?;
-                                __buf
-                            }
-                        })
+                        Ok(make_bytes_decode_expr(field_ty, crate_path))
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_decode_expr(len_ty_str, crate_path))
+                        Ok(make_seq_len_decode_expr(
+                            len_ty_str,
+                            crate_path,
+                            vec_element_type(field_ty),
+                        ))
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
                             Ok(quote! { #expr })
@@ -444,12 +504,12 @@ pub(crate) fn derive_borrow_decode_body(
             Data::Struct(data_struct) => {
                 derive_borrow_decode_transparent(&data_struct.fields, de_lifetime, crate_path)
             }
-            Data::Enum(_) => Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
+            Data::Enum(data_enum) => Err(syn::Error::new(
+                data_enum.enum_token.span(),
                 "#[oxicode(transparent)] is not supported on enums",
             )),
-            Data::Union(_) => Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
+            Data::Union(data_union) => Err(syn::Error::new(
+                data_union.union_token.span(),
                 "#[oxicode(transparent)] is not supported on unions",
             )),
         };
@@ -459,28 +519,39 @@ pub(crate) fn derive_borrow_decode_body(
             derive_borrow_decode_struct(&data_struct.fields, de_lifetime, crate_path)
         }
         Data::Enum(data_enum) => {
+            // Mirror the `Decode` derive: skipped variants get no borrow-decode arm, so the
+            // accepted byte set stays identical between `Decode` and `BorrowDecode`.
             let variant_decodings: Vec<TokenStream2> = data_enum
                 .variants
                 .iter()
                 .enumerate()
-                .map(|(idx, variant)| {
-                    derive_borrow_decode_variant(idx, variant, de_lifetime, crate_path)
+                .filter_map(|(idx, variant)| match parse_variant_attrs(&variant.attrs) {
+                    Ok(attrs) if attrs.skip => None,
+                    Ok(_) => Some(derive_borrow_decode_variant(
+                        idx,
+                        variant,
+                        de_lifetime,
+                        crate_path,
+                        tag_type,
+                    )),
+                    Err(e) => Some(Err(e)),
                 })
                 .collect::<Result<_, _>>()?;
 
             // Primitive integers implement Decode (not BorrowDecode), so use Decode here.
+            // Decode the tag at its native width; the arm literals match that width exactly.
             let decode_tag = match tag_type {
                 TagType::U8 => quote! {
-                    let __variant_tag = <u8 as #crate_path::de::Decode>::decode(decoder)? as u32;
+                    let __variant_tag = <u8 as #crate_path::de::Decode>::decode(decoder)?;
                 },
                 TagType::U16 => quote! {
-                    let __variant_tag = <u16 as #crate_path::de::Decode>::decode(decoder)? as u32;
+                    let __variant_tag = <u16 as #crate_path::de::Decode>::decode(decoder)?;
                 },
                 TagType::U32 => quote! {
                     let __variant_tag = <u32 as #crate_path::de::Decode>::decode(decoder)?;
                 },
                 TagType::U64 => quote! {
-                    let __variant_tag = <u64 as #crate_path::de::Decode>::decode(decoder)? as u32;
+                    let __variant_tag = <u64 as #crate_path::de::Decode>::decode(decoder)?;
                 },
             };
 
@@ -494,8 +565,8 @@ pub(crate) fn derive_borrow_decode_body(
                 }
             })
         }
-        Data::Union(_) => Err(syn::Error::new(
-            proc_macro2::Span::call_site(),
+        Data::Union(data_union) => Err(syn::Error::new(
+            data_union.union_token.span(),
             "BorrowDecode cannot be derived for unions",
         )),
     }
@@ -571,8 +642,13 @@ fn derive_borrow_decode_struct(
                     let attrs = parse_field_attrs(f)?;
                     let field_name = &f.ident;
                     let field_ty = &f.ty;
-                    if let Some(ref len_ty_str) = attrs.seq_len {
-                        let decode_expr = make_seq_len_decode_expr(len_ty_str, crate_path);
+                    if attrs.bytes {
+                        let decode_expr =
+                            make_bytes_borrow_decode_expr(field_ty, de_lifetime, crate_path);
+                        Ok(quote! { #field_name: #decode_expr })
+                    } else if let Some(ref len_ty_str) = attrs.seq_len {
+                        let decode_expr =
+                            make_seq_len_decode_expr(len_ty_str, crate_path, vec_element_type(field_ty));
                         Ok(quote! { #field_name: #decode_expr })
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
@@ -612,8 +688,10 @@ fn derive_borrow_decode_struct(
                 .map(|f| {
                     let attrs = parse_field_attrs(f)?;
                     let field_ty = &f.ty;
-                    if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_decode_expr(len_ty_str, crate_path))
+                    if attrs.bytes {
+                        Ok(make_bytes_borrow_decode_expr(field_ty, de_lifetime, crate_path))
+                    } else if let Some(ref len_ty_str) = attrs.seq_len {
+                        Ok(make_seq_len_decode_expr(len_ty_str, crate_path, vec_element_type(field_ty)))
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
                             Ok(quote! { #expr })
@@ -651,11 +729,12 @@ fn derive_borrow_decode_variant(
     variant: &syn::Variant,
     de_lifetime: &syn::Lifetime,
     crate_path: &syn::Path,
+    tag_type: TagType,
 ) -> Result<TokenStream2, syn::Error> {
     let variant_name = &variant.ident;
     let variant_attrs = parse_variant_attrs(&variant.attrs)?;
-    let discriminant = variant_attrs.tag.unwrap_or(idx as u32);
-    let discriminant_lit = proc_macro2::Literal::u32_suffixed(discriminant);
+    let discriminant = variant_attrs.tag.unwrap_or(idx as u64);
+    let discriminant_lit = discriminant_literal(discriminant, tag_type, variant.ident.span())?;
 
     match &variant.fields {
         Fields::Named(fields) => {
@@ -666,8 +745,13 @@ fn derive_borrow_decode_variant(
                     let attrs = parse_field_attrs(f)?;
                     let field_name = &f.ident;
                     let field_ty = &f.ty;
-                    if let Some(ref len_ty_str) = attrs.seq_len {
-                        let decode_expr = make_seq_len_decode_expr(len_ty_str, crate_path);
+                    if attrs.bytes {
+                        let decode_expr =
+                            make_bytes_borrow_decode_expr(field_ty, de_lifetime, crate_path);
+                        Ok(quote! { #field_name: #decode_expr })
+                    } else if let Some(ref len_ty_str) = attrs.seq_len {
+                        let decode_expr =
+                            make_seq_len_decode_expr(len_ty_str, crate_path, vec_element_type(field_ty));
                         Ok(quote! { #field_name: #decode_expr })
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
@@ -705,8 +789,10 @@ fn derive_borrow_decode_variant(
                 .map(|f| {
                     let attrs = parse_field_attrs(f)?;
                     let field_ty = &f.ty;
-                    if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_decode_expr(len_ty_str, crate_path))
+                    if attrs.bytes {
+                        Ok(make_bytes_borrow_decode_expr(field_ty, de_lifetime, crate_path))
+                    } else if let Some(ref len_ty_str) = attrs.seq_len {
+                        Ok(make_seq_len_decode_expr(len_ty_str, crate_path, vec_element_type(field_ty)))
                     } else if attrs.skip {
                         if let Some(ref expr) = attrs.default_expr {
                             Ok(quote! { #expr })

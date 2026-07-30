@@ -7,7 +7,7 @@
 //! yield analysis per die, cleanroom environmental monitoring, EUV scanner metrics,
 //! wafer probe test results, and die sort bin maps.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,31 +4,39 @@ use crate::enc::Encoder;
 use serde::ser;
 
 /// Error type for serde serialization
+///
+/// This wraps the underlying oxicode [`crate::error::Error`] without loss so that
+/// callers can still recover the concrete failure cause (for example
+/// [`crate::error::Error::UnexpectedEnd`] when a fixed-size output buffer is
+/// exhausted) after encoding through the serde bridge. Genuine serde `custom`
+/// messages that have no oxicode counterpart are carried as [`SerError::Custom`].
 #[derive(Debug)]
-pub struct SerError {
-    pub(crate) msg: alloc::string::String,
+pub enum SerError {
+    /// The underlying oxicode error, preserved verbatim.
+    Codec(crate::error::Error),
+    /// A serde-originated message with no underlying oxicode error.
+    Custom(alloc::string::String),
 }
 
 impl SerError {
-    /// Create a SerError from a static string slice
+    /// Create a SerError from a static string slice.
     pub(crate) fn from_static(msg: &'static str) -> Self {
-        SerError {
-            msg: alloc::string::String::from(msg),
-        }
+        SerError::Custom(alloc::string::String::from(msg))
     }
 }
 
 impl ser::Error for SerError {
     fn custom<T: core::fmt::Display>(msg: T) -> Self {
-        SerError {
-            msg: alloc::format!("{}", msg),
-        }
+        SerError::Custom(alloc::format!("{}", msg))
     }
 }
 
 impl core::fmt::Display for SerError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.msg)
+        match self {
+            SerError::Codec(err) => write!(f, "{}", err),
+            SerError::Custom(msg) => write!(f, "{}", msg),
+        }
     }
 }
 
@@ -36,7 +44,10 @@ impl core::error::Error for SerError {}
 
 impl From<SerError> for crate::error::Error {
     fn from(err: SerError) -> Self {
-        crate::error::Error::OwnedCustom { message: err.msg }
+        match err {
+            SerError::Codec(inner) => inner,
+            SerError::Custom(message) => crate::error::Error::OwnedCustom { message },
+        }
     }
 }
 
@@ -65,104 +76,87 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode bool"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode i8"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode i16"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode i32"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode i64"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode i128"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode u8"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode u16"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode u32"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode u64"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode u128"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode f32"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode f64"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode char"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode str"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        v.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode bytes"))
+        v.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        0u8.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode None"))
+        0u8.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_some<T: ?Sized + ser::Serialize>(
@@ -170,8 +164,7 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        1u8.encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode Some variant"))?;
+        1u8.encode(self.encoder).map_err(SerError::Codec)?;
         value.serialize(self)
     }
 
@@ -190,9 +183,7 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
         _variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
         use crate::enc::Encode;
-        variant_index
-            .encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode variant"))
+        variant_index.encode(self.encoder).map_err(SerError::Codec)
     }
 
     fn serialize_newtype_struct<T: ?Sized + ser::Serialize>(
@@ -213,16 +204,14 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
         use crate::enc::Encode;
         variant_index
             .encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode variant"))?;
+            .map_err(SerError::Codec)?;
         value.serialize(self)
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         let len = len.ok_or_else(|| SerError::from_static("Sequence length required"))?;
         use crate::enc::Encode;
-        (len as u64)
-            .encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode length"))?;
+        (len as u64).encode(self.encoder).map_err(SerError::Codec)?;
         Ok(SeqSerializer {
             encoder: self.encoder,
         })
@@ -254,7 +243,7 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
         use crate::enc::Encode;
         variant_index
             .encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode variant"))?;
+            .map_err(SerError::Codec)?;
         Ok(TupleVariantSerializer {
             encoder: self.encoder,
         })
@@ -263,9 +252,7 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         let len = len.ok_or_else(|| SerError::from_static("Map length required"))?;
         use crate::enc::Encode;
-        (len as u64)
-            .encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode length"))?;
+        (len as u64).encode(self.encoder).map_err(SerError::Codec)?;
         Ok(MapSerializer {
             encoder: self.encoder,
         })
@@ -291,7 +278,7 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
         use crate::enc::Encode;
         variant_index
             .encode(self.encoder)
-            .map_err(|_| SerError::from_static("Failed to encode variant"))?;
+            .map_err(SerError::Codec)?;
         Ok(StructVariantSerializer {
             encoder: self.encoder,
         })

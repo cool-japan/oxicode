@@ -3,6 +3,7 @@
 //! Covers 22 scenarios exercising large Vec encoding, fixed-int configs,
 //! big-endian configs, varint boundaries, partial-decode failures, and more.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

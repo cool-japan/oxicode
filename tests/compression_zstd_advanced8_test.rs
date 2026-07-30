@@ -3,7 +3,7 @@
 //! Exercises oxicode encode/decode combined with Zstd compress/decompress
 //! using realistic threat-intelligence data structures.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

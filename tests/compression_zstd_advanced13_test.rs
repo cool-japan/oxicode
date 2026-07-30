@@ -1,4 +1,4 @@
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 //! Advanced Zstd compression tests for the genomics / DNA sequence analysis domain.
 //!
 //! Covers nucleotide sequences, gene variants, SNP data, genome assemblies,
@@ -425,8 +425,8 @@ fn test_zstd_gene_variant_missense_roundtrip() {
         gene_id: "ENSG00000157764".to_string(),
         transcript_id: "ENST00000288602".to_string(),
         variant_type: VariantEffect::Missense {
-            codon_ref: [b'G', b'T', b'G'],
-            codon_alt: [b'G', b'A', b'G'],
+            codon_ref: *b"GTG",
+            codon_alt: *b"GAG",
         },
         population_frequency: 0.0001,
         clinically_significant: true,

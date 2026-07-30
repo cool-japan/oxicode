@@ -4,6 +4,7 @@
 //! binary layout stability, and encode/decode backward compatibility using the
 //! standard encode/decode API together with `#[oxicode(skip)]`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

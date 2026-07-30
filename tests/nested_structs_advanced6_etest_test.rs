@@ -1,5 +1,6 @@
 //! Etest/packaging/ESD-focused tests for nested_structs_advanced6 (split from nested_structs_advanced6_test.rs).
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

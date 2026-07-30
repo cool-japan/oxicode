@@ -1,6 +1,7 @@
 //! Advanced tests for `std::cmp::Ordering` and `std::ops::ControlFlow` serialization in OxiCode.
 //! 22 tests covering roundtrip, config variants, structs, arrays, and byte-consumption checks.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

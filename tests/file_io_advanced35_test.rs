@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for OxiCode — domain: nuclear power plant monitoring and control systems
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -5,6 +5,7 @@
 //! Domain: vehicle counts, signal phases, intersection control, congestion metrics,
 //! incident detection, pedestrian crossings, toll collection, parking management.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

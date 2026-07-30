@@ -12,17 +12,39 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```rust
 //! use oxicode::versioning::{Version, VersionedEncoder, VersionedDecoder};
 //!
 //! // Encode with version header
 //! let data = b"Hello, World!";
 //! let version = Version::new(1, 2, 0);
-//! let encoded = VersionedEncoder::encode_with_version(data, version)?;
+//! let encoded = VersionedEncoder::encode_with_version(data, version).expect("encode failed");
 //!
 //! // Decode with version checking
-//! let (decoded, version) = VersionedDecoder::decode_with_version(&encoded)?;
+//! let (decoded, version) = VersionedDecoder::decode_with_version(&encoded).expect("decode failed");
+//! assert_eq!(decoded, data);
 //! println!("Decoded data from version {}", version);
+//! ```
+//!
+//! `VersionedEncoder` and `VersionedDecoder` are thin, stateful wrappers over
+//! the [`encode_versioned`] / [`decode_versioned`] (and
+//! [`decode_versioned_with_check`]) free functions, for callers who prefer to
+//! configure a version (and, for decoding, compatibility requirements) once
+//! and reuse it across multiple calls:
+//!
+//! ```rust
+//! use oxicode::versioning::{Version, VersionedEncoder, VersionedDecoder};
+//!
+//! let encoder = VersionedEncoder::new(Version::new(1, 2, 0));
+//! let encoded = encoder.encode(b"payload").expect("encode failed");
+//!
+//! let decoder = VersionedDecoder::new()
+//!     .expect_version(Version::new(1, 0, 0))
+//!     .min_compatible(Version::new(1, 0, 0));
+//! let (decoded, version, compat) = decoder.decode(&encoded).expect("decode failed");
+//! assert_eq!(decoded, b"payload");
+//! assert_eq!(version, Version::new(1, 2, 0));
+//! assert!(compat.is_usable());
 //! ```
 
 mod compatibility;
@@ -103,6 +125,120 @@ pub fn is_versioned(data: &[u8]) -> bool {
 pub fn extract_version(data: &[u8]) -> Result<Version> {
     let header = VersionedHeader::from_bytes(data)?;
     Ok(header.version())
+}
+
+/// A stateful, type-based wrapper for encoding data with a version header.
+///
+/// This is a thin convenience wrapper over [`encode_versioned`], useful when
+/// a version is configured once and reused across multiple encode calls.
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Copy)]
+pub struct VersionedEncoder {
+    version: Version,
+}
+
+#[cfg(feature = "alloc")]
+impl VersionedEncoder {
+    /// Create a new encoder that stamps encoded data with `version`.
+    #[inline]
+    pub const fn new(version: Version) -> Self {
+        Self { version }
+    }
+
+    /// The version this encoder stamps onto encoded data.
+    #[inline]
+    pub const fn version(&self) -> Version {
+        self.version
+    }
+
+    /// Encode `data` with this encoder's version header.
+    ///
+    /// Equivalent to `encode_versioned(data, self.version())`.
+    pub fn encode(&self, data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
+        encode_versioned(data, self.version)
+    }
+
+    /// Encode `data` with a version header in one call, without
+    /// constructing a [`VersionedEncoder`] first.
+    ///
+    /// Equivalent to `encode_versioned(data, version)`.
+    pub fn encode_with_version(data: &[u8], version: Version) -> Result<alloc::vec::Vec<u8>> {
+        encode_versioned(data, version)
+    }
+}
+
+/// A stateful, type-based wrapper for decoding versioned data, optionally
+/// enforcing a compatibility requirement.
+///
+/// This is a thin convenience wrapper over [`decode_versioned`] and
+/// [`decode_versioned_with_check`], useful when expected/minimum versions
+/// are configured once and reused across multiple decode calls.
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VersionedDecoder {
+    expected: Option<Version>,
+    min_compatible: Option<Version>,
+}
+
+#[cfg(feature = "alloc")]
+impl VersionedDecoder {
+    /// Create a decoder with no compatibility requirements: any
+    /// well-formed versioned payload decodes successfully regardless of its
+    /// embedded version.
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            expected: None,
+            min_compatible: None,
+        }
+    }
+
+    /// Require decoded data to be compatible with `expected` (checked via
+    /// [`check_compatibility`]). Once set, [`VersionedDecoder::decode`]
+    /// rejects data whose version is [`CompatibilityLevel::Incompatible`]
+    /// with `expected`.
+    #[inline]
+    pub const fn expect_version(mut self, expected: Version) -> Self {
+        self.expected = Some(expected);
+        self
+    }
+
+    /// Additionally require the decoded data's version to be at least
+    /// `min_compatible`. Only consulted once
+    /// [`VersionedDecoder::expect_version`] has also been set.
+    #[inline]
+    pub const fn min_compatible(mut self, min_compatible: Version) -> Self {
+        self.min_compatible = Some(min_compatible);
+        self
+    }
+
+    /// Decode versioned `data`, applying this decoder's compatibility
+    /// requirements (if any).
+    ///
+    /// Returns the payload, its version, and the resulting
+    /// [`CompatibilityLevel`]. When no `expected` version has been
+    /// configured (the default), compatibility is not checked and the level
+    /// is always reported as [`CompatibilityLevel::Compatible`].
+    pub fn decode(
+        &self,
+        data: &[u8],
+    ) -> Result<(alloc::vec::Vec<u8>, Version, CompatibilityLevel)> {
+        match self.expected {
+            Some(expected) => decode_versioned_with_check(data, expected, self.min_compatible),
+            None => {
+                let (payload, version) = decode_versioned(data)?;
+                Ok((payload, version, CompatibilityLevel::Compatible))
+            }
+        }
+    }
+
+    /// Decode versioned `data` in one call, without constructing a
+    /// [`VersionedDecoder`] first and without any compatibility requirement.
+    ///
+    /// Equivalent to `decode_versioned(data)`.
+    pub fn decode_with_version(data: &[u8]) -> Result<(alloc::vec::Vec<u8>, Version)> {
+        decode_versioned(data)
+    }
 }
 
 #[cfg(test)]

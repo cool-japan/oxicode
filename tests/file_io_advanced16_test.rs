@@ -3,6 +3,7 @@
 //! Tests encode_to_file / decode_from_file for DSP types including sample formats,
 //! channel layouts, audio configs, frames, and clips.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

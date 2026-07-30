@@ -1,5 +1,6 @@
 //! Advanced tests for BTreeMap encode/decode roundtrips
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

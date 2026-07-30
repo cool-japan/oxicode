@@ -4,6 +4,7 @@
 //! varint sizing, borrow-decode, encode_into_slice, encoded_size, and
 //! byte-limit enforcement.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -536,15 +537,17 @@ fn test_interop_byte_limit_exactly_encoded_size_succeeds() {
     let reference_bytes = oxicode::encode_to_vec_with_config(&value, config::standard())
         .expect("reference encode failed");
 
-    // reference_bytes.len() is 1 (varint 99 < 251).
-    // Use with_limit::<1> — exactly the encoded size.
-    let limit_cfg = config::standard().with_limit::<1>();
+    // reference_bytes.len() is 1 on the wire (varint 99 < 251), but a scalar
+    // `u32` decode claims its fixed width (4 bytes) against the limit, mirroring
+    // bincode 2.0.1's DoS-safe accounting (see the D1 limit-accounting suite).
+    // Use with_limit::<4> — exactly the claimed scalar width.
+    let limit_cfg = config::standard().with_limit::<4>();
     let result: Result<(u32, usize), _> =
         oxicode::decode_from_slice_with_config(&reference_bytes, limit_cfg);
 
     assert!(
         result.is_ok(),
-        "decode with limit == encoded_size must succeed; got err={:?}",
+        "decode with limit == claimed scalar width must succeed; got err={:?}",
         result.err()
     );
     let (decoded, _) = result.expect("decode with exact limit failed");

@@ -5,6 +5,7 @@
 //! fixed-int config, struct with PathBuf+OsString, inequality, "." path,
 //! and extension preservation.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

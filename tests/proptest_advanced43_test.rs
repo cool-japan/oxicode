@@ -7,6 +7,7 @@
 //! roundtrips, consumed-bytes checks, deterministic encoding, option types,
 //! vec collections, and arbitrary quality/depth values.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

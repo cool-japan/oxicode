@@ -3,6 +3,7 @@
 //! Cell<T> and RefCell<T> are transparent wrappers — their wire format is
 //! identical to the inner value T.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

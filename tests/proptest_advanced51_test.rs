@@ -4,6 +4,7 @@
 //! Tests verify encode → decode roundtrips for domain types and structural
 //! invariants such as consumed == bytes.len() and deterministic encoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

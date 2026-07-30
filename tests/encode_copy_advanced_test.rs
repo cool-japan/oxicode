@@ -1,5 +1,6 @@
 //! Comprehensive tests for the `encode_copy` API covering a wide range of `Copy` types.
 
+#![cfg(all(feature = "alloc", feature = "simd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -5,6 +5,7 @@
 //! Result variants, Range, RangeInclusive, Cow<str>, zigzag symmetry, varint
 //! single-byte invariant, length-prefix invariants, and derived structs.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

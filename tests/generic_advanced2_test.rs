@@ -1,6 +1,7 @@
 //! Advanced generic struct serialization tests for OxiCode.
 //! Tests 22 different scenarios involving generic structs and types.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,6 +4,7 @@
 //! Vec collections, Option, derived structs, HashMap, exact byte inspection,
 //! and encoded_size verification.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

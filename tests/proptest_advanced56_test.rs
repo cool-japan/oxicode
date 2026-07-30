@@ -1,5 +1,6 @@
 //! Proptest-based tests for renewable energy / power generation domain.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

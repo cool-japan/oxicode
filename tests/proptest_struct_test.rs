@@ -4,6 +4,7 @@
 //! encoding then decoding yields an identical value, and that `encoded_size`
 //! matches the actual byte length produced by `encode_to_vec`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

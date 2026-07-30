@@ -4,6 +4,7 @@
 //! config variants (fixed-int, big-endian), collections, Option, tuples,
 //! derived structs, and wide integer types.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

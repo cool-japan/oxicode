@@ -1,5 +1,6 @@
 //! Comprehensive roundtrip tests for tuple Encode/Decode/BorrowDecode (sizes 1–16)
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -3,6 +3,7 @@
 //! Each proptest! block contains exactly one #[test] function.
 //! Tests verify that encode → decode is a perfect roundtrip for all tested types.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

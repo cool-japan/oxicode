@@ -1,6 +1,7 @@
 //! Advanced tests for string slice and &str encoding in OxiCode.
 //! All tests use String for roundtrip (owned type); wire format is varint length + UTF-8 bytes.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

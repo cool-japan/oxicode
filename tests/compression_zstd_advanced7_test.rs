@@ -3,7 +3,7 @@
 //! Tests exercise compress/decompress round-trips using NLP domain types:
 //! tokens, documents, corpora, and various language codes.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

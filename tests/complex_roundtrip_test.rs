@@ -1,5 +1,11 @@
 //! Comprehensive roundtrip tests for complex real-world data structures.
 
+#![cfg(all(
+    feature = "checksum",
+    feature = "compression-zstd",
+    feature = "derive",
+    feature = "std"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced collection tests: Task management / project tracking theme
 //! Covers Priority, TaskStatus, Task, Project with various collection types.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

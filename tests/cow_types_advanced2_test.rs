@@ -1,6 +1,7 @@
 //! Advanced roundtrip tests for Cow<str> and Cow<[u8]> — second set of distinct tests.
 //! Exercises encode/decode with configs, option wrapping, sequential decode, and more.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

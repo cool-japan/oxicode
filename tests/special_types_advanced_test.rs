@@ -2,6 +2,7 @@
 //! This module focuses on distinct values and type combinations
 //! not exhaustively covered by the other test suites.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

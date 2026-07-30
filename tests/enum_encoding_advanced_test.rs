@@ -3,6 +3,7 @@
 //! Covers discriminant/variant encoding, mixed variant types, tag_type attribute,
 //! payload variants, container wrapping, config interactions, and error handling.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

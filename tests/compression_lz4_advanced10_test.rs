@@ -3,7 +3,7 @@
 //! Tests cover encode/decode round-trips combined with LZ4 compress/decompress
 //! across a variety of satellite imagery data structures and edge cases.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

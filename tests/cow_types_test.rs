@@ -1,5 +1,6 @@
 //! Roundtrip tests for Cow<str> and Cow<[u8]> encode/decode/borrow_decode
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Advanced tests for HashMap and HashSet encoding in OxiCode — scenario set 3.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

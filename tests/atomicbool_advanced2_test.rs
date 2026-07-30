@@ -3,6 +3,7 @@
 //! Covers bool roundtrips, wire-byte verification, Option<bool>, tuple/struct/enum with bools,
 //! large Vec<bool>, BTreeMap<bool, u8>, config variants, and nested/compound types.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

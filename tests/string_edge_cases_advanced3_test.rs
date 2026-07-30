@@ -3,6 +3,7 @@
 //! 22 top-level test functions covering empty strings, null bytes, ASCII, Unicode,
 //! varint length prefixes, Vec<String>, and various roundtrip invariants.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

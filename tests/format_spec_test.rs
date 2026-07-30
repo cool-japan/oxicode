@@ -19,6 +19,7 @@
 //! Option encodes as 0x00 (None) or 0x01 followed by the encoded value (Some).
 //! Fixed-int config encodes integers directly in their native byte size (LE or BE).
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

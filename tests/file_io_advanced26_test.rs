@@ -3,6 +3,7 @@
 //! Covers reactor cores, fuel rods, neutron flux, coolant systems, control rods,
 //! radiation monitoring, safety interlocks, power output, and temperature gradients.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

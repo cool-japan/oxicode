@@ -8,6 +8,7 @@
 //!   3. More complex interactions (nested types, multiple attrs, generics, enums
 //!      with payloads, cross-convention byte-identity, etc.) work correctly.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

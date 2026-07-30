@@ -1,5 +1,6 @@
 //! Tests for OxiCode configuration combinations and cross-config compatibility.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -352,13 +353,14 @@ fn test_fixed_int_struct_roundtrip() {
 }
 
 // Test 22: Limit config just at boundary
-// A string of N bytes claims exactly N bytes via claim_bytes_read.
-// Encoding a 1-byte string "a" produces 2 bytes (1-byte varint length + 1 byte content).
-// Decoding it with limit::<1>() claims 1 byte of content — succeeds.
-// Decoding a 2-byte string "ab" with limit::<1>() claims 2 bytes — fails.
+// Decoding a String claims its length prefix (u64::decode claims a fixed 8
+// bytes, mirroring bincode 2.0.1) plus N bytes for the content, so the peak
+// claim for an N-byte string is 8 + N.
+// A 1-byte string "a" peaks at 8 + 1 = 9 and succeeds under limit::<9>().
+// A 2-byte string "ab" peaks at 8 + 2 = 10 and fails under limit::<9>().
 #[test]
 fn test_limit_config_boundary() {
-    // Part A: "a" has 1 byte of content; limit::<1>() must succeed.
+    // Part A: "a" peaks at 8 + 1 = 9 claimed bytes; limit::<9>() must succeed.
     let one_char_encoded = encode_to_vec(&String::from("a")).expect("encode failed");
     // Encoding: 1-byte varint(1) + 1 byte 'a' = 2 bytes total.
     assert_eq!(
@@ -367,17 +369,17 @@ fn test_limit_config_boundary() {
         "1-char string should encode to 2 bytes"
     );
 
-    let cfg_limit_1 = config::standard().with_limit::<1>();
+    let cfg_limit_9 = config::standard().with_limit::<9>();
     let result_ok: Result<(String, _), _> =
-        decode_from_slice_with_config(&one_char_encoded, cfg_limit_1);
+        decode_from_slice_with_config(&one_char_encoded, cfg_limit_9);
     assert!(
         result_ok.is_ok(),
-        "decode with limit::<1> should succeed for 1-byte content string"
+        "decode with limit::<9> should succeed for 1-byte content string (8-byte len claim + 1-byte body)"
     );
     let (val, _) = result_ok.expect("decode succeeded");
     assert_eq!(val, "a");
 
-    // Part B: "ab" has 2 bytes of content; limit::<1>() must fail because claim_bytes_read(2) > 1.
+    // Part B: "ab" peaks at 8 + 2 = 10 claimed bytes; limit::<9>() must fail.
     let two_char_encoded = encode_to_vec(&String::from("ab")).expect("encode failed");
     // Encoding: 1-byte varint(2) + 2 bytes "ab" = 3 bytes total.
     assert_eq!(
@@ -387,9 +389,9 @@ fn test_limit_config_boundary() {
     );
 
     let result_err: Result<(String, _), _> =
-        decode_from_slice_with_config(&two_char_encoded, cfg_limit_1);
+        decode_from_slice_with_config(&two_char_encoded, cfg_limit_9);
     assert!(
         result_err.is_err(),
-        "decode with limit::<1> should fail for 2-byte content string"
+        "decode with limit::<9> should fail for 2-byte content string (peak claim 10 > 9)"
     );
 }

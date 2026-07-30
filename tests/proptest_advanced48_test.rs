@@ -5,6 +5,7 @@
 //! Each test is a top-level #[test] function inside a proptest! macro block,
 //! verifying encode/decode roundtrip invariants for networking types.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

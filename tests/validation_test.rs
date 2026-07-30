@@ -1,5 +1,6 @@
 //! Comprehensive validation middleware tests.
 
+#![cfg(all(feature = "alloc", feature = "validation", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

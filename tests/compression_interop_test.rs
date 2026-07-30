@@ -4,6 +4,7 @@
 //! with the standard oxicode encode/decode API, verifying correctness, size
 //! reduction properties, and error-handling behaviour.
 
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -91,7 +92,7 @@ use oxicode::{
 // Shared test types (module-level, feature-gated)
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct CompressPoint {
     x: f64,
@@ -99,7 +100,7 @@ struct CompressPoint {
     label: String,
 }
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct NestedOuter {
     inner: CompressPoint,
@@ -241,7 +242,7 @@ fn test_compress_decompress_large_string_roundtrip() {
 // Test 9 – Compress/decompress struct with derive roundtrip
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[test]
 fn test_compress_decompress_derived_struct_roundtrip() {
     let value = CompressPoint {
@@ -489,7 +490,7 @@ fn test_multiple_sequential_compress_decompress() {
 // Test 22 – Compress/decompress with nested struct
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[test]
 fn test_compress_decompress_nested_struct_roundtrip() {
     let value = NestedOuter {

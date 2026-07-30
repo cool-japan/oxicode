@@ -2,6 +2,7 @@
 //! large enums, generics with where clauses, PhantomData, wide-integer types, arrays,
 //! nested modules, BorrowDecode with lifetimes, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

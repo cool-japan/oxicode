@@ -3,6 +3,7 @@
 //! Covers 2D/3D/4D vectors, nested maps, option-wrapped collections,
 //! tuple-containing vectors, and config-driven encoding variants.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

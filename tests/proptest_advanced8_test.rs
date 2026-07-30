@@ -3,6 +3,7 @@
 //! Each test function contains exactly one proptest! block.
 //! All tests are top-level — no #[cfg(test)] module wrapper.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

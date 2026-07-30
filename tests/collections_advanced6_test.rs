@@ -1,5 +1,6 @@
 //! Advanced collection type encoding tests (set 6)
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

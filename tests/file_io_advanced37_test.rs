@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for OxiCode — domain: cybersecurity SIEM and threat intelligence
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

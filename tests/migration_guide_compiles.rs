@@ -4,6 +4,7 @@
 //! Run with:
 //!   cargo test -p oxicode --test migration_guide_compiles
 
+#![cfg(all(feature = "derive", feature = "serde", feature = "simd"))]
 use oxicode::{Decode, Encode};
 
 /// Test 1: Basic encode_to_vec_with_config + decode_from_slice_with_config round-trip.

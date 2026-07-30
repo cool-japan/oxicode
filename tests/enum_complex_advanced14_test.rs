@@ -5,6 +5,7 @@
 //! enum variants (including named-field and newtype variants with data) across a variety
 //! of OxiCode config options.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -46,6 +46,19 @@ pub trait Constraint<T: ?Sized> {
 }
 
 /// Maximum length constraint for strings and collections.
+///
+/// # Units
+///
+/// For `str`/`String`, the length is measured in **UTF-8 bytes**
+/// (`str::len()`), not Unicode scalar values ("chars") or grapheme
+/// clusters. This mirrors oxicode's own byte-oriented wire-size limits
+/// elsewhere in the crate (e.g. [`crate::Error::LimitExceeded`]), so a
+/// `MaxLength` constraint gives an accurate bound on the number of bytes a
+/// validated string will occupy once encoded. It also means multi-byte
+/// (e.g. CJK, emoji) strings are limited more tightly in character count
+/// than single-byte-per-character (ASCII) strings for the same numeric
+/// limit. Callers who need a character-count limit instead should compare
+/// `value.chars().count()` directly rather than using this constraint.
 #[derive(Debug, Clone, Copy)]
 pub struct MaxLength {
     max: usize,
@@ -117,6 +130,12 @@ impl<T> Constraint<alloc::vec::Vec<T>> for MaxLength {
 }
 
 /// Minimum length constraint for strings and collections.
+///
+/// # Units
+///
+/// As with [`MaxLength`], the length of a `str`/`String` is measured in
+/// **UTF-8 bytes**, not chars. See [`MaxLength`]'s documentation for
+/// details and rationale.
 #[derive(Debug, Clone, Copy)]
 pub struct MinLength {
     min: usize,
@@ -188,51 +207,102 @@ impl<T> Constraint<alloc::vec::Vec<T>> for MinLength {
 }
 
 /// Range constraint for numeric values.
+///
+/// Internally a range remembers whether each bound is *inclusive* or
+/// *exclusive*, so that [`Range::from_bounds`] can faithfully represent any
+/// [`RangeBounds`] — including half-open ranges such as `0..100`, whose end
+/// bound is [`core::ops::Bound::Excluded`] — without silently discarding the
+/// exclusivity of the bound. This works uniformly for any `T: PartialOrd`,
+/// not just integer types, and avoids the overflow pitfalls that a
+/// "decrement the excluded bound by one" approach would hit at the type's
+/// extremes (e.g. an excluded lower bound of `u8::MAX`).
 #[derive(Debug, Clone)]
 pub struct Range<T> {
     min: Option<T>,
+    min_exclusive: bool,
     max: Option<T>,
+    max_exclusive: bool,
 }
 
 impl<T: PartialOrd + Clone> Range<T> {
-    /// Create a new range constraint.
+    /// Create a new range constraint from two *inclusive* bounds.
+    ///
+    /// Both `min` and `max`, when present, are treated as inclusive limits
+    /// (matching the historical behavior of this constructor). Use
+    /// [`Range::from_bounds`] to build a range that preserves exclusivity
+    /// from a Rust [`RangeBounds`] value (e.g. `0..100`).
     pub fn new(min: Option<T>, max: Option<T>) -> Self {
-        Self { min, max }
+        Self {
+            min,
+            min_exclusive: false,
+            max,
+            max_exclusive: false,
+        }
     }
 
-    /// Create a range from a RangeBounds.
+    /// Create a range from a [`RangeBounds`], preserving exclusivity.
+    ///
+    /// Unlike a naive conversion, an [`core::ops::Bound::Excluded`] end bound
+    /// (as produced by e.g. `0..100`) is **not** silently dropped: the
+    /// resulting constraint rejects the excluded boundary value itself while
+    /// still constraining everything beyond it. For example:
+    ///
+    /// ```
+    /// use oxicode::validation::{Constraint, Range};
+    ///
+    /// let half_open: Range<i32> = Range::from_bounds(&(0..100));
+    /// assert!(half_open.validate(&0).is_valid());
+    /// assert!(half_open.validate(&99).is_valid());
+    /// assert!(half_open.validate(&100).is_invalid(), "100 is excluded");
+    /// assert!(half_open.validate(&1000).is_invalid());
+    /// ```
     pub fn from_bounds<R: RangeBounds<T>>(bounds: &R) -> Self
     where
         T: Clone,
     {
         use core::ops::Bound;
 
-        let min = match bounds.start_bound() {
-            Bound::Included(v) => Some(v.clone()),
-            Bound::Excluded(_) => None, // Excluded bounds are tricky for generic types
-            Bound::Unbounded => None,
+        let (min, min_exclusive) = match bounds.start_bound() {
+            Bound::Included(v) => (Some(v.clone()), false),
+            Bound::Excluded(v) => (Some(v.clone()), true),
+            Bound::Unbounded => (None, false),
         };
 
-        let max = match bounds.end_bound() {
-            Bound::Included(v) => Some(v.clone()),
-            Bound::Excluded(_) => None,
-            Bound::Unbounded => None,
+        let (max, max_exclusive) = match bounds.end_bound() {
+            Bound::Included(v) => (Some(v.clone()), false),
+            Bound::Excluded(v) => (Some(v.clone()), true),
+            Bound::Unbounded => (None, false),
         };
 
-        Self { min, max }
+        Self {
+            min,
+            min_exclusive,
+            max,
+            max_exclusive,
+        }
     }
 }
 
 impl<T: PartialOrd> Constraint<T> for Range<T> {
     fn validate(&self, value: &T) -> ValidationResult {
         if let Some(ref min) = self.min {
-            if value < min {
+            let below = if self.min_exclusive {
+                value <= min
+            } else {
+                value < min
+            };
+            if below {
                 return ValidationResult::Invalid("value below minimum");
             }
         }
 
         if let Some(ref max) = self.max {
-            if value > max {
+            let above = if self.max_exclusive {
+                value >= max
+            } else {
+                value > max
+            };
+            if above {
                 return ValidationResult::Invalid("value above maximum");
             }
         }
@@ -473,6 +543,70 @@ mod tests {
         assert!(constraint.validate(&100).is_valid());
         assert!(constraint.validate(&-1).is_invalid());
         assert!(constraint.validate(&101).is_invalid());
+    }
+
+    #[test]
+    fn test_range_from_bounds_half_open_excludes_end() {
+        // `0..100` has an Excluded end bound; from_bounds must preserve the
+        // exclusivity rather than silently dropping the upper limit.
+        let constraint: Range<i32> = Range::from_bounds(&(0..100));
+
+        assert!(constraint.validate(&0).is_valid());
+        assert!(constraint.validate(&99).is_valid());
+        assert!(constraint.validate(&100).is_invalid(), "100 is excluded");
+        assert!(constraint.validate(&1000).is_invalid());
+        assert!(constraint.validate(&-1).is_invalid());
+    }
+
+    #[test]
+    fn test_range_from_bounds_inclusive_end() {
+        // `0..=100` has an Included end bound.
+        let constraint: Range<i32> = Range::from_bounds(&(0..=100));
+
+        assert!(constraint.validate(&100).is_valid(), "100 is included");
+        assert!(constraint.validate(&101).is_invalid());
+    }
+
+    #[test]
+    fn test_range_from_bounds_exclusive_start() {
+        use core::ops::Bound;
+        // (0, 10] — excluded lower bound, included upper bound.
+        let constraint: Range<i32> =
+            Range::from_bounds(&(Bound::Excluded(0i32), Bound::Included(10i32)));
+
+        assert!(constraint.validate(&0).is_invalid(), "0 is excluded");
+        assert!(constraint.validate(&1).is_valid());
+        assert!(constraint.validate(&10).is_valid());
+        assert!(constraint.validate(&11).is_invalid());
+    }
+
+    #[test]
+    fn test_range_from_bounds_unbounded() {
+        // `..` places no constraint at all.
+        let constraint: Range<i32> = Range::from_bounds(&(..));
+        assert!(constraint.validate(&i32::MIN).is_valid());
+        assert!(constraint.validate(&i32::MAX).is_valid());
+
+        // `10..` constrains only the lower (inclusive) end.
+        let lower: Range<i32> = Range::from_bounds(&(10..));
+        assert!(lower.validate(&10).is_valid());
+        assert!(lower.validate(&9).is_invalid());
+        assert!(lower.validate(&i32::MAX).is_valid());
+    }
+
+    #[test]
+    fn test_max_length_counts_bytes_not_chars() {
+        // A 2-char multi-byte string occupies 6 UTF-8 bytes; MaxLength counts
+        // bytes, so a limit of 5 rejects it even though it is only 2 chars.
+        let constraint = MaxLength::new(5);
+        assert_eq!("世界".chars().count(), 2);
+        assert_eq!("世界".len(), 6);
+        assert!(
+            constraint.validate("世界").is_invalid(),
+            "byte length (6) exceeds max 5"
+        );
+        // An equivalent-char-count ASCII string fits.
+        assert!(constraint.validate("ab").is_valid());
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //! Default-fn behavior (skip + default): skip takes precedence → Default::default() applies.
 //! Default-fn-only behavior (only default attr, no skip): custom fn is called on decode.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

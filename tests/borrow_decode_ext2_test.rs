@@ -5,6 +5,7 @@
 //! special-char strings, cross-type encode-then-borrow-decode, and
 //! simultaneous multi-buffer zero-copy.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

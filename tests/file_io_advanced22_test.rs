@@ -1,6 +1,7 @@
 //! Advanced file I/O tests — materials science / crystallography domain
 //! 22 top-level #[test] functions, no cfg(test) wrapper, no module wrapper.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

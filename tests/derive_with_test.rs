@@ -7,6 +7,7 @@
 //! sorted vectors, ASCII chars, mixed fields, tuple structs, and enum
 //! struct variants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -5,7 +5,9 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse::Parse, LitInt, LitStr, Token};
+use syn::{
+    parse::Parse, parse::Parser, punctuated::Punctuated, spanned::Spanned, LitInt, LitStr, Token,
+};
 
 // ---------------------------------------------------------------------------
 // TagType — enum discriminant width control
@@ -174,41 +176,19 @@ pub(crate) fn parse_bound_string(
     if trimmed.is_empty() {
         return Ok(vec![]);
     }
-    // Split on commas, but we must be careful about angle-bracket nesting (e.g. `T: Trait<A, B>`).
-    // Use a simple depth-tracking split.
-    let parts = split_predicates(trimmed);
-    let mut predicates = Vec::with_capacity(parts.len());
-    for part in parts {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let pred = syn::parse_str::<syn::WherePredicate>(part).map_err(|e| {
-            syn::Error::new(span, format!("invalid where predicate `{}`: {}", part, e))
-        })?;
-        predicates.push(pred);
-    }
-    Ok(predicates)
-}
-
-/// Split a predicate string by top-level commas (ignoring commas inside `<>`).
-fn split_predicates(s: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: usize = 0;
-    let mut start = 0;
-    for (i, ch) in s.char_indices() {
-        match ch {
-            '<' => depth += 1,
-            '>' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(&s[start..]);
-    parts
+    // Parse the whole string as a comma-terminated list of `where` predicates using syn's
+    // punctuated parser. Unlike a hand-rolled comma splitter, this correctly tracks nesting
+    // of `<>`, `()`, and `[]`, so Fn-trait predicates such as `T: Fn(u8, u8) -> ()` — whose
+    // argument list contains top-level-looking commas inside parentheses — are handled
+    // correctly instead of being split into invalid fragments.
+    let parser = Punctuated::<syn::WherePredicate, Token![,]>::parse_terminated;
+    let parsed = parser.parse_str(trimmed).map_err(|e| {
+        syn::Error::new(
+            span,
+            format!("invalid where predicates `{}`: {}", trimmed, e),
+        )
+    })?;
+    Ok(parsed.into_iter().collect())
 }
 
 /// Apply a `rename_all` naming convention to a field name.
@@ -248,6 +228,86 @@ pub(crate) fn apply_rename_all(name: &str, convention: &str) -> String {
         "kebab-case" => name.replace('_', "-"),
         _ => name.to_owned(),
     }
+}
+
+/// Produce the enum-discriminant literal token at the integer width selected by `tag_type`,
+/// validating that `disc` actually fits that width.
+///
+/// Both the encode side (which writes the tag) and the decode side (which matches on it) call
+/// this so the literal width always agrees with the decoded tag width. Returning an error when
+/// a supplied `#[oxicode(variant = N)]` value exceeds the configured `tag_type` avoids silently
+/// truncating the discriminant on the wire.
+pub(crate) fn discriminant_literal(
+    disc: u64,
+    tag_type: TagType,
+    span: proc_macro2::Span,
+) -> syn::Result<proc_macro2::Literal> {
+    match tag_type {
+        TagType::U8 => {
+            if disc > u8::MAX as u64 {
+                return Err(syn::Error::new(
+                    span,
+                    format!(
+                        "enum discriminant {} does not fit in tag_type `u8` (max {})",
+                        disc,
+                        u8::MAX
+                    ),
+                ));
+            }
+            Ok(proc_macro2::Literal::u8_suffixed(disc as u8))
+        }
+        TagType::U16 => {
+            if disc > u16::MAX as u64 {
+                return Err(syn::Error::new(
+                    span,
+                    format!(
+                        "enum discriminant {} does not fit in tag_type `u16` (max {})",
+                        disc,
+                        u16::MAX
+                    ),
+                ));
+            }
+            Ok(proc_macro2::Literal::u16_suffixed(disc as u16))
+        }
+        TagType::U32 => {
+            if disc > u32::MAX as u64 {
+                return Err(syn::Error::new(
+                    span,
+                    format!(
+                        "enum discriminant {} does not fit in tag_type `u32` (max {}); use #[oxicode(tag_type = \"u64\")]",
+                        disc,
+                        u32::MAX
+                    ),
+                ));
+            }
+            Ok(proc_macro2::Literal::u32_suffixed(disc as u32))
+        }
+        TagType::U64 => Ok(proc_macro2::Literal::u64_suffixed(disc)),
+    }
+}
+
+/// Extract the element type `T` from a field whose declared type is `Vec<T>`
+/// (matching either `Vec<T>` or a path ending in `Vec<T>` such as `std::vec::Vec<T>`).
+///
+/// Used by the `seq_len` decode path so it can emit `claim_container_read::<T>` and honor the
+/// configured decode memory limit before reserving capacity.
+pub(crate) fn vec_element_type(ty: &syn::Type) -> Option<&syn::Type> {
+    if let syn::Type::Path(type_path) = ty {
+        if type_path.qself.is_none() {
+            if let Some(segment) = type_path.path.segments.last() {
+                if segment.ident == "Vec" {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        for arg in &args.args {
+                            if let syn::GenericArgument::Type(inner) = arg {
+                                return Some(inner);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Build a `where` clause `TokenStream2` from a list of `WherePredicate`s.
@@ -396,6 +456,27 @@ pub(crate) fn parse_field_attrs(field: &syn::Field) -> Result<FieldAttrs, syn::E
         })?;
     }
 
+    // Reject mutually-exclusive attribute combinations up front so that code generation never
+    // has to resolve them by silent precedence. In particular `#[oxicode(skip, bytes)]` on a
+    // named enum-variant field previously produced code that referenced an unbound identifier
+    // (the field is pattern-bound as `_field` when skipped, but the `bytes` branch emitted the
+    // raw `field` ident), so surface the conflict as a clear compile error instead.
+    let with_like =
+        attrs.with_module.is_some() || attrs.encode_with.is_some() || attrs.decode_with.is_some();
+    let excluded = attrs.skip || attrs.default_fn.is_some() || attrs.seq_len.is_some() || with_like;
+    if attrs.bytes && excluded {
+        return Err(syn::Error::new(
+            field.span(),
+            "#[oxicode(bytes)] cannot be combined with skip, default, seq_len, with, encode_with, or decode_with",
+        ));
+    }
+    if (attrs.skip || attrs.default_fn.is_some()) && with_like {
+        return Err(syn::Error::new(
+            field.span(),
+            "#[oxicode(skip)]/#[oxicode(default = ...)] cannot be combined with with, encode_with, or decode_with",
+        ));
+    }
+
     Ok(attrs)
 }
 
@@ -403,7 +484,11 @@ pub(crate) fn parse_field_attrs(field: &syn::Field) -> Result<FieldAttrs, syn::E
 #[derive(Default)]
 pub(crate) struct VariantAttrs {
     /// `#[oxicode(variant = N)]` — use N as the discriminant tag instead of position index.
-    pub(crate) tag: Option<u32>,
+    ///
+    /// Stored as `u64` so that discriminants above `u32::MAX` can be assigned when the
+    /// container selects `#[oxicode(tag_type = "u64")]`. The value is validated against the
+    /// configured tag width at code-generation time.
+    pub(crate) tag: Option<u64>,
     /// `#[oxicode(rename = "name")]` — no-op on the binary wire format (variants are positional).
     /// Stored for documentation, future text/JSON layers, and serde migration compatibility.
     #[allow(dead_code)]
@@ -438,10 +523,10 @@ pub(crate) fn parse_variant_attrs(attrs: &[syn::Attribute]) -> Result<VariantAtt
                     "variant" => {
                         let _eq: Token![=] = input.parse()?;
                         let lit: LitInt = input.parse()?;
-                        let value: u32 = lit.base10_parse().map_err(|_| {
+                        let value: u64 = lit.base10_parse().map_err(|_| {
                             syn::Error::new(
                                 lit.span(),
-                                "oxicode `variant` value must be a valid u32 literal",
+                                "oxicode `variant` value must be a valid u64 literal",
                             )
                         })?;
                         variant_attrs.tag = Some(value);

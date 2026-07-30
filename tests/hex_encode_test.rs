@@ -1,5 +1,6 @@
 //! Tests for encode_to_hex and decode_from_hex.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,6 +1,7 @@
 //! Advanced nested struct encoding tests for OxiCode (set 11, part B)
 //! Theme: Fashion retail and apparel supply chain management — tests 12–22
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

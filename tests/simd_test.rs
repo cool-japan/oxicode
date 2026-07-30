@@ -5,10 +5,10 @@
 //! round-trip path (which uses the standard Encode/Decode impls for arrays –
 //! the SIMD feature simply changes the *internal* dispatch).
 
+#![cfg(all(feature = "alloc", feature = "simd"))]
 // ---------------------------------------------------------------------------
 // Tests that use the simd:: API directly
 // ---------------------------------------------------------------------------
-
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

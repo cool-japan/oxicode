@@ -1,5 +1,6 @@
 //! Advanced VecDeque encoding tests (set 2) for OxiCode.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

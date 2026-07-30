@@ -1,6 +1,6 @@
+#![cfg(all(feature = "alloc", feature = "derive"))]
 // Advanced iterator-based encoding tests for OxiCode.
 // 22 top-level #[test] functions — no #[cfg(test)] module wrapper.
-
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

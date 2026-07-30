@@ -4,6 +4,7 @@
 //! or cow_types_test.rs: cross-struct encode/decode, nested borrowed structs, multiple &str
 //! fields with pointer verification, large payloads, config variations, and byte alignment.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

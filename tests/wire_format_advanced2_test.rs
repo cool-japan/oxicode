@@ -3,6 +3,7 @@
 //! Each test validates the byte-level encoding of a specific type or configuration.
 //! No `#[cfg(test)]` wrapper — all tests are top-level as required.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

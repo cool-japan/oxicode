@@ -3,6 +3,7 @@
 //! Covers roundtrips, byte-level equality with raw types, collections,
 //! Option wrappers, fixed-int config encoding size, and consumed byte counts.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

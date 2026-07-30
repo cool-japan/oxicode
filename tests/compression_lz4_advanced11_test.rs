@@ -3,7 +3,7 @@
 //! Exercises OxiCode's LZ4 compression API over a rich set of game-engine data
 //! structures: vertices, meshes, scene nodes, transforms, and more.
 
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

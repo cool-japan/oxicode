@@ -4,6 +4,7 @@
 //! interaction with the encode/decode pipeline that are not covered by the
 //! existing compression_roundtrip_test.rs / compression_test.rs suites.
 
+#![cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -81,10 +82,16 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
-#[cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
+// `AdvRecord` (and the `Encode`/`Decode` derive macros it needs) is used
+// only by `test_adv_lz4_compress_encoded_struct` below, which is gated on
+// `compression-lz4` alone; no zstd-gated test in this file touches it. Gate
+// on exactly `compression-lz4` + `derive` (rather than the previous
+// `any(compression-lz4, compression-zstd)`) so a zstd-only build doesn't
+// compile an unused struct/import under `-D warnings`.
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 use oxicode::{Decode, Encode};
 
-#[cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct AdvRecord {
     id: u64,
@@ -168,7 +175,7 @@ fn test_adv_lz4_sequential_numbers_roundtrip() {
 // Test 5 – encode struct → compress → decompress → decode roundtrip
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[test]
 fn test_adv_lz4_compress_encoded_struct() {
     use oxicode::compression::{compress, decompress, Compression};

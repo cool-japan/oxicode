@@ -108,8 +108,17 @@ pub fn verify_checksum(data: &[u8]) -> Result<&[u8]> {
             }
         })?) as usize;
 
-    // Validate total length
-    let expected_total = HEADER_SIZE + stored_len;
+    // Validate total length using checked arithmetic: `stored_len` is fully
+    // attacker-controlled (an 8-byte LE u64 read straight from untrusted
+    // input), so a forged value near `usize::MAX` must never be allowed to
+    // silently wrap in `HEADER_SIZE + stored_len`. Wrapping would let the
+    // subsequent `data.len() < expected_total` guard pass incorrectly and
+    // then panic on the slice below (start > end).
+    let expected_total = HEADER_SIZE
+        .checked_add(stored_len)
+        .ok_or(Error::InvalidData {
+            message: "checksum payload length overflow",
+        })?;
     if data.len() < expected_total {
         return Err(Error::UnexpectedEnd {
             additional: expected_total - data.len(),
@@ -124,8 +133,10 @@ pub fn verify_checksum(data: &[u8]) -> Result<&[u8]> {
             }
         })?);
 
-    // Extract payload
-    let payload = &data[HEADER_SIZE..HEADER_SIZE + stored_len];
+    // Extract payload. `expected_total` was already validated above (via
+    // checked_add) and confirmed to be <= data.len(), so this slice is
+    // provably in-bounds regardless of the attacker-controlled `stored_len`.
+    let payload = &data[HEADER_SIZE..expected_total];
 
     // Compute and verify CRC32
     let computed_crc = crc32fast::hash(payload);

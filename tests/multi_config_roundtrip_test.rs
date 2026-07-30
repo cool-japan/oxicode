@@ -4,6 +4,7 @@
 //! using structs, enums, primitives, collections, and nested types.
 //! Each test uses `encode_to_vec_with_config` / `decode_from_slice_with_config`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

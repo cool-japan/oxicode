@@ -4,6 +4,16 @@
 //! interoperability.  Feature guards ensure the suite compiles cleanly
 //! regardless of which optional features are enabled.
 
+#![cfg(all(
+    feature = "async-tokio",
+    feature = "checksum",
+    feature = "compression-lz4",
+    feature = "compression-zstd",
+    feature = "derive",
+    feature = "serde",
+    feature = "std",
+    feature = "versioning"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

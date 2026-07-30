@@ -3,6 +3,7 @@
 //! Exercises encode_versioned_value / decode_versioned_value with V1/V2/V3
 //! UserProfile structs to validate forward-compatible storage patterns.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

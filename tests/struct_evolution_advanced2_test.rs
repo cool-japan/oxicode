@@ -4,6 +4,7 @@
 //! fields are encoded in declaration order, names are not encoded, and the byte
 //! layout is the exact concatenation of each field's individual encoding.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

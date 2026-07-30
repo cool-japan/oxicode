@@ -6,6 +6,7 @@
 //! config variants (fixed-int, big-endian), and the consumed == encoded.len()
 //! invariant.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

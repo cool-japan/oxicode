@@ -4,6 +4,7 @@
 //! mixed Option/Result inside collections, large-scale collection roundtrips,
 //! and encoded_size comparisons for empty vs populated nested containers.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

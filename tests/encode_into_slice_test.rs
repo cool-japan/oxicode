@@ -4,6 +4,7 @@
 //! tests/utility_api_test.rs. This file focuses on encode_into_slice, the
 //! slice/config decode variants, and borrow_decode_from_slice.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "simd"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

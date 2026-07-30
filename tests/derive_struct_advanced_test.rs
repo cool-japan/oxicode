@@ -6,6 +6,7 @@
 //! struct, unit struct zero bytes, crate path override, long field names, underscore
 //! field names, field-order encoding, nested Vec<Option<String>>, doc-comment fields.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(dead_code)]
 #![allow(
     clippy::approx_constant,

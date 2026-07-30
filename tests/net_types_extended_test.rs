@@ -3,6 +3,7 @@
 //! Covers IpAddr::V4/V6 variants, SocketAddrV4/V6 roundtrips, Vec<IpAddr>,
 //! Option<SocketAddr>, structs with SocketAddr fields, and HashMap<IpAddr, String>.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

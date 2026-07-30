@@ -1,5 +1,6 @@
 //! Advanced nested structs test — organizational hierarchy theme, 22 tests.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

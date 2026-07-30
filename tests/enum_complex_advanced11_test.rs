@@ -3,6 +3,7 @@
 //! Domain types model a simplified network packet processing pipeline:
 //! protocol versioning, message flags, packet headers, payloads, and connection states.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

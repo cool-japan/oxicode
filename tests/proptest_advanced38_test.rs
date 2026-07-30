@@ -3,6 +3,7 @@
 //! 22 top-level #[test] functions, each containing exactly one proptest! block.
 //! Theme: Calendar / scheduling — DayOfWeek, TimeSlot, Event, Schedule.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

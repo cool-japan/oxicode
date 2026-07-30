@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for OxiCode — space exploration / planetary science / rover telemetry domain.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

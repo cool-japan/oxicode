@@ -77,7 +77,15 @@
     clippy::precedence,
     clippy::unnecessary_literal_unwrap
 )]
-#[cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
+// Every test in this module derives `Encode`/`Decode` (needs the `derive`
+// feature) and exercises only the LZ4 codec (no zstd-gated test exists
+// here), so the module is gated on exactly `compression-lz4` + `derive`
+// rather than `any(compression-lz4, compression-zstd)`. The previous
+// broader `any(...)` gate let the module (and its unused-under-zstd
+// `LargeData`/`Command` structs and imports) compile under a
+// zstd-only build, triggering dead-code/unused-import errors under
+// `-D warnings`.
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 mod compression_derive_tests {
     use oxicode::{compression, compression::Compression, Decode, Encode};
 

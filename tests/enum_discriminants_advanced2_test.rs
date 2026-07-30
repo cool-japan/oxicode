@@ -1,6 +1,7 @@
 //! Advanced tests for enum discriminant encoding, roundtrip correctness,
 //! tag_type attributes, large enums, and composite types.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

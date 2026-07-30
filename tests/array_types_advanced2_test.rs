@@ -2,6 +2,7 @@
 //!
 //! 22 tests covering a variety of element types, sizes, configurations, and edge cases.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

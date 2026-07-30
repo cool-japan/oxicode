@@ -7,6 +7,7 @@
 //!
 //! All tests are new — they do not duplicate derive_attr_test.rs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

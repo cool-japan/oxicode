@@ -3,6 +3,7 @@
 //! Covers all configuration options: standard, legacy, fixed_int, big_endian,
 //! little_endian, limit, and combinations thereof.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

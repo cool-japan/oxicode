@@ -8,6 +8,7 @@
 //! - `bound` with generic structs
 //! - `seq_len` with different width specifiers on multiple fields
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

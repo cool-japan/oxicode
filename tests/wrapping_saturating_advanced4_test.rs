@@ -1,6 +1,7 @@
 //! Advanced roundtrip tests for Wrapping<T> and Saturating<T> encoding in OxiCode.
 //! Both types encode transparently — same bytes as their inner T.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

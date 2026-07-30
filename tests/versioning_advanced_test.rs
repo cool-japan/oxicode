@@ -4,6 +4,7 @@
 //! compatibility checking, header magic, and schema evolution patterns.
 //! All tests are top-level; no cfg(test) module wrapper.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

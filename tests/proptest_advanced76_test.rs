@@ -6,6 +6,7 @@
 //! team formations, pitch control, set pieces, scouting, contract valuation,
 //! fan engagement, venue capacity, broadcast viewership, and referee decisions.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

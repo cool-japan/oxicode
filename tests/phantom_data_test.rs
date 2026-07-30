@@ -3,6 +3,7 @@
 //! PhantomData<T> encodes as zero bytes (it carries no data).
 //! Unit type () also encodes as zero bytes.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

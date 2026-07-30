@@ -3,6 +3,7 @@
 //! Covers 22 distinct scenarios including roundtrips, wire-format properties,
 //! config variants, collections, nesting, and float/integer variants.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

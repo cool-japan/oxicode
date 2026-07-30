@@ -1,5 +1,6 @@
 //! Advanced tests for Option<T> encoding in OxiCode (set 4)
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

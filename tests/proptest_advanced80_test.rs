@@ -8,6 +8,7 @@
 //! exoplanet transit detections, radio interferometry baselines, dome/shutter status,
 //! and calibration frame libraries.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,7 +1,12 @@
 //! Built-in compression support for oxicode.
 //!
-//! This module provides transparent compression/decompression for serialized data.
-//! Compression can be applied globally or per-message.
+//! This module provides a small, explicit byte-level compression API. It is
+//! **not** wired into [`crate::encode_to_vec`]/[`crate::decode_from_slice`],
+//! [`crate::config::Configuration`], the streaming encoders, or the checksum
+//! wrapper — there is no automatic or global compression. Callers opt in
+//! explicitly by chaining the standalone functions, for example
+//! `encode_to_vec(&value, config)` followed by [`compress`], and [`decompress`]
+//! followed by `decode_from_slice(&bytes, config)` on the way back.
 //!
 //! ## Supported Codecs
 //!
@@ -13,6 +18,13 @@
 //!   fast performance. Good for storage and network transmission.
 //!   Pure Rust via oxiarc-zstd (full encode + decode, no C toolchain needed).
 //!
+//! ## Wire format
+//!
+//! [`compress`] prepends a fixed 5-byte header — `MAGIC` (`b"OXC"`), a version
+//! byte, and a codec id — to the codec payload. [`decompress`] reads that header
+//! to select the codec. The header is an oxicode framing convention and is
+//! unrelated to the codec's own frame format.
+//!
 //! ## Example
 //!
 //! ```rust,ignore
@@ -23,16 +35,25 @@
 //! // Compress with LZ4 (default)
 //! let compressed = compress(data, Compression::Lz4)?;
 //!
-//! // Decompress
+//! // Decompress (256 MiB output cap by default; see `decompress_with_limit`)
 //! let decompressed = decompress(&compressed)?;
 //! assert_eq!(data.as_slice(), decompressed.as_slice());
 //! ```
 //!
-//! ## Automatic Detection
+//! ## Detection and its limits
 //!
-//! Compressed data includes a magic header that allows automatic detection
-//! of the compression format. The `decompress_auto` function can detect
-//! and decompress any supported format.
+//! [`detect_compression`] and [`is_compressed`] inspect the 5-byte header to
+//! recognise oxicode-compressed data. Detection is heuristic: arbitrary
+//! serialized bytes can legitimately begin with the same 5 bytes, so a raw
+//! payload may be mistaken for a compressed one (see [`decompress_or_passthrough`]).
+//! For reliable round-trips, track whether a payload is compressed out of band
+//! rather than relying on header sniffing.
+//!
+//! ## Decompression-bomb protection
+//!
+//! [`decompress`] caps the regenerated size at
+//! [`DEFAULT_MAX_DECOMPRESSED_SIZE`] (256 MiB). Use [`decompress_with_limit`]
+//! to pick a different bound when decompressing untrusted input.
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -51,6 +72,12 @@ mod zstd_impl;
 const MAGIC: [u8; 3] = [0x4F, 0x58, 0x43];
 const VERSION: u8 = 1;
 const HEADER_SIZE: usize = 5; // MAGIC (3) + VERSION (1) + CODEC (1)
+
+/// Default cap on the regenerated (decompressed) size, in bytes (256 MiB).
+///
+/// [`decompress`] uses this bound to reject decompression bombs. Use
+/// [`decompress_with_limit`] to override it for a specific call.
+pub const DEFAULT_MAX_DECOMPRESSED_SIZE: usize = 256 * 1024 * 1024;
 
 /// Compression algorithm selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -152,52 +179,34 @@ impl CompressionStats {
 /// Returns the compressed data with a header for automatic detection.
 #[cfg(feature = "alloc")]
 pub fn compress(data: &[u8], compression: Compression) -> Result<alloc::vec::Vec<u8>> {
-    if compression.is_none() {
-        // No compression - just copy with header
-        let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + data.len());
-        output.extend_from_slice(&MAGIC);
-        output.push(VERSION);
-        output.push(compression.codec_id());
-        output.extend_from_slice(data);
-        return Ok(output);
-    }
-
-    match compression {
-        Compression::None => unreachable!(),
+    // Compute the codec payload first (or `None` for the passthrough case), then
+    // write the 5-byte header and payload exactly once. Structuring it this way
+    // keeps the wire format byte-identical to the previous implementation while
+    // removing the unreachable!() panic path from the production code.
+    let payload: Option<alloc::vec::Vec<u8>> = match compression {
+        Compression::None => None,
 
         #[cfg(feature = "compression-lz4")]
-        Compression::Lz4 => {
-            let compressed = lz4::compress(data)?;
-            let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + compressed.len());
-            output.extend_from_slice(&MAGIC);
-            output.push(VERSION);
-            output.push(compression.codec_id());
-            output.extend_from_slice(&compressed);
-            Ok(output)
-        }
+        Compression::Lz4 => Some(lz4::compress(data)?),
 
         #[cfg(feature = "compression-zstd")]
-        Compression::Zstd => {
-            let compressed = zstd_impl::compress(data, 3)?; // Default level
-            let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + compressed.len());
-            output.extend_from_slice(&MAGIC);
-            output.push(VERSION);
-            output.push(compression.codec_id());
-            output.extend_from_slice(&compressed);
-            Ok(output)
-        }
+        Compression::Zstd => Some(zstd_impl::compress(data, 3)?), // Default level
 
         #[cfg(feature = "compression-zstd")]
-        Compression::ZstdLevel(level) => {
-            let compressed = zstd_impl::compress(data, level as i32)?;
-            let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + compressed.len());
-            output.extend_from_slice(&MAGIC);
-            output.push(VERSION);
-            output.push(compression.codec_id());
-            output.extend_from_slice(&compressed);
-            Ok(output)
-        }
-    }
+        Compression::ZstdLevel(level) => Some(zstd_impl::compress(data, level as i32)?),
+    };
+
+    let body: &[u8] = match payload.as_deref() {
+        Some(compressed) => compressed,
+        None => data,
+    };
+
+    let mut output = alloc::vec::Vec::with_capacity(HEADER_SIZE + body.len());
+    output.extend_from_slice(&MAGIC);
+    output.push(VERSION);
+    output.push(compression.codec_id());
+    output.extend_from_slice(body);
+    Ok(output)
 }
 
 /// Compress data and return statistics.
@@ -221,9 +230,24 @@ pub fn compress_with_stats(
 
 /// Decompress data that was compressed with `compress`.
 ///
-/// Automatically detects the compression format from the header.
+/// The compression format is selected from the 5-byte header. The regenerated
+/// size is capped at [`DEFAULT_MAX_DECOMPRESSED_SIZE`] to guard against
+/// decompression bombs; use [`decompress_with_limit`] to choose a different cap.
 #[cfg(feature = "alloc")]
 pub fn decompress(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
+    decompress_with_limit(data, DEFAULT_MAX_DECOMPRESSED_SIZE)
+}
+
+/// Decompress data that was compressed with `compress`, capping the regenerated
+/// size at `max_output` bytes.
+///
+/// The cap bounds worst-case memory use on untrusted input: a frame that would
+/// regenerate more than `max_output` bytes is rejected with
+/// [`Error::LimitExceeded`] instead of being expanded. If a payload's codec id
+/// is recognised by the format but its feature is not compiled in, the error
+/// states that explicitly rather than reporting an unknown codec.
+#[cfg(feature = "alloc")]
+pub fn decompress_with_limit(data: &[u8], max_output: usize) -> Result<alloc::vec::Vec<u8>> {
     if data.len() < HEADER_SIZE {
         return Err(Error::UnexpectedEnd {
             additional: HEADER_SIZE - data.len(),
@@ -245,28 +269,71 @@ pub fn decompress(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
         });
     }
 
-    // Get codec
     let codec_id = data[4];
-    let compression = Compression::from_codec_id(codec_id).ok_or(Error::InvalidData {
-        message: "unknown compression codec",
-    })?;
-
     let payload = &data[HEADER_SIZE..];
 
-    match compression {
-        Compression::None => Ok(payload.to_vec()),
+    // Dispatch on the raw codec id so that a codec known to the wire format but
+    // not compiled in reports "feature not enabled" rather than "unknown codec".
+    match codec_id {
+        0 => Ok(payload.to_vec()),
 
-        #[cfg(feature = "compression-lz4")]
-        Compression::Lz4 => lz4::decompress(payload),
+        1 => {
+            #[cfg(feature = "compression-lz4")]
+            {
+                lz4::decompress(payload, max_output)
+            }
+            #[cfg(not(feature = "compression-lz4"))]
+            {
+                let _ = max_output;
+                Err(Error::InvalidData {
+                    message:
+                        "payload is LZ4-compressed but the compression-lz4 feature is not enabled",
+                })
+            }
+        }
 
-        #[cfg(feature = "compression-zstd")]
-        Compression::Zstd | Compression::ZstdLevel(_) => zstd_impl::decompress(payload),
+        2 => {
+            #[cfg(feature = "compression-zstd")]
+            {
+                zstd_impl::decompress(payload, max_output)
+            }
+            #[cfg(not(feature = "compression-zstd"))]
+            {
+                let _ = max_output;
+                Err(Error::InvalidData {
+                    message:
+                        "payload is Zstd-compressed but the compression-zstd feature is not enabled",
+                })
+            }
+        }
+
+        _ => Err(Error::InvalidData {
+            message: "unknown compression codec",
+        }),
     }
 }
 
-/// Try to decompress data, falling back to the original if not compressed.
+/// Try to decompress data, falling back to the original if it is not recognised
+/// as compressed.
 ///
-/// This is useful when you're not sure if data is compressed or not.
+/// # Collision hazard
+///
+/// This function is a heuristic: it decompresses when [`is_compressed`] returns
+/// `true` and otherwise returns the input unchanged. Detection looks only at the
+/// 5-byte header, so an *uncompressed* payload that happens to begin with the
+/// same bytes (`b"OXC"`, version `1`, and a valid codec id `0..=2`) is
+/// misclassified as compressed. The probability is ~2^-40 for uniformly random
+/// bytes but can be higher for structured data. When that happens:
+///
+/// * a colliding codec-`0` (passthrough) prefix has its 5-byte header stripped,
+///   returning `Ok` with the first 5 bytes silently removed;
+/// * a colliding codec-`1`/`2` prefix is fed to the LZ4/Zstd decoder, which
+///   almost always fails and surfaces a decompression error.
+///
+/// Because a raw payload cannot be distinguished from a genuinely compressed one
+/// by content alone, do **not** rely on this function for correctness on
+/// arbitrary bytes. Track whether a payload is compressed out of band, or always
+/// wrap payloads with [`compress`] so the header is guaranteed to be meaningful.
 #[cfg(feature = "alloc")]
 pub fn decompress_or_passthrough(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
     if is_compressed(data) {
@@ -276,9 +343,20 @@ pub fn decompress_or_passthrough(data: &[u8]) -> Result<alloc::vec::Vec<u8>> {
     }
 }
 
-/// Check if data appears to be compressed (has valid magic header).
+/// Check whether `data` looks like oxicode-compressed data.
+///
+/// Returns `true` when the 5-byte header is present: `MAGIC` (`b"OXC"`), the
+/// expected version byte, and a codec id known to the wire format (`0..=2`).
+///
+/// This is a heuristic and can return a false positive: arbitrary serialized
+/// bytes may legitimately start with the same 5-byte prefix. See
+/// [`decompress_or_passthrough`] for the resulting collision hazard. Do not use
+/// this as a correctness-critical test on untrusted or arbitrary input.
 pub fn is_compressed(data: &[u8]) -> bool {
-    data.len() >= HEADER_SIZE && data[0..3] == MAGIC && data[3] == VERSION
+    data.len() >= HEADER_SIZE
+        && data[0..3] == MAGIC
+        && data[3] == VERSION
+        && matches!(data[4], 0..=2)
 }
 
 /// Detect the compression type from compressed data.

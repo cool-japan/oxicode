@@ -27,6 +27,7 @@
 //!   21. seq_len = "u8" with fixed-int (legacy) encoding config
 //!   22. seq_len = "u16" with big-endian config
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

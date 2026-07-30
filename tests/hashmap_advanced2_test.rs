@@ -1,5 +1,6 @@
 //! Advanced HashMap/HashSet serialization tests — second batch (22 tests, new angles).
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

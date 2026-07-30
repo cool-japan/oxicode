@@ -2,6 +2,7 @@
 //!
 //! `ManuallyDrop<T>` encodes/decodes the inner value identically to `T`.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

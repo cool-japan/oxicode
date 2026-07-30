@@ -1,5 +1,6 @@
 //! Advanced cybersecurity / threat detection enum tests for oxicode (set 16)
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

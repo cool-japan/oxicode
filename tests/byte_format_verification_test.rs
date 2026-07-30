@@ -16,6 +16,7 @@
 //!
 //! char encoding: UTF-8 bytes (not fixed u32).
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

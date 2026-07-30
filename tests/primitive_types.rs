@@ -1,5 +1,6 @@
 //! Tests for primitive type encoding and decoding
 
+#![cfg(feature = "alloc")]
 use oxicode::{
     config,
     de::{Decode, DecoderImpl, SliceReader},

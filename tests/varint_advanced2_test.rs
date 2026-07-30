@@ -6,6 +6,7 @@
 //! - Values 65536-4294967295: marker 0xFC + 4 bytes LE (u32)
 //! - Values 4294967296+:      marker 0xFD + 8 bytes LE (u64)
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

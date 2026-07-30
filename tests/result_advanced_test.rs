@@ -1,5 +1,6 @@
 //! Advanced tests for `Result<T, E>` encoding and decoding in OxiCode.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

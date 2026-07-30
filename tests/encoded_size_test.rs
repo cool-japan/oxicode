@@ -1,5 +1,6 @@
 //! Tests that encoded_size matches actual encode_to_vec length.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

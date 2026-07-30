@@ -4,6 +4,7 @@
 //! All tests are top-level `#[test]` functions with no `#[cfg(test)]` wrapper.
 //! No `unwrap()` — all Results are handled with `.expect("msg")`.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

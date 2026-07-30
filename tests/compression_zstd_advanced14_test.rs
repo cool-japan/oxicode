@@ -4,7 +4,7 @@
 //! large buffer compression ratios, MIDI event lists, spectral analysis frames, and
 //! error/edge-case scenarios — all exercised exclusively via the Zstd codec.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

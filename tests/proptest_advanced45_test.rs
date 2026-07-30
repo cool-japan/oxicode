@@ -5,6 +5,7 @@
 //! Covers roundtrip, consumed == bytes.len(), deterministic encoding,
 //! all enum variants, vec of shipments, option types for optional fields.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

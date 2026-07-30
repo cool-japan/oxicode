@@ -3,6 +3,7 @@
 //! Covers Quote, OHLCV, MarketSummary structs across all AssetClass variants,
 //! round-trip consistency, overwrite semantics, error handling, large data, etc.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

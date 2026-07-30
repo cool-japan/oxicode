@@ -1,5 +1,6 @@
 //! Advanced file I/O tests for robotics / robot arm control data structures.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

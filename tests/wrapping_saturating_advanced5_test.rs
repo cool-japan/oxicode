@@ -2,6 +2,7 @@
 //! transparent encoding in OxiCode.
 //! All four wrappers encode transparently — same wire bytes as their inner T.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

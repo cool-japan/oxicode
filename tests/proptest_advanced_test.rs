@@ -4,6 +4,7 @@
 //! for primitive types, compound types, byte-length consistency, and
 //! fixed-int encoding variants.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

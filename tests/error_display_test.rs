@@ -3,6 +3,7 @@
 //! These 20 tests focus on the Display and Debug representations of all
 //! error variants, as well as std::error::Error trait integration.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

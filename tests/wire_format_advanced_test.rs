@@ -11,6 +11,7 @@
 //! - Vec<T>: u64 varint length, then each element
 //! - String: u64 varint byte-length, then UTF-8 bytes
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,0 +1,5 @@
+error: enum discriminant 4294967296 does not fit in tag_type `u32` (max 4294967295); use #[oxicode(tag_type = "u64")]
+  --> tests/ui/variant_tag_exceeds_u32.rs:12:5
+   |
+12 |     A,
+   |     ^

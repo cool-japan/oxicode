@@ -1,5 +1,6 @@
 //! Tests for special types (NonZero, Range, Duration, etc.)
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

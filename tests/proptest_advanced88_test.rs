@@ -8,6 +8,7 @@
 //! endodontic canal measurements, crown/bridge prep specifications, patient
 //! consent forms, sterilization autoclave logs, and more.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

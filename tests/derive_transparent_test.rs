@@ -1,5 +1,6 @@
 //! Tests for `#[oxicode(transparent)]` container attribute.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -1,5 +1,6 @@
 //! Version struct basics-focused tests for the versioning module (split from versioning_test.rs).
 
+#![cfg(feature = "versioning")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

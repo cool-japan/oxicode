@@ -7,7 +7,7 @@
 //! profiles, particle accelerator event logs, flow cytometry cell populations,
 //! chromatography retention times, and fluorescence microscopy z-stacks.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

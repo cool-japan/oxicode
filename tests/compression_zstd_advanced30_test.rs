@@ -7,7 +7,7 @@
 //! quarantine protocols, guest attendance metrics, conservation project tracking,
 //! water quality monitoring for aquariums, and more.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

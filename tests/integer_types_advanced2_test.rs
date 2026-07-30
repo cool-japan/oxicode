@@ -3,6 +3,7 @@
 //! Focuses on boundary values and encoding characteristics not covered
 //! by existing integer_types_test.rs.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

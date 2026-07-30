@@ -3,6 +3,7 @@
 //! Covers CT scans, MRI images, image series, patient metadata, modality types,
 //! pixel data, windowing parameters, DICOM tags, and imaging protocols.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

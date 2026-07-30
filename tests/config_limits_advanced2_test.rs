@@ -3,6 +3,7 @@
 //! The limit is a byte limit enforced via `claim_bytes_read` / `claim_container_read`
 //! during decoding of strings and collections.  Encoding is never limited.
 
+#![cfg(feature = "alloc")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

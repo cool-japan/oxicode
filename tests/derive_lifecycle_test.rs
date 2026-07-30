@@ -3,6 +3,7 @@
 //! Focuses on types with lifetime parameters, BorrowDecode, and the
 //! `borrow_decode_from_slice` API.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,9 +4,13 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::spanned::Spanned;
 use syn::{Data, Fields, Index};
 
-use crate::attrs::{parse_field_attrs, parse_variant_attrs, predicates_to_where_clause, TagType};
+use crate::attrs::{
+    discriminant_literal, parse_field_attrs, parse_variant_attrs, predicates_to_where_clause,
+    TagType,
+};
 
 /// Generate the body of the `Encode::encode` method.
 pub(crate) fn derive_encode_body(
@@ -18,12 +22,12 @@ pub(crate) fn derive_encode_body(
     if transparent {
         return match data {
             Data::Struct(data_struct) => derive_encode_transparent(&data_struct.fields, crate_path),
-            Data::Enum(_) => Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
+            Data::Enum(data_enum) => Err(syn::Error::new(
+                data_enum.enum_token.span(),
                 "#[oxicode(transparent)] is not supported on enums",
             )),
-            Data::Union(_) => Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
+            Data::Union(data_union) => Err(syn::Error::new(
+                data_union.union_token.span(),
                 "#[oxicode(transparent)] is not supported on unions",
             )),
         };
@@ -40,15 +44,15 @@ pub(crate) fn derive_encode_body(
 
             // First pass: determine the "natural" discriminant for each variant.
             // Natural = explicit `#[oxicode(variant = N)]` tag, or position index.
-            let natural: Vec<u32> = variants
+            let natural: Vec<u64> = variants
                 .iter()
                 .enumerate()
-                .map(|(idx, v)| parse_variant_attrs(&v.attrs).map(|a| a.tag.unwrap_or(idx as u32)))
+                .map(|(idx, v)| parse_variant_attrs(&v.attrs).map(|a| a.tag.unwrap_or(idx as u64)))
                 .collect::<Result<_, _>>()?;
 
             // Second pass: for each variant, if it is marked `skip`, walk forward to
             // find the first non-skipped successor and borrow its natural discriminant.
-            let mut effective: Vec<u32> = natural.clone();
+            let mut effective: Vec<u64> = natural.clone();
             for i in 0..n {
                 let attrs_i = parse_variant_attrs(&variants[i].attrs)?;
                 if attrs_i.skip {
@@ -60,12 +64,19 @@ pub(crate) fn derive_encode_body(
                                 .unwrap_or(true)
                         })
                         .map(|j| natural[j]);
-                    if let Some(disc) = successor_disc {
-                        effective[i] = disc;
+                    match successor_disc {
+                        Some(disc) => effective[i] = disc,
+                        // A skipped variant with no non-skipped successor has no discriminant to
+                        // alias onto: `Encode` would still emit an arm writing its natural index,
+                        // but `Decode` filters it out, so the value would fail to round-trip. Make
+                        // that a clear compile error instead of a silent latent failure.
+                        None => {
+                            return Err(syn::Error::new(
+                                variants[i].ident.span(),
+                                "#[oxicode(skip)] on a variant requires a following non-skipped variant whose discriminant it can alias; a trailing skipped variant cannot be decoded",
+                            ));
+                        }
                     }
-                    // If no successor exists, keep the natural index (unreachable in
-                    // valid code since the user cannot construct the skipped variant
-                    // without hitting a compile error from the encode arm below).
                 }
             }
 
@@ -83,8 +94,8 @@ pub(crate) fn derive_encode_body(
                 }
             })
         }
-        Data::Union(_) => Err(syn::Error::new(
-            proc_macro2::Span::call_site(),
+        Data::Union(data_union) => Err(syn::Error::new(
+            data_union.union_token.span(),
             "Encode cannot be derived for unions",
         )),
     }
@@ -245,21 +256,18 @@ fn derive_encode_struct(
 /// attributes (skipped variants receive the same discriminant as their nearest
 /// non-skipped successor).
 fn derive_encode_variant(
-    discriminant: u32,
+    discriminant: u64,
     variant: &syn::Variant,
     crate_path: &syn::Path,
     tag_type: TagType,
 ) -> Result<TokenStream2, syn::Error> {
     let variant_name = &variant.ident;
-    let discriminant_lit = proc_macro2::Literal::u32_suffixed(discriminant);
+    // Emit the discriminant literal already narrowed to the configured tag width, validating the
+    // fit. The literal is the exact type written to the wire, so no `as` truncation is involved.
+    let discriminant_lit = discriminant_literal(discriminant, tag_type, variant.ident.span())?;
 
-    // Generate the tag encode expression based on the requested tag width.
-    let tag_encode = match tag_type {
-        TagType::U8 => quote! { (#discriminant_lit as u8).encode(encoder)?; },
-        TagType::U16 => quote! { (#discriminant_lit as u16).encode(encoder)?; },
-        TagType::U32 => quote! { (#discriminant_lit as u32).encode(encoder)?; },
-        TagType::U64 => quote! { (#discriminant_lit as u64).encode(encoder)?; },
-    };
+    // Generate the tag encode expression at the requested tag width.
+    let tag_encode = quote! { #discriminant_lit.encode(encoder)?; };
 
     match &variant.fields {
         Fields::Named(fields) => {
@@ -371,14 +379,10 @@ fn derive_encode_variant(
             })
         }
         Fields::Unit => {
-            // For unit variants, the tag_encode already ends in `?;` which returns (),
-            // but we need to return Ok(()). Restructure to avoid the trailing `;` issue.
-            let tag_encode_expr = match tag_type {
-                TagType::U8 => quote! { (#discriminant_lit as u8).encode(encoder) },
-                TagType::U16 => quote! { (#discriminant_lit as u16).encode(encoder) },
-                TagType::U32 => quote! { (#discriminant_lit as u32).encode(encoder) },
-                TagType::U64 => quote! { (#discriminant_lit as u64).encode(encoder) },
-            };
+            // For unit variants we want the arm to evaluate to `Ok(())` directly, so emit the tag
+            // encode as an expression (no trailing `;`). The literal already carries the configured
+            // tag width, so `.encode()` writes exactly that many bytes.
+            let tag_encode_expr = quote! { #discriminant_lit.encode(encoder) };
             Ok(quote! {
                 Self::#variant_name => #tag_encode_expr
             })

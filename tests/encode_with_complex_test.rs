@@ -5,6 +5,7 @@
 //! sentinel bytes, zigzag varints, custom string prefixes, packed pairs, array
 //! encodings, and combined-field structs with explicit byte-pattern verification.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

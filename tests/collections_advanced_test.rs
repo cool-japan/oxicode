@@ -3,6 +3,7 @@
 //! Covers nested collections, large collections, ordering guarantees,
 //! edge cases with empty containers, and the lazy decode iterator API.
 
+#![cfg(feature = "std")]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

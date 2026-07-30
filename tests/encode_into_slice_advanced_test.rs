@@ -1,5 +1,6 @@
 //! Advanced tests for `encode_into_slice` and related slice APIs.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

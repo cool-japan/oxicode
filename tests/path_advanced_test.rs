@@ -3,6 +3,7 @@
 //! Covers: simple filenames, absolute/relative paths, Unicode, spaces, empty paths,
 //! collections, structs, maps, tuples, and binary representation verification.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

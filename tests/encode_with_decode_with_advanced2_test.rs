@@ -2,6 +2,7 @@
 //! `#[oxicode(decode_with = "fn")]` field-level attributes.
 //! 22 tests covering patterns complementary to encode_with_advanced_test.rs.
 
+#![cfg(all(feature = "derive", feature = "simd", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -5,6 +5,7 @@
 //! StatusCode variants, big-endian/fixed-int configs, Vec of responses, version
 //! tuple accessor, and size ordering guarantees.
 
+#![cfg(all(feature = "alloc", feature = "derive", feature = "versioning"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

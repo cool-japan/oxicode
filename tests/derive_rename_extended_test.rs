@@ -28,6 +28,7 @@
 //! 21. rename_all = "kebab-case" on struct fields
 //! 22. Enum with mixed rename and non-rename variants, full roundtrip sweep
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -26,12 +26,19 @@ Each group uses `Throughput::Bytes` keyed to the raw payload size.
 
 ### `benches/comparison_bench.rs`
 
-The most comprehensive cross-library comparison: approximately 50 bench functions
-across ~785 lines.  Puts oxicode, bincode 2.0.1, rkyv, postcard, and borsh
-side-by-side on the same shared payload sizes (16 B, 256 B, 1 KB, and larger).
-Payloads include structs with primitive-heavy fields, string-heavy fields, and
-deeply nested data.  Uses `BenchmarkId` so criterion groups results by input
-size and library for easy visual comparison.
+The most comprehensive bench file in the suite: 12 bench functions across ~785
+lines. Despite its module doc comment's header (which lists rkyv, postcard,
+and borsh), the file's actual bench code only compares **oxicode vs bincode
+2.0.1** — none of the other three libraries are dev-dependencies or appear
+anywhere in the bench bodies. Groups cover: encode/decode/size comparisons on
+shared payload sizes (16 B, 256 B, 1 KB, and larger structs with
+primitive-heavy fields, string-heavy fields, and nested data), oxicode-only
+SIMD array benches (`i32`/`u32`/`i64`/`u64`/`f32`/`f64`), oxicode-only LZ4/Zstd
+compression benches, and primitive/struct/`Option`/`String`/round-trip scaling
+comparisons against bincode. Uses `BenchmarkId` so criterion groups results by
+input size and library for easy visual comparison. A genuine rkyv/postcard/
+borsh comparison would require adding those crates as dev-dependencies and new
+bench arms — that is not currently implemented.
 
 ### `benches/config_matrix_bench.rs`
 

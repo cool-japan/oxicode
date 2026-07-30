@@ -1,6 +1,7 @@
 //! Advanced nested struct tests for OxiCode — cryptocurrency exchange operations theme.
 //! Exactly 22 tests covering deeply nested domain types (3-4 levels).
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

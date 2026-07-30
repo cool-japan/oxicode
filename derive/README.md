@@ -46,12 +46,12 @@ The derive macros support:
 ## Example
 
 ```rust
-use oxicode::{encode, decode, Encode, Decode};
+use oxicode::{encode_to_vec, decode_from_slice, Encode, Decode};
 
 #[derive(Debug, PartialEq, Encode, Decode)]
-struct User<'a> {
+struct User {
     id: u64,
-    name: &'a str,
+    name: String,
     active: bool,
 }
 
@@ -65,12 +65,12 @@ enum Status {
 fn main() -> Result<(), oxicode::Error> {
     let user = User {
         id: 42,
-        name: "Alice",
+        name: "Alice".to_string(),
         active: true,
     };
 
-    let bytes = encode(&user)?;
-    let decoded: User = decode(&bytes)?;
+    let bytes = encode_to_vec(&user)?;
+    let (decoded, _): (User, _) = decode_from_slice(&bytes)?;
 
     assert_eq!(user, decoded);
     Ok(())

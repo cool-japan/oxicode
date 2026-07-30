@@ -3,6 +3,7 @@
 //! Import note: `oxicode::error` exports `Error` (not `DecodeError`).
 //! We alias it to `DecodeError` here to match the intended naming in the test spec.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,6 +4,7 @@
 //! including custom derived structs, enums, configs, fixed-int sizes,
 //! nested collections, and distinctness of encoded bytes.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

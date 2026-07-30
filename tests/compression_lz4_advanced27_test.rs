@@ -1,4 +1,4 @@
-#![cfg(feature = "compression-lz4")]
+#![cfg(all(feature = "compression-lz4", feature = "derive"))]
 //! Advanced LZ4 compression tests themed around particle physics and high-energy experiments.
 //!
 //! Covers particle collision events (transverse momentum, pseudorapidity, phi),

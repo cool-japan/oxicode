@@ -7,7 +7,7 @@
 //! aligner tray sequences, TMJ disorder assessments, whitening records,
 //! pediatric milestones, sterilization logs, and patient consent forms.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

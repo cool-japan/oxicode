@@ -8,7 +8,7 @@
 //! colony tracking, regulatory licenses, service agreements, rodent activity
 //! maps, and vegetation management schedules.
 
-#![cfg(feature = "compression-zstd")]
+#![cfg(all(feature = "compression-zstd", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

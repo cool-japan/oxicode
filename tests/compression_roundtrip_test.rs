@@ -1,6 +1,10 @@
 //! Comprehensive roundtrip tests for OxiCode compression.
 
-#![cfg(any(feature = "compression-lz4", feature = "compression-zstd"))]
+#![cfg(all(
+    any(feature = "compression-lz4", feature = "compression-zstd"),
+    feature = "derive",
+    feature = "std"
+))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,
@@ -85,8 +89,15 @@ use oxicode::compression::{
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helper struct shared across tests that need a serialisable type.
+//
+// Only `test_lz4_decompress_then_decode_struct` below (compression-lz4-gated)
+// uses this struct, and the `oxicode::Encode`/`oxicode::Decode` derive
+// macros it names require the `derive` feature. Gate it on exactly that
+// combination so a zstd-only (or derive-less) build doesn't compile an
+// unused/unresolvable struct under `-D warnings`.
 // ──────────────────────────────────────────────────────────────────────────────
 
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[derive(Debug, PartialEq, oxicode::Encode, oxicode::Decode)]
 struct SensorRecord {
     id: u32,
@@ -238,7 +249,7 @@ fn test_lz4_encode_to_vec_then_compress_pipeline() {
 // Test 9 – Decompress then decode pattern (SensorRecord struct)
 // ──────────────────────────────────────────────────────────────────────────────
 
-#[cfg(feature = "compression-lz4")]
+#[cfg(all(feature = "compression-lz4", feature = "derive"))]
 #[test]
 fn test_lz4_decompress_then_decode_struct() {
     let record = SensorRecord {

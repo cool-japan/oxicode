@@ -5,6 +5,7 @@
 //! special float values, struct derive interactions, HashMap content,
 //! and structural patterns such as structs that combine Cell and RefCell fields.
 
+#![cfg(all(feature = "derive", feature = "std"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -4,6 +4,7 @@
 //! grading scales, content types, individual assignments, and full course records
 //! with nested vecs and optional fields.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

@@ -2,6 +2,7 @@
 //! 22 tests covering new angles: wire sizes, addition/composition, cross-type
 //! structs, big-endian config, Option/Vec wrappers, and pre-epoch SystemTime.
 
+#![cfg(all(feature = "alloc", feature = "derive"))]
 #![allow(
     clippy::approx_constant,
     clippy::useless_vec,

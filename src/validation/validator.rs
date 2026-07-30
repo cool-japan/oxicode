@@ -172,6 +172,49 @@ impl<T> Validator<T> {
         Ok(())
     }
 
+    /// Validate `value` while tracking recursion depth against
+    /// [`ValidationConfig::max_depth`].
+    ///
+    /// [`Validator`] only knows how to validate a single flat `T` against its
+    /// registered constraints; it has no built-in notion of "nested
+    /// structures". Callers that hand-write recursive validation over
+    /// tree-shaped or self-referential data (e.g. a JSON-like value, a
+    /// recursive `Vec<Vec<T>>`, or a linked structure) use this method as the
+    /// recursive entry point, incrementing `depth` by one on each recursive
+    /// call. Once `depth` exceeds `self.config.max_depth`, validation fails
+    /// immediately with a dedicated error *before* running any constraints —
+    /// this guards against stack exhaustion (or unbounded work) on deeply
+    /// nested or adversarially crafted input, which is exactly the scenario
+    /// [`ValidationConfig::max_depth`] exists to bound.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use oxicode::validation::{Validator, Constraints, ValidationConfig};
+    ///
+    /// let config = ValidationConfig::new().with_max_depth(2);
+    /// let validator: Validator<i32> = Validator::with_config(config)
+    ///     .constraint("v", Constraints::range(Some(0i32), Some(100i32)));
+    ///
+    /// // Within the configured depth: ordinary constraint checking applies.
+    /// assert!(validator.validate_at_depth(&50, 0).is_ok());
+    /// assert!(validator.validate_at_depth(&50, 2).is_ok());
+    /// assert!(validator.validate_at_depth(&500, 0).is_err()); // fails Range, not depth
+    ///
+    /// // Beyond the configured depth: rejected immediately, even though 50
+    /// // would otherwise satisfy every registered constraint.
+    /// assert!(validator.validate_at_depth(&50, 3).is_err());
+    /// ```
+    pub fn validate_at_depth(&self, value: &T, depth: usize) -> Result<(), ValidationError> {
+        if depth > self.config.max_depth {
+            return Err(ValidationError::new(
+                "<recursion>",
+                "maximum validation depth exceeded",
+            ));
+        }
+        self.validate_first(value)
+    }
+
     /// Get the number of constraints.
     pub fn constraint_count(&self) -> usize {
         self.validations.len()
@@ -230,6 +273,115 @@ impl<T> Validator<T> {
             Ok(()) => value.clone(),
             Err(_) => default_fn(),
         }
+    }
+}
+
+/// Error returned by [`Validator::decode_and_validate`].
+///
+/// Unifies decode-time failures (truncated/corrupt bytes, a checksum
+/// mismatch) with post-decode constraint violations so callers can handle
+/// both from a single `Result`.
+#[cfg(all(feature = "alloc", feature = "checksum"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValidatedDecodeError {
+    /// The payload failed to decode, or (when
+    /// [`ValidationConfig::verify_checksum`] is enabled) its checksum did
+    /// not match.
+    Decode(crate::Error),
+    /// Decoding succeeded, but the decoded value failed one or more
+    /// registered constraints.
+    Validation(Vec<ValidationError>),
+}
+
+#[cfg(all(feature = "alloc", feature = "checksum"))]
+impl core::fmt::Display for ValidatedDecodeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ValidatedDecodeError::Decode(e) => write!(f, "decode failed: {e}"),
+            ValidatedDecodeError::Validation(errors) => {
+                write!(f, "validation failed with {} error(s)", errors.len())?;
+                for e in errors {
+                    write!(f, "; {e}")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(all(feature = "std", feature = "checksum"))]
+impl std::error::Error for ValidatedDecodeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ValidatedDecodeError::Decode(e) => Some(e),
+            ValidatedDecodeError::Validation(_) => None,
+        }
+    }
+}
+
+#[cfg(all(feature = "alloc", feature = "checksum"))]
+impl<T: crate::Decode> Validator<T> {
+    /// Decode `data` and validate the result in one step, honoring
+    /// [`ValidationConfig::verify_checksum`].
+    ///
+    /// When `self.config.verify_checksum` is `true`, `data` must be wrapped
+    /// with [`crate::checksum::wrap_with_checksum`] (or one of the
+    /// `encode_with_checksum*` helpers): the embedded CRC32 checksum is
+    /// verified via [`crate::checksum::decode_with_checksum`] before the
+    /// payload is decoded, and a mismatch or corrupt header is surfaced as
+    /// [`ValidatedDecodeError::Decode`]. When `false`, `data` is decoded
+    /// directly (via [`crate::decode_from_slice`]) with no checksum framing.
+    ///
+    /// After a successful decode, every registered constraint is run
+    /// against the value via [`Validator::validate`]; constraint failures
+    /// are reported as [`ValidatedDecodeError::Validation`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use oxicode::validation::{Validator, Constraints, ValidationConfig, ValidatedDecodeError};
+    /// use oxicode::checksum::wrap_with_checksum;
+    ///
+    /// let config = ValidationConfig::new().with_checksum(true);
+    /// let validator: Validator<i32> = Validator::with_config(config)
+    ///     .constraint("v", Constraints::range(Some(0i32), Some(100i32)));
+    ///
+    /// let payload = oxicode::encode_to_vec(&50i32).expect("encode");
+    /// let wrapped = wrap_with_checksum(&payload);
+    ///
+    /// assert_eq!(validator.decode_and_validate(&wrapped), Ok(50));
+    ///
+    /// // Corrupting the payload trips the checksum check first.
+    /// let mut corrupted = wrapped.clone();
+    /// let last = corrupted.len() - 1;
+    /// corrupted[last] ^= 0xFF;
+    /// assert!(matches!(
+    ///     validator.decode_and_validate(&corrupted),
+    ///     Err(ValidatedDecodeError::Decode(_))
+    /// ));
+    ///
+    /// // A value that decodes fine but violates the range constraint.
+    /// let out_of_range = oxicode::encode_to_vec(&500i32).expect("encode");
+    /// let wrapped_oor = wrap_with_checksum(&out_of_range);
+    /// assert!(matches!(
+    ///     validator.decode_and_validate(&wrapped_oor),
+    ///     Err(ValidatedDecodeError::Validation(_))
+    /// ));
+    /// ```
+    pub fn decode_and_validate(&self, data: &[u8]) -> Result<T, ValidatedDecodeError> {
+        let value: T = if self.config.verify_checksum {
+            crate::checksum::decode_with_checksum::<T>(data)
+                .map(|(value, _consumed)| value)
+                .map_err(ValidatedDecodeError::Decode)?
+        } else {
+            crate::decode_from_slice::<T>(data)
+                .map(|(value, _consumed)| value)
+                .map_err(ValidatedDecodeError::Decode)?
+        };
+
+        self.validate(&value)
+            .map_err(ValidatedDecodeError::Validation)?;
+        Ok(value)
     }
 }
 
@@ -614,6 +766,70 @@ mod tests {
             default_called,
             "default closure must be called when invalid"
         );
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_validate_at_depth_enforces_max_depth() {
+        let config = ValidationConfig::new().with_max_depth(2);
+        let validator: Validator<i32> =
+            Validator::with_config(config).constraint("v", Range::new(Some(0), Some(100)));
+
+        // Within the configured depth, ordinary constraint checking applies.
+        assert!(validator.validate_at_depth(&50, 0).is_ok());
+        assert!(validator.validate_at_depth(&50, 2).is_ok());
+        // Constraint failure still surfaces within the depth budget.
+        assert!(validator.validate_at_depth(&500, 0).is_err());
+
+        // Beyond the configured depth, rejected immediately even for a value
+        // that would satisfy every registered constraint.
+        let err = validator
+            .validate_at_depth(&50, 3)
+            .expect_err("depth 3 exceeds max_depth 2");
+        assert_eq!(err.field, "<recursion>");
+        assert_eq!(err.message, "maximum validation depth exceeded");
+    }
+
+    #[cfg(all(feature = "std", feature = "checksum"))]
+    #[test]
+    fn test_decode_and_validate_honors_verify_checksum() {
+        use alloc::vec::Vec;
+
+        // With checksum verification enabled, the input must be checksum-wrapped.
+        let config = ValidationConfig::new().with_checksum(true);
+        let validator: Validator<i32> =
+            Validator::with_config(config).constraint("v", Range::new(Some(0), Some(100)));
+
+        let payload = crate::encode_to_vec(&50i32).expect("encode");
+        let wrapped = crate::checksum::wrap_with_checksum(&payload);
+        assert_eq!(validator.decode_and_validate(&wrapped), Ok(50));
+
+        // Corrupting the wrapped bytes trips the checksum check as a Decode error.
+        let mut corrupted: Vec<u8> = wrapped.clone();
+        let last = corrupted.len() - 1;
+        corrupted[last] ^= 0xFF;
+        assert!(matches!(
+            validator.decode_and_validate(&corrupted),
+            Err(ValidatedDecodeError::Decode(_))
+        ));
+
+        // A value that decodes but violates a constraint is a Validation error.
+        let oor = crate::encode_to_vec(&500i32).expect("encode");
+        let wrapped_oor = crate::checksum::wrap_with_checksum(&oor);
+        assert!(matches!(
+            validator.decode_and_validate(&wrapped_oor),
+            Err(ValidatedDecodeError::Validation(_))
+        ));
+    }
+
+    #[cfg(all(feature = "std", feature = "checksum"))]
+    #[test]
+    fn test_decode_and_validate_without_checksum_uses_plain_decode() {
+        // When verify_checksum is false, the payload is decoded directly.
+        let validator: Validator<i32> =
+            Validator::new().constraint("v", Range::new(Some(0), Some(100)));
+        let payload = crate::encode_to_vec(&42i32).expect("encode");
+        assert_eq!(validator.decode_and_validate(&payload), Ok(42));
     }
 
     #[cfg(feature = "alloc")]
