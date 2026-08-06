@@ -3,6 +3,9 @@
 #[cfg(feature = "alloc")]
 mod impl_alloc;
 
+#[cfg(feature = "alloc")]
+pub(crate) use impl_alloc::read_bytes_bounded;
+
 #[cfg(feature = "std")]
 mod impl_std;
 

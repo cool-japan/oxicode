@@ -46,14 +46,14 @@ pub(crate) fn make_seq_len_decode_expr(
     quote! {
         {
             let __seq_len = ::core::convert::TryInto::<usize>::try_into(
-                <#len_ty_tokens as #crate_path::Decode>::decode(decoder)?
+                <#len_ty_tokens as #crate_path::Decode<_>>::decode(decoder)?
             ).map_err(|_| #crate_path::Error::InvalidData {
                 message: "seq_len exceeds usize on this platform"
             })?;
             #claim
-            let mut __vec = Vec::with_capacity(::core::cmp::min(__seq_len, 4096));
+            let mut __vec = #crate_path::__private::Vec::with_capacity(::core::cmp::min(__seq_len, 4096));
             for _ in 0..__seq_len {
-                __vec.push(<_ as #crate_path::Decode>::decode(decoder)?);
+                __vec.push(<_ as #crate_path::Decode<_>>::decode(decoder)?);
             }
             __vec
         }
@@ -71,15 +71,21 @@ pub(crate) fn make_bytes_decode_expr(field_ty: &syn::Type, crate_path: &syn::Pat
     quote! {
         {
             let __len = ::core::convert::TryInto::<usize>::try_into(
-                <u64 as #crate_path::de::Decode>::decode(decoder)?
+                <u64 as #crate_path::de::Decode<_>>::decode(decoder)?
             ).map_err(|_| #crate_path::Error::InvalidData {
                 message: "byte length exceeds usize on this platform"
             })?;
             decoder.claim_bytes_read(__len)?;
-            let mut __buf: Vec<u8> = Vec::with_capacity(__len);
-            __buf.resize(__len, 0u8);
-            <_ as #crate_path::de::read::Reader>::read(decoder.reader(), &mut __buf)?;
-            <#field_ty as ::core::convert::TryFrom<Vec<u8>>>::try_from(__buf)
+            // Never reserve the full attacker-controlled length up front. When
+            // the reader knows how much input is left the length is rejected
+            // before any allocation; otherwise the buffer is materialized in
+            // bounded steps, each of which must actually be filled from the
+            // reader before the next is reserved, so a forged length prefix
+            // fails on the first short read rather than committing a
+            // multi-gigabyte allocation from a handful of bytes.
+            let __buf: #crate_path::__private::Vec<u8> =
+                #crate_path::__private::read_bytes_bounded(decoder, __len)?;
+            <#field_ty as ::core::convert::TryFrom<#crate_path::__private::Vec<u8>>>::try_from(__buf)
                 .map_err(|_| #crate_path::Error::InvalidData {
                     message: "byte field does not fit its declared type"
                 })?
@@ -101,7 +107,7 @@ pub(crate) fn make_bytes_borrow_decode_expr(
     quote! {
         {
             let __len = ::core::convert::TryInto::<usize>::try_into(
-                <u64 as #crate_path::de::Decode>::decode(decoder)?
+                <u64 as #crate_path::de::Decode<_>>::decode(decoder)?
             ).map_err(|_| #crate_path::Error::InvalidData {
                 message: "byte length exceeds usize on this platform"
             })?;
@@ -162,16 +168,16 @@ pub(crate) fn derive_decode_body(
             // a `tag_type = "u64"` discriminant above `u32::MAX` is preserved and matched exactly.
             let decode_tag = match tag_type {
                 TagType::U8 => quote! {
-                    let __variant_tag = <u8 as #crate_path::Decode>::decode(decoder)?;
+                    let __variant_tag = <u8 as #crate_path::Decode<_>>::decode(decoder)?;
                 },
                 TagType::U16 => quote! {
-                    let __variant_tag = <u16 as #crate_path::Decode>::decode(decoder)?;
+                    let __variant_tag = <u16 as #crate_path::Decode<_>>::decode(decoder)?;
                 },
                 TagType::U32 => quote! {
-                    let __variant_tag = <u32 as #crate_path::Decode>::decode(decoder)?;
+                    let __variant_tag = <u32 as #crate_path::Decode<_>>::decode(decoder)?;
                 },
                 TagType::U64 => quote! {
-                    let __variant_tag = <u64 as #crate_path::Decode>::decode(decoder)?;
+                    let __variant_tag = <u64 as #crate_path::Decode<_>>::decode(decoder)?;
                 },
             };
 
@@ -216,7 +222,7 @@ fn derive_decode_transparent(
             let field_ty = &field.ty;
             Ok(quote! {
                 Ok(Self {
-                    #field_name: <#field_ty as #crate_path::Decode>::decode(decoder)?,
+                    #field_name: <#field_ty as #crate_path::Decode<_>>::decode(decoder)?,
                 })
             })
         }
@@ -236,7 +242,7 @@ fn derive_decode_transparent(
                 .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "expected field"))?;
             let field_ty = &field.ty;
             Ok(quote! {
-                Ok(Self(<#field_ty as #crate_path::Decode>::decode(decoder)?))
+                Ok(Self(<#field_ty as #crate_path::Decode<_>>::decode(decoder)?))
             })
         }
         Fields::Unit => Err(syn::Error::new(
@@ -284,7 +290,7 @@ fn derive_decode_struct(
                     } else if let Some(ref path) = attrs.decode_with {
                         Ok(quote! { #field_name: #path(decoder)? })
                     } else {
-                        Ok(quote! { #field_name: <#field_ty>::decode(decoder)? })
+                        Ok(quote! { #field_name: <#field_ty as #crate_path::Decode<_>>::decode(decoder)? })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -326,7 +332,7 @@ fn derive_decode_struct(
                     } else if let Some(ref path) = attrs.decode_with {
                         Ok(quote! { #path(decoder)? })
                     } else {
-                        Ok(quote! { <#field_ty>::decode(decoder)? })
+                        Ok(quote! { <#field_ty as #crate_path::Decode<_>>::decode(decoder)? })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -383,7 +389,7 @@ fn derive_decode_variant(
                     } else if let Some(ref path) = attrs.decode_with {
                         Ok(quote! { #field_name: #path(decoder)? })
                     } else {
-                        Ok(quote! { #field_name: <#field_ty>::decode(decoder)? })
+                        Ok(quote! { #field_name: <#field_ty as #crate_path::Decode<_>>::decode(decoder)? })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -423,7 +429,7 @@ fn derive_decode_variant(
                     } else if let Some(ref path) = attrs.decode_with {
                         Ok(quote! { #path(decoder)? })
                     } else {
-                        Ok(quote! { <#field_ty>::decode(decoder)? })
+                        Ok(quote! { <#field_ty as #crate_path::Decode<_>>::decode(decoder)? })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -442,23 +448,44 @@ pub(crate) fn build_decode_generics(
     generics: &syn::Generics,
     crate_path: &syn::Path,
     bound: &Option<Vec<syn::WherePredicate>>,
+    context: Option<&syn::Type>,
+    context_generic: bool,
 ) -> (TokenStream2, TokenStream2) {
-    let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
+    let (_impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
 
-    let impl_generics_tokens = if bound.is_some() {
-        quote! { #impl_generics }
-    } else {
-        let mut generics_with_bounds = generics.clone();
+    // `#[oxicode(context_generic)]` makes the impl generic over a fresh context
+    // parameter, which is what lets a derived type be decoded under *any*
+    // context. `#[oxicode(decode_context = "...")]` instead names one specific
+    // context — either a concrete type or a parameter the container declares.
+    let fresh_ctx = context_generic.then(generic_context_ident);
+
+    // The auto-bound on each type parameter has to name the same context, or a
+    // generic field would only be decodable under `()`.
+    let decode_bound: syn::TypeParamBound = match context {
+        Some(ctx) => syn::parse_quote!(#crate_path::Decode<#ctx>),
+        None => syn::parse_quote!(#crate_path::Decode),
+    };
+
+    let mut generics_with_bounds = generics.clone();
+    insert_context_param(&mut generics_with_bounds, fresh_ctx.as_ref());
+    if bound.is_none() {
         for param in &mut generics_with_bounds.params {
             if let syn::GenericParam::Type(type_param) = param {
-                type_param
-                    .bounds
-                    .push(syn::parse_quote!(#crate_path::Decode));
+                // Never bound the context parameter by `Decode`: neither the
+                // one the container declares (`C: Decode<C>`) nor the fresh one
+                // the derive just introduced.
+                if is_context_param(context, &type_param.ident)
+                    || fresh_ctx.as_ref() == Some(&type_param.ident)
+                {
+                    continue;
+                }
+                type_param.bounds.push(decode_bound.clone());
             }
         }
-        let (ig, _, _) = generics_with_bounds.split_for_impl();
-        quote! { #ig }
-    };
+    }
+
+    let (impl_generics_with_bounds, _, generated_where) = generics_with_bounds.split_for_impl();
+    let impl_generics_tokens = quote! { #impl_generics_with_bounds };
 
     let effective_where = if let Some(ref predicates) = bound {
         match where_clause {
@@ -469,22 +496,68 @@ pub(crate) fn build_decode_generics(
             None => predicates_to_where_clause(predicates),
         }
     } else {
-        let mut generics_with_bounds = generics.clone();
-        for param in &mut generics_with_bounds.params {
-            if let syn::GenericParam::Type(type_param) = param {
-                type_param
-                    .bounds
-                    .push(syn::parse_quote!(#crate_path::Decode));
-            }
-        }
-        let (_, _, wc) = generics_with_bounds.split_for_impl();
-        match wc {
+        match generated_where {
             Some(wc) => quote! { #wc },
             None => quote! {},
         }
     };
 
     (impl_generics_tokens, effective_where)
+}
+
+/// Is `ident` the type parameter named by the container's context attribute?
+///
+/// Only true when the attribute named a bare identifier that the container also
+/// declares as a generic parameter — the `#[oxicode(decode_context = "Ctx")]`
+/// on `struct Foo<Ctx, T>` case. Such a parameter must not get a `Decode` bound
+/// of its own: `Ctx: Decode<Ctx>` is not what the user asked for.
+fn is_context_param(context: Option<&syn::Type>, ident: &syn::Ident) -> bool {
+    match context.and_then(context_ident) {
+        Some(ctx_ident) => ctx_ident == *ident,
+        None => false,
+    }
+}
+
+/// The single identifier a context type is written as, if it is one.
+///
+/// `"Ctx"` yields `Some(Ctx)`; `"my_crate::Arena"` or `"&'a Bump"` yield `None`
+/// because those are unambiguously concrete types.
+fn context_ident(ty: &syn::Type) -> Option<syn::Ident> {
+    let syn::Type::Path(type_path) = ty else {
+        return None;
+    };
+    if type_path.qself.is_some() {
+        return None;
+    }
+    let ident = type_path.path.get_ident()?;
+    Some(ident.clone())
+}
+
+/// Name of the context parameter introduced by `#[oxicode(context_generic)]`.
+///
+/// Deliberately not user-chosen: a name given in an attribute string cannot be
+/// told apart from a concrete type at macro-expansion time, so accepting one
+/// would silently shadow real types (`decode_context = "Tracker"` becoming
+/// `impl<Tracker> ...`). The flag form has no such ambiguity.
+pub(crate) fn generic_context_ident() -> syn::Ident {
+    syn::Ident::new("__Ctx", proc_macro2::Span::call_site())
+}
+
+/// Declare `ctx` on the impl, after every lifetime parameter (Rust requires
+/// lifetimes to come first in a generic parameter list).
+fn insert_context_param(generics: &mut syn::Generics, ctx: Option<&syn::Ident>) {
+    let Some(ident) = ctx else {
+        return;
+    };
+    let position = generics
+        .params
+        .iter()
+        .position(|param| !matches!(param, syn::GenericParam::Lifetime(_)))
+        .unwrap_or(generics.params.len());
+    generics.params.insert(
+        position,
+        syn::GenericParam::Type(syn::TypeParam::from(ident.clone())),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -542,16 +615,16 @@ pub(crate) fn derive_borrow_decode_body(
             // Decode the tag at its native width; the arm literals match that width exactly.
             let decode_tag = match tag_type {
                 TagType::U8 => quote! {
-                    let __variant_tag = <u8 as #crate_path::de::Decode>::decode(decoder)?;
+                    let __variant_tag = <u8 as #crate_path::de::Decode<_>>::decode(decoder)?;
                 },
                 TagType::U16 => quote! {
-                    let __variant_tag = <u16 as #crate_path::de::Decode>::decode(decoder)?;
+                    let __variant_tag = <u16 as #crate_path::de::Decode<_>>::decode(decoder)?;
                 },
                 TagType::U32 => quote! {
-                    let __variant_tag = <u32 as #crate_path::de::Decode>::decode(decoder)?;
+                    let __variant_tag = <u32 as #crate_path::de::Decode<_>>::decode(decoder)?;
                 },
                 TagType::U64 => quote! {
-                    let __variant_tag = <u64 as #crate_path::de::Decode>::decode(decoder)?;
+                    let __variant_tag = <u64 as #crate_path::de::Decode<_>>::decode(decoder)?;
                 },
             };
 
@@ -597,7 +670,7 @@ fn derive_borrow_decode_transparent(
             let field_ty = &field.ty;
             Ok(quote! {
                 Ok(Self {
-                    #field_name: <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime>>::borrow_decode(decoder)?,
+                    #field_name: <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime, _>>::borrow_decode(decoder)?,
                 })
             })
         }
@@ -617,7 +690,7 @@ fn derive_borrow_decode_transparent(
                 .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "expected field"))?;
             let field_ty = &field.ty;
             Ok(quote! {
-                Ok(Self(<#field_ty as #crate_path::de::BorrowDecode<#de_lifetime>>::borrow_decode(decoder)?))
+                Ok(Self(<#field_ty as #crate_path::de::BorrowDecode<#de_lifetime, _>>::borrow_decode(decoder)?))
             })
         }
         Fields::Unit => Err(syn::Error::new(
@@ -670,7 +743,7 @@ fn derive_borrow_decode_struct(
                         Ok(quote! { #field_name: #path(decoder)? })
                     } else {
                         Ok(quote! {
-                            #field_name: <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime>>::borrow_decode(decoder)?
+                            #field_name: <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime, _>>::borrow_decode(decoder)?
                         })
                     }
                 })
@@ -710,7 +783,7 @@ fn derive_borrow_decode_struct(
                         Ok(quote! { #path(decoder)? })
                     } else {
                         Ok(quote! {
-                            <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime>>::borrow_decode(decoder)?
+                            <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime, _>>::borrow_decode(decoder)?
                         })
                     }
                 })
@@ -773,7 +846,7 @@ fn derive_borrow_decode_variant(
                         Ok(quote! { #field_name: #path(decoder)? })
                     } else {
                         Ok(quote! {
-                            #field_name: <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime>>::borrow_decode(decoder)?
+                            #field_name: <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime, _>>::borrow_decode(decoder)?
                         })
                     }
                 })
@@ -811,7 +884,7 @@ fn derive_borrow_decode_variant(
                         Ok(quote! { #path(decoder)? })
                     } else {
                         Ok(quote! {
-                            <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime>>::borrow_decode(decoder)?
+                            <#field_ty as #crate_path::de::BorrowDecode<#de_lifetime, _>>::borrow_decode(decoder)?
                         })
                     }
                 })
@@ -831,6 +904,8 @@ pub(crate) fn build_borrow_decode_generics(
     generics: &syn::Generics,
     crate_path: &syn::Path,
     bound: &Option<Vec<syn::WherePredicate>>,
+    context: Option<&syn::Type>,
+    context_generic: bool,
 ) -> (TokenStream2, syn::Lifetime, TokenStream2) {
     let (_impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
 
@@ -858,13 +933,26 @@ pub(crate) fn build_borrow_decode_generics(
     // and BorrowDecode bounds on type params.
     let mut generics_with_bounds = generics.clone();
 
+    let fresh_ctx = context_generic.then(generic_context_ident);
+    insert_context_param(&mut generics_with_bounds, fresh_ctx.as_ref());
+
+    let borrow_bound: syn::TypeParamBound = match context {
+        Some(ctx) => {
+            syn::parse_quote!(#crate_path::de::BorrowDecode<#de_lifetime, #ctx>)
+        }
+        None => syn::parse_quote!(#crate_path::de::BorrowDecode<#de_lifetime>),
+    };
+
     if bound.is_none() {
         // Auto-generate BorrowDecode bounds.
         for param in &mut generics_with_bounds.params {
             if let syn::GenericParam::Type(type_param) = param {
-                type_param
-                    .bounds
-                    .push(syn::parse_quote!(#crate_path::de::BorrowDecode<#de_lifetime>));
+                if is_context_param(context, &type_param.ident)
+                    || fresh_ctx.as_ref() == Some(&type_param.ident)
+                {
+                    continue;
+                }
+                type_param.bounds.push(borrow_bound.clone());
             }
         }
     }

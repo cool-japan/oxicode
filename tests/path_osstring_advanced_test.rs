@@ -204,10 +204,20 @@ fn test_pathbuf_fixed_int_encoding_roundtrip() {
     let (decoded, _): (PathBuf, usize) =
         decode_from_slice_with_config(&encoded, cfg).expect("decode with fixed int failed");
     assert_eq!(path, decoded);
-    // verify the path string bytes are present in the encoded output
+    // Verify the path characters are present verbatim in the encoded output.
+    // The payload is the platform's raw `OsStr` representation (see the
+    // "Path & PathBuf" section of src/features/impl_std.rs): UTF-8 bytes on
+    // unix, UTF-16 code units on windows. Under fixed-int encoding each code
+    // unit occupies two little-endian bytes, so the windows payload is the
+    // UTF-16LE form of the path rather than its ASCII bytes.
     let path_str = path.to_str().expect("path is valid UTF-8");
-    let path_bytes = path_str.as_bytes();
-    let contains = encoded.windows(path_bytes.len()).any(|w| w == path_bytes);
+    #[cfg(windows)]
+    let expected_payload: Vec<u8> = path_str.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    #[cfg(not(windows))]
+    let expected_payload: Vec<u8> = path_str.as_bytes().to_vec();
+    let contains = encoded
+        .windows(expected_payload.len())
+        .any(|w| w == expected_payload);
     assert!(contains, "encoded bytes must contain raw path string");
 }
 

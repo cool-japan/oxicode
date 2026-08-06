@@ -15,6 +15,19 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use std::io::Read;
 
+/// Largest chunk-payload slice read (and thus allocated) in one step when
+/// materializing a chunk payload from a `std::io::Read` / `AsyncRead` stream.
+///
+/// A chunk header only carries a claimed `payload_len` (up to `MAX_CHUNK_SIZE`
+/// after the bound check), not the bytes themselves; bounding the per-step
+/// allocation means a header that lies about its payload — or a connection
+/// that sends the header and then stalls — can only ever commit this much
+/// memory before the reader has to actually produce more bytes, rather than
+/// the full claimed length up front. `pub(crate)` because `AsyncStreamingDecoder`
+/// (in `super::async_io`) uses the same bound for the identical reason.
+#[cfg(feature = "std")]
+pub(crate) const PAYLOAD_READ_STEP: usize = 64 * 1024;
+
 /// A streaming decoder for reading items incrementally.
 ///
 /// Reads chunks from the input and decodes items one at a time,
@@ -155,7 +168,21 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
         // Create reader from remaining chunk data, using the stored codec config.
         let reader = SliceReader::new(&chunk.data[chunk.offset..]);
         let mut decoder = DecoderImpl::new(reader, self.codec_config);
-        let item = T::decode(&mut decoder)?;
+        let item = match T::decode(&mut decoder) {
+            Ok(item) => item,
+            Err(e) => {
+                // Poison on item-level errors too, matching the documented
+                // contract ("once any decode error occurs the decoder is
+                // poisoned") and the chunk-level error sites below. Without
+                // this, `chunk.offset` is never advanced on a failed decode,
+                // so a caller that loops past the error would re-decode the
+                // exact same bytes forever instead of getting a deterministic
+                // failed-state error on the next call.
+                self.poisoned = true;
+                self.finished = true;
+                return Err(e);
+            }
+        };
 
         // Update offset based on how much was read
         let bytes_consumed = chunk.data[chunk.offset..].len() - decoder.reader().slice.len();
@@ -234,21 +261,48 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
             });
         }
 
-        // Read chunk payload (payload_len is now bounded by `bound`).
-        let mut data = alloc::vec![0u8; header.payload_len as usize];
-        if let Err(e) = self.reader.read_exact(&mut data) {
-            self.poisoned = true;
-            self.finished = true;
-            let kind = e.kind();
-            if kind == std::io::ErrorKind::UnexpectedEof {
-                return Err(Error::UnexpectedEnd {
-                    additional: header.payload_len as usize,
-                });
+        // Read chunk payload (payload_len is now bounded by `bound`, so the
+        // *ceiling* on this allocation is already capped). Still materialize
+        // it incrementally rather than `vec![0u8; payload_len]` + `read_exact`:
+        // a header is only 13 bytes, so without this a connection that sends a
+        // header and then stalls (or a hostile peer that never sends the
+        // payload at all) would still cost the receiver a full `bound`-sized
+        // allocation — up to MAX_CHUNK_SIZE (16 MiB) by default — before a
+        // single payload byte has actually arrived. Growing in bounded
+        // `PAYLOAD_READ_STEP` increments means the allocation tracks bytes
+        // actually received off the wire instead of the header's claim.
+        let payload_len = header.payload_len as usize;
+        let mut data: alloc::vec::Vec<u8> = alloc::vec::Vec::new();
+        let mut filled = 0usize;
+        while filled < payload_len {
+            // `resize` only ever grows here: `data.len()` is always <=
+            // `payload_len` (by construction of `step` below) and never
+            // shrinks below `filled`, so re-resizing to the same or a larger
+            // target on the next iteration (including after retrying an
+            // `Interrupted` read below) is a cheap no-op / pure growth, never
+            // a truncation of bytes already read into `data[..filled]`.
+            let step = core::cmp::min(PAYLOAD_READ_STEP, payload_len - filled);
+            data.resize(filled + step, 0u8);
+            match self.reader.read(&mut data[filled..filled + step]) {
+                Ok(0) => {
+                    // EOF before the payload was fully received: truncated stream.
+                    self.poisoned = true;
+                    self.finished = true;
+                    return Err(Error::UnexpectedEnd {
+                        additional: payload_len - filled,
+                    });
+                }
+                Ok(n) => filled += n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => {
+                    self.poisoned = true;
+                    self.finished = true;
+                    return Err(Error::Io {
+                        kind: e.kind(),
+                        message: e.to_string(),
+                    });
+                }
             }
-            return Err(Error::Io {
-                kind,
-                message: e.to_string(),
-            });
         }
 
         self.current_chunk = Some(ChunkData {
@@ -286,6 +340,12 @@ impl<R: Read, C: Config> StreamingDecoder<R, C> {
 /// Streaming decoder for in-memory buffers (no std required).
 ///
 /// The `C` type parameter selects the codec configuration used to decode items.
+///
+/// Shares [`StreamingDecoder`]'s poisoning guarantee: once any decode error
+/// occurs (chunk-level or item-level), the decoder is poisoned and every
+/// subsequent call returns a deterministic error rather than misinterpreting
+/// payload bytes as a fresh chunk header or re-attempting a decode that will
+/// only fail the same way again.
 #[cfg(feature = "alloc")]
 pub struct BufferStreamingDecoder<'a, C: Config = config::Configuration> {
     data: &'a [u8],
@@ -371,7 +431,18 @@ impl<'a, C: Config> BufferStreamingDecoder<'a, C> {
         // Decode item
         let reader = SliceReader::new(&self.data[self.offset..self.current_chunk_end]);
         let mut decoder = DecoderImpl::new(reader, self.codec_config);
-        let item = T::decode(&mut decoder)?;
+        let item = match T::decode(&mut decoder) {
+            Ok(item) => item,
+            Err(e) => {
+                // See the identical poisoning at the same point in
+                // `StreamingDecoder::read_item` for the rationale: item-level
+                // errors must poison too, or a caller looping past the error
+                // spins on the same unadvanced offset forever.
+                self.poisoned = true;
+                self.finished = true;
+                return Err(e);
+            }
+        };
 
         let bytes_consumed = (self.current_chunk_end - self.offset) - decoder.reader().slice.len();
         self.offset += bytes_consumed;

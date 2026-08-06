@@ -249,7 +249,7 @@ mod encode_impl;
 use attrs::parse_container_attrs;
 use decode_impl::{
     build_borrow_decode_generics, build_decode_generics, derive_borrow_decode_body,
-    derive_decode_body,
+    derive_decode_body, generic_context_ident,
 };
 use encode_impl::{build_encode_generics, derive_encode_body};
 
@@ -316,7 +316,7 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics_tokens #crate_path::Encode for #name #ty_generics #effective_where {
-            fn encode<__E: #crate_path::enc::Encoder>(&self, encoder: &mut __E) -> Result<(), #crate_path::Error> {
+            fn encode<__E: #crate_path::enc::Encoder>(&self, encoder: &mut __E) -> ::core::result::Result<(), #crate_path::Error> {
                 #encode_body
             }
         }
@@ -337,6 +337,20 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 ///
 /// - `#[oxicode(skip)]` — don't decode this field; fill it with `Default::default()`
 /// - `#[oxicode(default = "fn_path")]` — don't decode this field; call `fn_path()` to produce it
+/// - `#[oxicode(decode_context = "Ctx")]` — implement `Decode<Ctx>` instead of
+///   `Decode<()>`, so the type can be decoded with `oxicode`'s
+///   `decode_from_slice_with_context` and friends, and can hold fields whose
+///   own impls need that context. `Ctx` may be a concrete type or a generic
+///   parameter the container already declares.
+/// - `#[oxicode(context_generic)]` — implement `Decode<C>` for *every* `C`, so
+///   the type composes into any context. Prefer this when the type itself does
+///   not care about the context.
+/// - `#[oxicode(context = "Ctx")]` sets both `decode_context` and
+///   `borrow_decode_context`; `#[oxicode(context_generic)]` likewise sets both
+///   generic forms.
+///
+/// Without any of these the generated impl is `Decode<()>`, exactly as before —
+/// the default path is unchanged in both the API and the wire format.
 ///
 /// # Example
 ///
@@ -369,8 +383,24 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
 
     let (_impl_generics, ty_generics, _where_clause) = generics.split_for_impl();
 
-    let (impl_generics_tokens, effective_where) =
-        build_decode_generics(generics, crate_path, &container_attrs.bound);
+    let decode_context = container_attrs.decode_context.clone();
+    let context_generic = container_attrs.decode_context_generic;
+    let (impl_generics_tokens, effective_where) = build_decode_generics(
+        generics,
+        crate_path,
+        &container_attrs.bound,
+        decode_context.as_ref(),
+        context_generic,
+    );
+    // `Context = ()` unless the container opted into a context, so the default
+    // derive output — and therefore the wire format and the public API — is
+    // unchanged.
+    let decode_context_ty: syn::Type = if context_generic {
+        let ctx = generic_context_ident();
+        syn::parse_quote!(#ctx)
+    } else {
+        decode_context.unwrap_or_else(|| syn::parse_quote!(()))
+    };
 
     let decode_body = match derive_decode_body(
         &input.data,
@@ -383,8 +413,8 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl #impl_generics_tokens #crate_path::Decode for #name #ty_generics #effective_where {
-            fn decode<__D: #crate_path::de::Decoder<Context = ()>>(decoder: &mut __D) -> Result<Self, #crate_path::Error> {
+        impl #impl_generics_tokens #crate_path::Decode<#decode_context_ty> for #name #ty_generics #effective_where {
+            fn decode<__D: #crate_path::de::Decoder<Context = #decode_context_ty>>(decoder: &mut __D) -> ::core::result::Result<Self, #crate_path::Error> {
                 #decode_body
             }
         }
@@ -407,6 +437,10 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
 ///
 /// - `#[oxicode(skip)]` — don't borrow-decode this field; fill with `Default::default()`
 /// - `#[oxicode(default = "fn_path")]` — don't decode; call `fn_path()` to produce it
+/// - `#[oxicode(borrow_decode_context = "Ctx")]` — implement
+///   `BorrowDecode<'de, Ctx>` instead of `BorrowDecode<'de, ()>`
+/// - `#[oxicode(borrow_decode_context_generic)]` — implement
+///   `BorrowDecode<'de, C>` for every `C`
 ///
 /// # Example
 ///
@@ -435,8 +469,21 @@ pub fn derive_borrow_decode(input: TokenStream) -> TokenStream {
 
     let (_impl_generics, ty_generics, _where_clause) = generics.split_for_impl();
 
-    let (impl_generics_with_bounds, de_lifetime, effective_where) =
-        build_borrow_decode_generics(generics, crate_path, &container_attrs.bound);
+    let borrow_context = container_attrs.borrow_decode_context.clone();
+    let context_generic = container_attrs.borrow_decode_context_generic;
+    let (impl_generics_with_bounds, de_lifetime, effective_where) = build_borrow_decode_generics(
+        generics,
+        crate_path,
+        &container_attrs.bound,
+        borrow_context.as_ref(),
+        context_generic,
+    );
+    let borrow_context_ty: syn::Type = if context_generic {
+        let ctx = generic_context_ident();
+        syn::parse_quote!(#ctx)
+    } else {
+        borrow_context.unwrap_or_else(|| syn::parse_quote!(()))
+    };
 
     let decode_body = match derive_borrow_decode_body(
         &input.data,
@@ -450,10 +497,10 @@ pub fn derive_borrow_decode(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl #impl_generics_with_bounds #crate_path::de::BorrowDecode<#de_lifetime> for #name #ty_generics #effective_where {
-            fn borrow_decode<__D: #crate_path::de::BorrowDecoder<#de_lifetime, Context = ()>>(
+        impl #impl_generics_with_bounds #crate_path::de::BorrowDecode<#de_lifetime, #borrow_context_ty> for #name #ty_generics #effective_where {
+            fn borrow_decode<__D: #crate_path::de::BorrowDecoder<#de_lifetime, Context = #borrow_context_ty>>(
                 decoder: &mut __D,
-            ) -> Result<Self, #crate_path::Error> {
+            ) -> ::core::result::Result<Self, #crate_path::Error> {
                 #decode_body
             }
         }

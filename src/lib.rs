@@ -69,6 +69,39 @@ pub mod encode {
     pub use crate::enc::{SizeWriter, SliceWriter, Writer};
 }
 
+/// Implementation detail of `#[derive(Encode)]` / `#[derive(Decode)]` /
+/// `#[derive(BorrowDecode)]`. Not part of the public API; do not use directly.
+///
+/// The derive macros splice item references (like `Vec`) into the invoking
+/// crate's source. A bare `Vec` in that generated code resolves through
+/// *that* crate's prelude/imports, not oxicode's — which breaks under
+/// `#![no_std]` + `alloc` (where `Vec` is never implicitly in scope) and can
+/// in principle be shadowed by an unrelated same-named item. Routing the
+/// generated code through this module's re-exports instead gives it a path
+/// that always resolves to the right type regardless of what the invoking
+/// crate has imported.
+#[cfg(feature = "alloc")]
+#[doc(hidden)]
+pub mod __private {
+    pub use alloc::vec::Vec;
+
+    /// Read exactly `len` bytes for the `#[oxicode(bytes)]` derive block.
+    ///
+    /// Exposed so generated code gets the same allocation bound the built-in
+    /// `String` / `Vec<u8>` impls use: reject up front when the reader knows
+    /// the remaining input is shorter than the claimed length, otherwise
+    /// materialize the buffer incrementally so a forged length prefix fails on
+    /// the first short read rather than at `alloc` time.
+    ///
+    /// Not part of the public API and not subject to semver.
+    pub fn read_bytes_bounded<D: crate::de::Decoder>(
+        decoder: &mut D,
+        len: usize,
+    ) -> ::core::result::Result<Vec<u8>, crate::error::Error> {
+        crate::features::read_bytes_bounded(decoder, len)
+    }
+}
+
 pub(crate) mod utils;
 pub(crate) mod varint;
 
@@ -796,6 +829,88 @@ pub fn decode_from_buffered_read<D: Decode, R: std::io::Read>(
     D::decode(&mut decoder)
 }
 
+/// Decode a value from any `std::io::Read` whose total length is known.
+///
+/// Identical to [`decode_from_buffered_read`], except that the reader is given
+/// a hard budget of `max_bytes`. Two things follow from that:
+///
+/// * reads past the budget fail with [`Error::UnexpectedEnd`] instead of
+///   running into whatever follows in the stream, and
+/// * the decoder can answer "how much input is left?" exactly, so a
+///   length-prefixed field claiming more bytes than the stream can hold is
+///   rejected *before* an allocation of that size is attempted, exactly as it
+///   is for slice input.
+///
+/// Pass the *real* length of the payload: a file size, an HTTP
+/// `Content-Length`, or the frame length of a length-delimited protocol. The
+/// budget doubles as the allocation bound, so a deliberately generous value is
+/// a correspondingly generous bound — it never rejects valid input, but it
+/// buys less. A budget smaller than the value being decoded rejects valid
+/// input. (Allocation is capped and grown incrementally either way, so a loose
+/// budget is never worse than no budget.)
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// let bytes = oxicode::encode_to_vec(&"hello".to_string()).expect("encode failed");
+/// let len = bytes.len();
+/// let decoded: String =
+///     oxicode::decode_from_buffered_read_limited(Cursor::new(bytes), oxicode::config::standard(), len)
+///         .expect("decode failed");
+/// assert_eq!(decoded, "hello");
+///
+/// // A forged 16 EiB length prefix is refused without allocating.
+/// let forged = [253u8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+/// let err = oxicode::decode_from_buffered_read_limited::<String, _>(
+///     Cursor::new(forged),
+///     oxicode::config::standard(),
+///     forged.len(),
+/// )
+/// .expect_err("forged length must be rejected");
+/// assert!(matches!(err, oxicode::Error::UnexpectedEnd { .. }));
+/// ```
+#[cfg(feature = "std")]
+pub fn decode_from_buffered_read_limited<D: Decode, R: std::io::Read>(
+    src: R,
+    config: impl config::Config,
+    max_bytes: usize,
+) -> Result<D> {
+    let reader = de::read::BufferedIoReader::with_limit(src, max_bytes);
+    let mut decoder = de::DecoderImpl::new(reader, config);
+    D::decode(&mut decoder)
+}
+
+/// Decode a value from a `std::io::Read` whose total length is known.
+///
+/// Unbuffered counterpart of [`decode_from_buffered_read_limited`]; see that
+/// function for what the budget buys. Prefer the buffered variant for files
+/// and sockets.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+///
+/// let bytes = oxicode::encode_to_vec(&vec![1u8, 2, 3]).expect("encode failed");
+/// let len = bytes.len();
+/// let decoded: Vec<u8> =
+///     oxicode::decode_from_std_read_limited(Cursor::new(bytes), oxicode::config::standard(), len)
+///         .expect("decode failed");
+/// assert_eq!(decoded, vec![1u8, 2, 3]);
+/// ```
+#[cfg(feature = "std")]
+pub fn decode_from_std_read_limited<D: Decode, R: std::io::Read, C: config::Config>(
+    reader: R,
+    config: C,
+    max_bytes: usize,
+) -> Result<D> {
+    let io_reader = de::IoReader::with_limit(reader, max_bytes);
+    let mut decoder = de::DecoderImpl::new(io_reader, config);
+    D::decode(&mut decoder)
+}
+
 /// Decode a value from a byte slice using the standard configuration.
 ///
 /// Returns the decoded value and the number of bytes consumed.
@@ -1027,13 +1142,28 @@ pub fn decode_from_file<D: Decode>(path: impl AsRef<std::path::Path>) -> Result<
 }
 
 /// Decode a value from a file with a custom configuration
+///
+/// The file's size is a genuinely known end-of-stream bound, so it is handed to
+/// the reader as a byte budget: a length prefix claiming more bytes than the
+/// file physically contains is rejected before that much memory is reserved.
+/// Sources whose length cannot be determined (a named pipe, a `/proc` entry, a
+/// file longer than `usize::MAX` on a 32-bit target) simply decode unbounded,
+/// as before.
 #[cfg(feature = "std")]
 pub fn decode_from_file_with_config<D: Decode, C: config::Config>(
     path: impl AsRef<std::path::Path>,
     config: C,
 ) -> Result<D> {
     let file = std::fs::File::open(path)?;
-    decode_from_std_read(file, config)
+    let known_len = file
+        .metadata()
+        .ok()
+        .filter(|meta| meta.is_file())
+        .and_then(|meta| usize::try_from(meta.len()).ok());
+    match known_len {
+        Some(len) => decode_from_std_read_limited(file, config, len),
+        None => decode_from_std_read(file, config),
+    }
 }
 
 /// Decode a value from a byte slice with custom context
@@ -1050,6 +1180,62 @@ where
     let result = D::decode(&mut decoder)?;
     let bytes_read = src.len() - decoder.reader().slice.len();
     Ok((result, bytes_read))
+}
+
+/// Borrow decode a value from a byte slice (zero-copy) with a custom context.
+///
+/// The zero-copy counterpart of [`decode_from_slice_with_context`]. Types opt
+/// into a context with `#[oxicode(borrow_decode_context = "Ctx")]` or
+/// `#[oxicode(borrow_decode_context_generic)]`.
+pub fn borrow_decode_from_slice_with_context<'a, Ctx, D, C: config::Config>(
+    src: &'a [u8],
+    config: C,
+    context: Ctx,
+) -> Result<(D, usize)>
+where
+    D: de::BorrowDecode<'a, Ctx>,
+{
+    let reader = de::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::with_context(reader, config, context);
+    let result = D::borrow_decode(&mut decoder)?;
+    let bytes_read = src.len() - decoder.reader().slice.len();
+    Ok((result, bytes_read))
+}
+
+/// Decode a value from a `std::io::Read` with a custom context.
+///
+/// The `std::io` counterpart of [`decode_from_slice_with_context`]. Pair it
+/// with [`decode_from_std_read_limited`]'s budget by constructing the reader
+/// yourself when the stream length is known.
+#[cfg(feature = "std")]
+pub fn decode_from_std_read_with_context<Ctx, D, R: std::io::Read, C: config::Config>(
+    reader: R,
+    config: C,
+    context: Ctx,
+) -> Result<D>
+where
+    D: de::Decode<Ctx>,
+{
+    let io_reader = de::IoReader::new(reader);
+    let mut decoder = de::DecoderImpl::with_context(io_reader, config, context);
+    D::decode(&mut decoder)
+}
+
+/// Decode a value from any oxicode [`de::Reader`] with a custom context.
+///
+/// The most general context entry point: it accepts a reader the caller built,
+/// so a budgeted [`de::IoReader::with_limit`] or a custom reader can be used
+/// together with a context.
+pub fn decode_from_de_reader_with_context<Ctx, D, R: de::Reader, C: config::Config>(
+    reader: R,
+    config: C,
+    context: Ctx,
+) -> Result<D>
+where
+    D: de::Decode<Ctx>,
+{
+    let mut decoder = de::DecoderImpl::with_context(reader, config, context);
+    D::decode(&mut decoder)
 }
 
 /// Borrow decode a value from a byte slice (zero-copy) using the standard configuration.

@@ -66,6 +66,11 @@ fn char_decode_accepts_valid_ascii_and_multibyte() {
 
 static DROP_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+/// `DROP_COUNT` is process-global, so the two tests that assert on it must not
+/// run concurrently — otherwise one test's four drops land inside the other
+/// test's window and the assertion sees a count it never produced.
+static DROP_COUNT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct DropCounter(#[allow(dead_code)] u8);
 
 impl Drop for DropCounter {
@@ -82,6 +87,7 @@ impl Decode for DropCounter {
 
 #[test]
 fn array_decode_drops_initialized_prefix_on_error() {
+    let _guard = DROP_COUNT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     DROP_COUNT.store(0, Ordering::SeqCst);
 
     // Feed only 2 bytes for a [DropCounter; 4]: elements 0 and 1 decode, then
@@ -100,6 +106,7 @@ fn array_decode_drops_initialized_prefix_on_error() {
 
 #[test]
 fn array_decode_full_success_does_not_overdrop() {
+    let _guard = DROP_COUNT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     DROP_COUNT.store(0, Ordering::SeqCst);
     {
         let bytes = [1u8, 2, 3, 4];

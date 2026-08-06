@@ -8,9 +8,9 @@
 > [CHANGELOG.md](CHANGELOG.md); build/test commands are in
 > [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Current status (2026-07-30)
+## Current status (2026-08-06)
 
-- **Version 0.2.5** on branch `0.2.5`. Latest crates.io release: 0.2.4.
+- **Version 0.2.6** on branch `0.2.6` — the release this document describes.
 - The 0.2.5 production-hardening program is **complete**: 107 of 119
   adversarially-verified audit findings fixed — decode-time DoS mitigation
   (container claim accounting, decompression caps, recursion guard, checked
@@ -18,16 +18,30 @@
   OsStr non-UTF-8 error, async cancellation safety, stream truncation
   poisoning), real SIMD (AVX2/SSE2/NEON with runtime dispatch and
   byte-equivalence proofs), derive/serde/streaming/compression hardening,
-  documentation truth pass, and CI re-enablement (clippy `-D warnings`,
-  nextest, MSRV, Miri, cargo-deny, cargo-semver-checks, BE/32-bit legs).
+  documentation truth pass, and a CI workflow definition (clippy `-D warnings`,
+  nextest, MSRV, Miri, cargo-deny, cargo-semver-checks, BE/32-bit legs). The
+  workflow ships as `.github/workflows/ci.yml.disabled` and is **not** currently
+  enabled in GitHub Actions; those gates are run locally. Re-enabling it in CI
+  is tracked as remaining work.
+- The 0.2.6 follow-on hardening waves are **complete**: the serde bridge (which
+  has its own decode path and so missed several 0.2.5 protections) gained the
+  recursion guard, checked length prefixes, container claims, and — the one
+  wire-relevant change — `is_human_readable() == false`, restoring
+  `bincode::serde` byte parity for `IpAddr`/`uuid`/`chrono`-style types;
+  allocation bounds moved from "claimed length" to "bytes actually received"
+  for streaming payloads, `#[oxicode(bytes)]` derive fields and IO decoding
+  (new `*_limited` entry points and budgeted readers); `AlignedVec<ZST>` UB
+  fixed; two derive mis-decode hazards became compile errors; decode contexts
+  became usable from the derive. See CHANGELOG.md §0.2.6.
 - The remaining 12 findings are the deliberately **deferred** bincode
   wire-format items below (user decision, 2026-07-17); they are documented as
   known issues in README §"Known compatibility caveats".
-- **Final verification gates (all GREEN):**
+- **Final verification gates (all GREEN, re-verified 2026-08-06):**
   `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
-  `cargo nextest run --workspace --all-features` = **20,126 passed / 0 failed /
-  9 skipped**; doc tests pass; single-compression-feature check/clippy legs
-  pass; `cargo fmt --check` clean.
+  `cargo nextest run --workspace --all-features` = **20,198 passed / 0 failed /
+  9 skipped** (15,601 under default features); `cargo test --doc
+  --all-features` = 53 passed; `RUSTDOCFLAGS="-D warnings" cargo doc` clean;
+  single-compression-feature check/clippy legs pass; `cargo fmt --check` clean.
 - **MSRV:** declared 1.81.0; compression features need Rust ≥ 1.85
   (oxiarc-core is edition2024) — documented in README.
 
@@ -108,17 +122,36 @@ self-roundtrip golden vectors in `compatibility/` and `tests/hardening_m1_*`.
   - **Fix:** Match bincode: allow nanos >= 1e9, guard `secs.checked_add(u64::from(nanos) / 1_000_000_000)` for overflow (error), then `Duration::new(secs, nanos)`. Alternatively document the stricter validation as an intentional deviation.
   - <sub>audit-dims: std-alloc-impls · id: std-alloc-impls#13</sub>
 
-- [ ] **[MEDIUM]** ⚠️ UNVERIFIED · _hard_ · `src/lib.rs:1029` — bincode 2 API parity gaps: missing *_with_context variants, derive hardcodes Context = (), serde module missing borrow/writer/reader entry points — ⏸ DEFERRED 2026-07-17: bincode wire-compat on hold (user decision)
+- [ ] **[MEDIUM]** ⚠️ PARTIALLY DONE · _hard_ · `src/lib.rs` — bincode 2 API parity gaps: ~~missing *_with_context variants~~, ~~derive hardcodes Context = ()~~, serde module missing borrow/writer/reader entry points — remaining part deferred (bincode wire-compat on hold, user decision 2026-07-17)
   - **Issue:** Migrating bincode 2 users hit these gaps: (1) Native context API: oxicode has only decode_from_slice_with_context (lib.rs:1029); bincode 2 also has borrow_decode_from_slice_with_context, decode_from_std_read_with_context, and decode_from_reader_with_context (bincode-2.0.1 src/lib.rs:191,213; features/impl_std.rs:39). (2) The context API is effectively unusable with derived types: oxicode_derive always emits `fn decode<__D: Decoder<Context = ()>>` (derive/src/lib.rs:302, :369), so any `#[derive(Decode)]` type only implements Decode<()> — decode_from_slice_with_context::<MyCtx, DerivedType, _> will not compile; bincode's derive supports contexts (#[bincode(decode_context)]). (3) serde module naming/coverage: bincode has bincode::serde::{borrow_decode_from_slice, encode_into_writer, decode_from_reader, seed_decode_from_slice}; oxicode::serde lacks all four names (its borrowing decode_from_slice is broken per the separate finding). Also oxicode::decode_from_reader takes std::io::Read and returns (D, usize) whereas bincode's decode_from_reader takes its Reader trait and returns D — same name, different contract (compile error on migration, but a documented rename table would help).
   - **Evidence:** grep 'with_context' src/lib.rs -> only decode_from_slice_with_context (line 1029). derive/src/lib.rs:302: `fn decode<__D: #crate_path::de::Decoder<Context = ()>>`. bincode-2.0.1/src/lib.rs:191 `pub fn borrow_decode_from_slice_with_context`, impl_std.rs:39 `pub fn decode_from_std_read_with_context`. grep 'borrow_decode_from_slice' src/features/serde/ -> no matches.
   - **Fix:** Add borrow_decode_from_slice_with_context, decode_from_std_read_with_context, decode_from_reader_with_context mirroring the existing decode_from_slice_with_context (DecoderImpl::with_context already exists). Extend the derive to accept a container attribute (e.g. #[oxicode(decode_context = "Ctx")] or generate `impl<__Ctx> Decode<__Ctx>` when all field types are context-generic) matching bincode_derive behavior. In oxicode::serde add borrow_decode_from_slice (on the fixed borrowed deserializer), encode_into_writer (enc::Writer generic), and decode_from_reader (de::Reader generic). Document the decode_from_reader semantic difference in MIGRATION.md.
+  - **Done (2026-08-03):** (1) the native context entry points now exist —
+    `borrow_decode_from_slice_with_context`, `decode_from_std_read_with_context`
+    and the reader-generic `decode_from_de_reader_with_context`. (2) The derive
+    is no longer pinned to `Context = ()`: every built-in `Decode` /
+    `BorrowDecode` impl is now generic over the context
+    (`impl<__Ctx> Decode<__Ctx> for u32`, mirroring bincode 2), and the derive
+    accepts `#[oxicode(decode_context = "Ctx")]`,
+    `#[oxicode(borrow_decode_context = "Ctx")]`, `#[oxicode(context = "Ctx")]`
+    and the fully generic `#[oxicode(context_generic)]`. Without an attribute
+    the generated impl is still `Decode<()>`, so the wire format and the public
+    API are unchanged (`tests/context_generic_derive_test.rs`).
+  - **Still open:** part (3), the `oxicode::serde` naming/coverage gap
+    (`borrow_decode_from_slice`, `encode_into_writer`, `decode_from_reader`,
+    `seed_decode_from_slice`) and the `decode_from_reader` contract difference.
+    The serde bridge is inherently unit-context (serde's `Deserializer` carries
+    no context), so it is unaffected by the context work above.
+  - **Note (2026-08-04):** unrelated to the parity gap, the serde module gained
+    `oxicode::serde::decode_from_std_read_limited` — the budgeted counterpart of
+    `decode_from_std_read`, so serde-decoded `String`/byte fields get the same
+    remaining-input allocation bound as the native IO path
+    (`tests/hardening_wave4_test.rs::serde_bounded_io`).
   - <sub>audit-dims: api-parity-serde · id: api-parity-serde#8</sub>
 
 ### [RELEASE] Tag / publish decisions (user)
 
-- [ ] No `v0.2.5` git tag exists yet and 0.2.5 has not yet been published to
-  crates.io (latest published: 0.2.4). This release publishes 0.2.5 directly
-  — no yanking or dual-publish step is needed.
+- [x] `v0.2.5` tagged and published to crates.io 2026-07-30.
 - [ ] Stale `git stash` entries exist on this branch: `stash@{0}` holds
   superseded mid-wave copies of `src/de/impls.rs` / `impl_alloc.rs`; the
   current tree is newer and fully gate-verified — safe to drop after review.

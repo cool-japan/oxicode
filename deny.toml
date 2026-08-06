@@ -8,10 +8,47 @@ all-features = true
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
-# Deny bincode >= 3.0.0 — the 3.x series has a breaking API change and must
-# never be pulled in transitively or accidentally upgraded to.
 deny = [
+    # Deny bincode >= 3.0.0 — the 3.x series has a breaking API change and
+    # must never be pulled in transitively or accidentally upgraded to.
+    # NOTE: bincode itself (2.0.1) is intentionally NOT banned outright — it
+    # is a dev-dependency used exclusively as the wire-format compatibility
+    # oracle for compatibility/ and tests/bincode_compat_test.rs.
     { crate = "bincode@>=3", reason = "bincode 3.x has incompatible API; oxicode intentionally pins =2.0.1" },
+
+    # Standing COOLJAPAN ecosystem bans (~/.claude/CLAUDE.md "Dependency
+    # Replacements"): prevent a transitive dependency from ever pulling in a
+    # C/C++-backed crate that this workspace has a pure-Rust COOLJAPAN
+    # replacement for. oxicode's own compression features (compression-lz4,
+    # compression-zstd) already route through oxiarc-lz4 / oxiarc-zstd, so
+    # the lz4/zstd rows are the load-bearing ones for this crate specifically
+    # — nothing else currently stops a transitive dep from pulling in the
+    # C-backed lz4-sys or zstd-sys instead. The rest (BLAS, SMT, SQLite, XML)
+    # have no first-party usage in oxicode today; these are preventive rows,
+    # not fixes for an active violation.
+    { crate = "openblas-src", reason = "COOLJAPAN: use oxiblas" },
+    { crate = "openblas-sys", reason = "COOLJAPAN: use oxiblas" },
+    { crate = "rustfft", reason = "COOLJAPAN: use oxifft" },
+    { crate = "z3", reason = "COOLJAPAN: use oxiz" },
+    { crate = "z3-sys", reason = "COOLJAPAN: use oxiz" },
+    { crate = "rusqlite", reason = "COOLJAPAN: use oxisql-sqlite-compat" },
+    { crate = "libsqlite3-sys", reason = "COOLJAPAN: use oxisql-sqlite-compat" },
+    { crate = "quick-xml", reason = "COOLJAPAN: use oxixml-* (no XML usage in oxicode; keep it that way)" },
+    { crate = "zip", reason = "COOLJAPAN: use oxiarc-archive" },
+    { crate = "flate2", reason = "COOLJAPAN: use oxiarc-deflate" },
+    { crate = "miniz_oxide", reason = "COOLJAPAN: use oxiarc-deflate" },
+    { crate = "zstd", reason = "COOLJAPAN: use oxiarc-zstd (already oxicode's compression-zstd backend)" },
+    { crate = "zstd-safe", reason = "COOLJAPAN: use oxiarc-zstd" },
+    { crate = "zstd-sys", reason = "COOLJAPAN: use oxiarc-zstd" },
+    { crate = "bzip2", reason = "COOLJAPAN: use oxiarc-bzip2" },
+    { crate = "bzip2-sys", reason = "COOLJAPAN: use oxiarc-bzip2" },
+    { crate = "lz4", reason = "COOLJAPAN: use oxiarc-lz4 (already oxicode's compression-lz4 backend)" },
+    { crate = "lz4-sys", reason = "COOLJAPAN: use oxiarc-lz4" },
+    { crate = "lz4_flex", reason = "COOLJAPAN: use oxiarc-lz4" },
+    { crate = "tar", reason = "COOLJAPAN: use oxiarc-archive" },
+    { crate = "snap", reason = "COOLJAPAN: use oxiarc-snappy" },
+    { crate = "brotli", reason = "COOLJAPAN: use oxiarc-brotli" },
+    { crate = "brotli-decompressor", reason = "COOLJAPAN: use oxiarc-brotli" },
 ]
 
 [advisories]

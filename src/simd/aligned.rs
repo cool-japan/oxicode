@@ -49,12 +49,36 @@ impl<T> AlignedVec<T> {
         }
     }
 
+    /// `true` when `T` is a zero-sized type.
+    ///
+    /// Zero-sized types must never reach the global allocator: `GlobalAlloc`
+    /// requires a non-zero layout size, so calling `alloc`/`realloc`/`dealloc`
+    /// with `size == 0` is undefined behaviour. Every allocating path below
+    /// therefore branches on this constant and keeps the dangling pointer that
+    /// `NonNull::dangling()` provides, exactly like `alloc::raw_vec::RawVec`.
+    const IS_ZST: bool = size_of::<T>() == 0;
+
+    /// Capacity reported for a zero-sized element type.
+    ///
+    /// A `T` that occupies no memory can be "stored" an unbounded number of
+    /// times, so the vector never needs to grow.
+    const ZST_CAPACITY: usize = usize::MAX;
+
     /// Create a new aligned vector with the specified capacity.
     ///
     /// # Panics
     ///
     /// Panics if allocation fails (via alloc::alloc::handle_alloc_error).
     pub fn with_capacity(capacity: usize) -> Self {
+        if Self::IS_ZST {
+            // No allocation is possible (or needed) for a zero-sized `T`.
+            return Self {
+                ptr: NonNull::dangling(),
+                len: 0,
+                cap: Self::ZST_CAPACITY,
+            };
+        }
+
         if capacity == 0 {
             return Self::new();
         }
@@ -231,14 +255,20 @@ impl<T> AlignedVec<T> {
     /// Check if the buffer is properly aligned for SIMD operations.
     #[inline]
     pub fn is_aligned(&self) -> bool {
-        if self.cap == 0 {
-            true // Empty buffer is "aligned" vacuously
+        if Self::IS_ZST || self.cap == 0 {
+            true // Empty (or zero-sized-element) buffer is "aligned" vacuously
         } else {
             (self.ptr.as_ptr() as usize) % SIMD_ALIGNMENT == 0
         }
     }
 
     fn grow(&mut self) {
+        if Self::IS_ZST {
+            // Zero-sized elements never need storage; just widen the capacity.
+            self.cap = Self::ZST_CAPACITY;
+            return;
+        }
+
         let new_cap = if self.cap == 0 {
             8
         } else {
@@ -248,6 +278,12 @@ impl<T> AlignedVec<T> {
     }
 
     fn realloc(&mut self, new_cap: usize) {
+        if Self::IS_ZST {
+            // Never hand a zero-size layout to the global allocator.
+            self.cap = Self::ZST_CAPACITY;
+            return;
+        }
+
         let new_layout = Self::layout_for_capacity(new_cap);
 
         let new_ptr = if self.cap == 0 {
@@ -275,17 +311,22 @@ impl<T> AlignedVec<T> {
 #[cfg(feature = "alloc")]
 impl<T> Drop for AlignedVec<T> {
     fn drop(&mut self) {
-        if self.cap > 0 {
-            // Drop all elements
-            for i in 0..self.len {
-                // SAFETY: All elements from 0..len are valid
-                unsafe {
-                    core::ptr::drop_in_place(self.ptr.as_ptr().add(i));
-                }
+        // Drop all live elements first. This is required for both sized and
+        // zero-sized `T` (a ZST may still have a meaningful `Drop`).
+        for i in 0..self.len {
+            // SAFETY: All elements from 0..len are valid
+            unsafe {
+                core::ptr::drop_in_place(self.ptr.as_ptr().add(i));
             }
+        }
 
-            // Deallocate
+        // Only sized element types ever reached the allocator. Calling
+        // `dealloc` with a zero-size layout would be undefined behaviour, and
+        // the pointer for a ZST is dangling, never allocated.
+        if !Self::IS_ZST && self.cap > 0 {
             let layout = Self::layout_for_capacity(self.cap);
+            // SAFETY: `ptr` came from `alloc`/`realloc` with exactly this
+            // layout (`cap > 0` and `T` is sized, so the layout is non-zero).
             unsafe {
                 alloc::alloc::dealloc(self.ptr.as_ptr() as *mut u8, layout);
             }
@@ -537,6 +578,58 @@ mod tests {
         let vec = AlignedVec::from_slice(&data);
         assert_eq!(vec.as_slice(), &data);
         assert!(vec.is_aligned());
+    }
+
+    /// Regression: `AlignedVec<T>` for a zero-sized `T` used to compute a
+    /// zero-size `Layout` and hand it to `alloc::alloc::alloc` /
+    /// `realloc` / `dealloc`, which is undefined behaviour per the
+    /// `GlobalAlloc` contract - reachable from entirely safe downstream code
+    /// because `with_capacity` is a safe public constructor and `T` is
+    /// unconstrained. The allocator must never be touched for a ZST.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_aligned_vec_zero_sized_type_never_allocates() {
+        // `with_capacity` on a ZST must not allocate.
+        let mut vec: AlignedVec<()> = AlignedVec::with_capacity(1);
+        assert_eq!(vec.len(), 0);
+        assert!(vec.is_aligned());
+
+        for _ in 0..1000 {
+            vec.push(());
+        }
+        assert_eq!(vec.len(), 1000);
+        assert_eq!(vec.as_slice().len(), 1000);
+        assert_eq!(vec.pop(), Some(()));
+        assert_eq!(vec.len(), 999);
+
+        vec.clear();
+        assert!(vec.is_empty());
+        // Dropping here must not call `dealloc` with a zero-size layout.
+    }
+
+    /// The `new()` -> `grow()` path must also stay away from the allocator for
+    /// zero-sized element types, and `resize`/`from_slice` must round-trip.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_aligned_vec_zero_sized_grow_and_resize() {
+        #[derive(Clone, Debug, PartialEq)]
+        struct ZeroSized;
+
+        let mut vec: AlignedVec<ZeroSized> = AlignedVec::new();
+        vec.push(ZeroSized);
+        assert_eq!(vec.len(), 1);
+
+        vec.resize(64, ZeroSized);
+        assert_eq!(vec.len(), 64);
+        vec.resize(2, ZeroSized);
+        assert_eq!(vec.len(), 2);
+
+        let copied = AlignedVec::from_slice(&[ZeroSized, ZeroSized, ZeroSized]);
+        assert_eq!(copied.len(), 3);
+        assert_eq!(copied.as_slice(), &[ZeroSized, ZeroSized, ZeroSized]);
+
+        let cloned = copied.clone();
+        assert_eq!(cloned.as_slice(), copied.as_slice());
     }
 
     #[test]

@@ -128,10 +128,22 @@ impl<W: Write, C: Config> StreamingEncoder<W, C> {
         }
 
         // Flush before the pending buffer would exceed the effective threshold.
+        //
+        // Also clamp to MAX_CHUNK_SIZE: `chunk_size` is range-checked by
+        // `StreamingConfig::with_chunk_size`, but both fields are public and
+        // `max_buffer_size` has no such clamp (see `StreamingConfig::with_max_buffer`
+        // and the doc on `max_buffer_size` itself), so a caller that constructs
+        // the config directly or via `with_max_buffer` could otherwise set an
+        // effective threshold above MAX_CHUNK_SIZE. Capping it here keeps every
+        // chunk this encoder emits within the bound any paired decoder using the
+        // default `MAX_CHUNK_SIZE` acceptance ceiling will actually accept, and
+        // keeps `self.buffer.len()` — hence the `u32` payload-length conversion
+        // in `flush_chunk` — provably within `u32::MAX`.
         let threshold = self
             .streaming_config
             .chunk_size
-            .min(self.streaming_config.max_buffer_size);
+            .min(self.streaming_config.max_buffer_size)
+            .min(MAX_CHUNK_SIZE);
         if !self.buffer.is_empty() && self.buffer.len() + item_bytes.len() > threshold {
             self.flush_chunk()?;
         }
@@ -299,7 +311,15 @@ impl<C: Config> BufferStreamingEncoder<C> {
             });
         }
 
-        let threshold = self.config.chunk_size.min(self.config.max_buffer_size);
+        // See the identical clamp (and its rationale) in `StreamingEncoder::write_item`
+        // above: `max_buffer_size` is not range-checked, so this keeps the
+        // threshold — and therefore `chunk_buffer.len()` — within MAX_CHUNK_SIZE,
+        // which is what makes the `as u32` conversion in `flush_chunk` infallible.
+        let threshold = self
+            .config
+            .chunk_size
+            .min(self.config.max_buffer_size)
+            .min(MAX_CHUNK_SIZE);
         if !self.chunk_buffer.is_empty() && self.chunk_buffer.len() + item_bytes.len() > threshold {
             self.flush_chunk();
         }
@@ -321,8 +341,17 @@ impl<C: Config> BufferStreamingEncoder<C> {
             return;
         }
 
-        // `chunk_buffer.len()` is bounded by MAX_CHUNK_SIZE (enforced in
-        // write_item), so it always fits in u32; the conversion cannot truncate.
+        // `chunk_buffer.len()` is bounded by MAX_CHUNK_SIZE (the flush
+        // `threshold` in `write_item` is clamped to it), so it always fits in
+        // u32 and this conversion cannot truncate. Assert the invariant rather
+        // than trusting it silently: MAX_CHUNK_SIZE (16 MiB) is many orders of
+        // magnitude below u32::MAX (4 GiB), so if this ever fires it means the
+        // threshold clamp above was weakened, not that legitimate input grew
+        // the buffer this large.
+        debug_assert!(
+            self.chunk_buffer.len() <= u32::MAX as usize,
+            "chunk_buffer exceeded u32::MAX despite the write_item threshold clamp to MAX_CHUNK_SIZE"
+        );
         let payload_len = self.chunk_buffer.len() as u32;
         let header = ChunkHeader::data(payload_len, self.items_in_chunk);
         self.buffer.extend_from_slice(&header.to_bytes());
@@ -414,6 +443,97 @@ mod tests {
 
         // Should have created multiple chunks
         assert!(progress.chunks_processed >= 1);
+    }
+
+    // ── Regression tests: MAX_CHUNK_SIZE threshold clamp ────────────────────
+    //
+    // `StreamingConfig::max_buffer_size` is a public field with no range
+    // check (unlike `chunk_size`, which `with_chunk_size` clamps), so a
+    // config built either by direct field construction or via
+    // `with_max_buffer` can request a threshold above `MAX_CHUNK_SIZE`. Both
+    // encoders must still flush before their buffer grows past
+    // `MAX_CHUNK_SIZE`, regardless of what the config asks for — that is what
+    // keeps `flush_chunk`'s payload-length-to-`u32` conversion infallible.
+
+    /// A config built by direct field construction (bypassing
+    /// `with_chunk_size`'s clamp) requesting an effectively unbounded
+    /// threshold. Constructing it this way, rather than via
+    /// `StreamingConfig::new().with_max_buffer(usize::MAX)`, additionally
+    /// proves the clamp does not depend on `with_chunk_size` having been
+    /// called at all.
+    fn unbounded_threshold_config() -> StreamingConfig {
+        StreamingConfig {
+            chunk_size: usize::MAX,
+            max_buffer_size: usize::MAX,
+            flush_per_item: false,
+        }
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn buffer_encoder_flushes_before_max_chunk_size_despite_unbounded_config() {
+        let mut encoder = BufferStreamingEncoder::with_config(unbounded_threshold_config());
+
+        // Each item is 1 KiB; MAX_CHUNK_SIZE is 16 MiB, so writing 20 MiB
+        // worth of items must force at least one flush even though the
+        // configured threshold alone would never trigger one.
+        let item = alloc::vec![0xABu8; 1024];
+        let iterations = (20 * 1024 * 1024) / item.len();
+        for _ in 0..iterations {
+            encoder.write_item(&item).expect("write failed");
+        }
+
+        // Checked BEFORE finish() is called: `finish()` also flushes, so this
+        // specifically proves `write_item` itself — not finish's own trailing
+        // flush — is what enforced the MAX_CHUNK_SIZE bound above.
+        assert!(
+            encoder.progress().chunks_processed >= 1,
+            "buffer must have flushed at least once during write_item, before finish() is \
+             ever called, to stay under MAX_CHUNK_SIZE"
+        );
+
+        let encoded = encoder.finish();
+
+        // Decode it back with the default (MAX_CHUNK_SIZE-bounded) decoder to
+        // prove every chunk this encoder emitted really did fit within what a
+        // normally-configured decoder accepts.
+        let mut decoder = super::super::decoder::BufferStreamingDecoder::new(&encoded);
+        let decoded: alloc::vec::Vec<alloc::vec::Vec<u8>> = decoder
+            .read_all()
+            .expect("a default decoder must accept every chunk this encoder emitted");
+        assert_eq!(decoded.len(), iterations);
+        assert!(decoded.iter().all(|v| *v == item));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn streaming_encoder_flushes_before_max_chunk_size_despite_unbounded_config() {
+        let mut buffer = alloc::vec::Vec::new();
+        let item = alloc::vec![0xCDu8; 1024];
+        let iterations = (20 * 1024 * 1024) / item.len();
+        {
+            let mut encoder =
+                StreamingEncoder::with_config(&mut buffer, unbounded_threshold_config());
+            for _ in 0..iterations {
+                encoder.write_item(&item).expect("write failed");
+            }
+            assert!(
+                encoder.progress().chunks_processed >= 1,
+                "buffer must have flushed at least once before finish() to stay under MAX_CHUNK_SIZE"
+            );
+            encoder.finish().expect("finish failed");
+        }
+
+        // Decode it back with the default (MAX_CHUNK_SIZE-bounded) decoder to
+        // prove every chunk this encoder emitted really did fit within what a
+        // normally-configured decoder accepts.
+        let cursor = std::io::Cursor::new(buffer);
+        let mut decoder = super::super::decoder::StreamingDecoder::new(cursor);
+        let decoded: alloc::vec::Vec<alloc::vec::Vec<u8>> = decoder
+            .read_all()
+            .expect("a default decoder must accept every chunk this encoder emitted");
+        assert_eq!(decoded.len(), iterations);
+        assert!(decoded.iter().all(|v| *v == item));
     }
 
     // ── Regression tests: issue #1 — new_with_config constructor ───────────

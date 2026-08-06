@@ -150,6 +150,44 @@ pub trait Decoder: Sealed {
     fn leave_recursion(&mut self) {
         // Default implementation does nothing.
     }
+
+    /// An exact upper bound on the bytes still available from the underlying
+    /// reader, when it is knowable.
+    ///
+    /// Forwards to [`Reader::remaining_bytes`]. Decode impls consult this
+    /// before allocating a buffer whose size came off the wire, so that a
+    /// forged length prefix is rejected instead of turned into a huge
+    /// allocation. Returns `None` for streaming readers, where the length must
+    /// instead be materialized incrementally.
+    ///
+    /// # Why the configured decode limit is not used here
+    ///
+    /// It looks like `config.with_limit::<N>()` should supply a bound when the
+    /// reader has none. It cannot, in either direction:
+    ///
+    /// * `N` is not an upper bound on the *stream*. The limit counts bytes
+    ///   passed to [`claim_bytes_read`](Decoder::claim_bytes_read), and not
+    ///   every byte read is claimed with its true width — a `u16` claims 2 but
+    ///   a variable-length encoding of it consumes 3 (see
+    ///   `crate::varint`). Capping the reader at `N` would therefore truncate
+    ///   valid input.
+    /// * `N - bytes_claimed` is not an upper bound on the *next buffer*
+    ///   either. Every length-prefixed decode claims its length before
+    ///   materializing it, so by the time a bound would be consulted the claim
+    ///   has already been subtracted: a `Limit<8>` decoder reading an 8-byte
+    ///   `Vec<u8>` would see a remaining budget of 0 and reject its own valid
+    ///   input.
+    ///
+    /// The configured limit is enforced where it is meaningful —
+    /// `claim_bytes_read` rejects an over-large length before any allocation —
+    /// and a *stream* bound must come from the reader, via
+    /// [`IoReader::with_limit`](read::IoReader::with_limit),
+    /// [`BufferedIoReader::with_limit`](read::BufferedIoReader::with_limit), or
+    /// slice input.
+    #[inline]
+    fn remaining_reader_bytes(&mut self) -> Option<usize> {
+        self.reader().remaining_bytes()
+    }
 }
 
 /// BorrowDecoder trait for zero-copy decoding
@@ -220,6 +258,10 @@ where
     fn leave_recursion(&mut self) {
         T::leave_recursion(self)
     }
+
+    fn remaining_reader_bytes(&mut self) -> Option<usize> {
+        T::remaining_reader_bytes(self)
+    }
 }
 
 impl<'de, T> BorrowDecoder<'de> for &mut T
@@ -236,9 +278,7 @@ where
 /// Decode the variant of an option (0 for None, 1 for Some)
 #[inline]
 #[allow(dead_code)]
-pub(crate) fn decode_option_variant<D: Decoder<Context = ()>>(
-    decoder: &mut D,
-) -> Result<Option<()>, Error> {
+pub(crate) fn decode_option_variant<D: Decoder>(decoder: &mut D) -> Result<Option<()>, Error> {
     let variant = u8::decode(decoder)?;
     match variant {
         0 => Ok(None),
@@ -256,7 +296,7 @@ pub(crate) fn decode_option_variant<D: Decoder<Context = ()>>(
 /// rejected with [`Error::OutsideUsizeRange`] rather than silently truncated.
 #[inline]
 #[allow(dead_code)]
-pub(crate) fn decode_slice_len<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<usize, Error> {
+pub(crate) fn decode_slice_len<D: Decoder>(decoder: &mut D) -> Result<usize, Error> {
     let len = u64::decode(decoder)?;
     usize::try_from(len).map_err(|_| Error::OutsideUsizeRange(len))
 }
@@ -282,9 +322,31 @@ where
 
 /// Helper macro to implement BorrowDecode for types that implement Decode.
 /// This is useful for types that don't need to borrow from the input.
+///
+/// Three forms:
+///
+/// * `impl_borrow_decode!(Ty)` — forwards under *any* decode context, which is
+///   what the built-in impls use so a context-generic derived type can hold a
+///   `Ty` field.
+/// * `impl_borrow_decode!(Ty, Ctx)` — forwards only under the concrete context
+///   `Ctx`. Use this when `Ty: Decode<Ctx>` holds for one specific context.
+/// * `impl_borrow_decode!(Ty, unit_context)` — forwards only under `Context = ()`.
+///   Kept for impls that must stay pinned to the unit context.
 #[macro_export]
 macro_rules! impl_borrow_decode {
     ($ty:ty) => {
+        impl<'de, __Ctx> $crate::de::BorrowDecode<'de, __Ctx> for $ty
+        where
+            $ty: $crate::de::Decode<__Ctx>,
+        {
+            fn borrow_decode<D: $crate::de::BorrowDecoder<'de, Context = __Ctx>>(
+                decoder: &mut D,
+            ) -> Result<Self, $crate::error::Error> {
+                <$ty as $crate::de::Decode<__Ctx>>::decode(decoder)
+            }
+        }
+    };
+    ($ty:ty, unit_context) => {
         impl<'de> $crate::de::BorrowDecode<'de> for $ty {
             fn borrow_decode<D: $crate::de::BorrowDecoder<'de, Context = ()>>(
                 decoder: &mut D,

@@ -180,7 +180,9 @@ fn test_pathbuf_root_roundtrip() {
     let encoded = encode_to_vec(&path).expect("encode root path");
     let (decoded, _): (PathBuf, usize) = decode_from_slice(&encoded).expect("decode root path");
     assert_eq!(path, decoded, "root path \"/\" must roundtrip unchanged");
-    assert!(decoded.is_absolute(), "decoded root path must be absolute");
+    // `has_root()` rather than `is_absolute()`: on windows an absolute path
+    // also needs a prefix (`C:\`), so a bare "/" is rooted but not absolute.
+    assert!(decoded.has_root(), "decoded root path must still be rooted");
 }
 
 // ===== Test 8: Vec<PathBuf> roundtrip =====

@@ -130,6 +130,27 @@ impl ChunkHeader {
         let payload_len = u32::from_le_bytes([data[5], data[6], data[7], data[8]]);
         let item_count = u32::from_le_bytes([data[9], data[10], data[11], data[12]]);
 
+        // Validate item_count against payload_len for data chunks so a forged
+        // header cannot drive the decoder's per-item loop far beyond what the
+        // payload can actually contain.
+        //
+        // The chunks a homogeneous stream produces come in exactly two shapes:
+        //   * zero-sized elements — every item encodes to 0 bytes, so a chunk
+        //     legitimately carries `payload_len == 0` with any `item_count`
+        //     (see `StreamingEncoder::flush_chunk`, which keys emission on the
+        //     item count precisely to preserve these). We must not reject those.
+        //   * non-zero-sized elements — every item consumes at least one payload
+        //     byte, so `item_count` can never exceed `payload_len`.
+        //
+        // A data chunk with `payload_len > 0` but `item_count > payload_len` is
+        // therefore unrepresentable output and is rejected up front, before the
+        // decoder trusts `item_count` as its loop bound.
+        if matches!(chunk_type, ChunkType::Data) && payload_len > 0 && item_count > payload_len {
+            return Err(Error::InvalidData {
+                message: "chunk item_count exceeds payload_len",
+            });
+        }
+
         Ok(Self {
             chunk_type,
             payload_len,
@@ -191,5 +212,46 @@ mod tests {
     #[test]
     fn test_header_size() {
         assert_eq!(ChunkHeader::SIZE, 13);
+    }
+
+    #[test]
+    fn test_reject_item_count_exceeding_payload_len() {
+        // A forged data header claiming more items than the payload could
+        // possibly hold (each non-zero-sized item needs >= 1 byte) must be
+        // rejected before the decoder trusts item_count as a loop bound.
+        let mut bytes = ChunkHeader::data(1, 5).to_bytes();
+        // Sanity: this is a data chunk with payload_len = 1, item_count = 5.
+        let result = ChunkHeader::from_bytes(&bytes);
+        assert!(
+            result.is_err(),
+            "item_count (5) > payload_len (1) must be rejected for data chunks"
+        );
+
+        // The classic amplification case: 0-length payload, huge item_count, is
+        // the malformed non-ZST shape once payload_len is forced non-zero.
+        bytes[5..9].copy_from_slice(&2u32.to_le_bytes()); // payload_len = 2
+        bytes[9..13].copy_from_slice(&u32::MAX.to_le_bytes()); // item_count = u32::MAX
+        assert!(
+            ChunkHeader::from_bytes(&bytes).is_err(),
+            "payload_len = 2, item_count = u32::MAX must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_zero_sized_item_chunk_is_accepted() {
+        // Zero-sized elements encode to 0 bytes, so the encoder legitimately
+        // emits payload_len = 0 with item_count > 0. Parsing must accept these.
+        let header = ChunkHeader::data(0, 10);
+        let parsed = ChunkHeader::from_bytes(&header.to_bytes()).expect("zero-sized chunk parse");
+        assert_eq!(parsed.payload_len, 0);
+        assert_eq!(parsed.item_count, 10);
+
+        // item_count == payload_len is the boundary of the non-ZST case and is
+        // valid (a stream of one-byte items).
+        let boundary = ChunkHeader::data(4, 4);
+        assert_eq!(
+            ChunkHeader::from_bytes(&boundary.to_bytes()).expect("boundary parse"),
+            boundary
+        );
     }
 }

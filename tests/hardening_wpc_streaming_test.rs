@@ -64,6 +64,90 @@ fn max_buffer_size_backpressure_bounds_decode() {
     }
 }
 
+// ─────────────────── Incremental payload read (std::io::Read) ───────────────
+//
+// `StreamingDecoder::load_next_chunk` used to materialize a chunk's payload
+// with `vec![0u8; payload_len]` + `read_exact` — a single up-front allocation
+// sized entirely from the (attacker-controlled, only bound-checked) header
+// field, before a single payload byte had been read. It now grows the buffer
+// in bounded steps, each of which must actually be filled from the reader
+// before the next is reserved. `Cursor`, used by every other test in this
+// file, satisfies any `read()` call in a single shot regardless of buffer
+// size, so it can't tell the two implementations apart. `TrickleReader` can:
+// it hands back only a few bytes per call no matter how large a buffer it is
+// asked to fill, forcing many iterations of the fill loop for a single chunk.
+
+/// Wraps a `Read` so every call returns at most `chunk` bytes, regardless of
+/// the caller-supplied buffer size.
+struct TrickleReader<R> {
+    inner: R,
+    chunk: usize,
+}
+
+impl<R: std::io::Read> std::io::Read for TrickleReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = buf.len().min(self.chunk);
+        self.inner.read(&mut buf[..n])
+    }
+}
+
+#[test]
+fn payload_spanning_many_read_steps_round_trips_through_trickle_reader() {
+    // Comfortably larger than the internal per-step allocation bound (64 KiB)
+    // so this exercises both the outer step loop (multiple reservations) and,
+    // via the 7-byte trickle, many `read()` calls within each step.
+    let big_item: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    let mut buffer = Vec::new();
+    {
+        let mut encoder = StreamingEncoder::new(&mut buffer);
+        encoder.write_item(&big_item).expect("write");
+        encoder.finish().expect("finish");
+    }
+
+    let reader = TrickleReader {
+        inner: Cursor::new(buffer),
+        chunk: 7,
+    };
+    let mut decoder = StreamingDecoder::new(reader);
+    let decoded: Vec<u8> = decoder
+        .read_item()
+        .expect("read must succeed")
+        .expect("Some(item) expected");
+    assert_eq!(
+        decoded, big_item,
+        "large payload must round-trip byte-exact"
+    );
+    assert_eq!(decoder.read_item::<Vec<u8>>().expect("End read"), None);
+}
+
+#[test]
+fn payload_truncated_mid_stream_over_trickle_reader_is_unexpected_end() {
+    let big_item: Vec<u8> = vec![0xEEu8; 200_000];
+    let mut buffer = Vec::new();
+    {
+        let mut encoder = StreamingEncoder::new(&mut buffer);
+        encoder.write_item(&big_item).expect("write");
+        encoder.finish().expect("finish");
+    }
+
+    // Cut off well inside the payload (past the 13-byte header, well before
+    // the 200,000-byte payload ends), simulating a peer that stalls or
+    // disconnects mid-transfer rather than one that sends nothing at all.
+    let cut = ChunkHeader::SIZE + 100_000;
+    let truncated = buffer[..cut].to_vec();
+
+    let reader = TrickleReader {
+        inner: Cursor::new(truncated),
+        chunk: 11,
+    };
+    let mut decoder = StreamingDecoder::new(reader);
+    let result = decoder.read_item::<Vec<u8>>();
+    assert!(
+        matches!(result, Err(Error::UnexpectedEnd { .. })),
+        "expected UnexpectedEnd for a stream truncated mid-payload, got {result:?}"
+    );
+}
+
 // ─────────────────────────── Truncation detection ───────────────────────────
 
 #[test]
@@ -221,6 +305,93 @@ fn decoder_is_poisoned_after_error_and_retry_fails_deterministically() {
     }
 }
 
+/// A single well-framed chunk (correct `payload_len`, correct `item_count`)
+/// whose payload byte is not a valid `bool` (only 0/1 are). This is an
+/// ITEM-level decode error — `T::decode` itself fails — as opposed to the
+/// chunk-level framing error covered above. `chunk.offset` is never advanced
+/// on a failed decode, so without poisoning here, a caller that loops past
+/// the error would re-decode the exact same unadvanced byte forever instead
+/// of getting a deterministic failed-state error.
+fn stream_with_invalid_bool_item() -> Vec<u8> {
+    let mut stream = Vec::new();
+    stream.extend_from_slice(&ChunkHeader::data(1, 1).to_bytes());
+    stream.push(2u8); // not a valid bool encoding (only 0/1 are)
+    stream.extend_from_slice(&ChunkHeader::end().to_bytes());
+    stream
+}
+
+#[test]
+fn decoder_is_poisoned_after_item_level_error_buffer() {
+    let stream = stream_with_invalid_bool_item();
+    let mut decoder = BufferStreamingDecoder::new(&stream);
+
+    let first = decoder.read_item::<bool>();
+    assert!(
+        matches!(first, Err(Error::InvalidBooleanValue(2))),
+        "expected InvalidBooleanValue(2), got {first:?}"
+    );
+
+    match decoder.read_item::<bool>() {
+        Err(Error::InvalidData { message }) => {
+            assert!(message.contains("failed state"));
+        }
+        other => panic!("expected poisoned failed-state error, got {other:?}"),
+    }
+    assert!(
+        !decoder.end_marker_seen(),
+        "poisoning on an item-level error must not be mistaken for a clean End"
+    );
+}
+
+#[test]
+fn decoder_is_poisoned_after_item_level_error_std() {
+    let stream = stream_with_invalid_bool_item();
+    let mut decoder = StreamingDecoder::new(Cursor::new(stream));
+
+    let first = decoder.read_item::<bool>();
+    assert!(
+        matches!(first, Err(Error::InvalidBooleanValue(2))),
+        "expected InvalidBooleanValue(2), got {first:?}"
+    );
+
+    match decoder.read_item::<bool>() {
+        Err(Error::InvalidData { message }) => {
+            assert!(message.contains("failed state"));
+        }
+        other => panic!("expected poisoned failed-state error, got {other:?}"),
+    }
+    assert!(
+        !decoder.end_marker_seen(),
+        "poisoning on an item-level error must not be mistaken for a clean End"
+    );
+}
+
+#[cfg(feature = "async-tokio")]
+#[tokio::test]
+async fn decoder_is_poisoned_after_item_level_error_async() {
+    use oxicode::streaming::AsyncStreamingDecoder;
+
+    let stream = stream_with_invalid_bool_item();
+    let mut decoder = AsyncStreamingDecoder::new(Cursor::new(stream));
+
+    let first = decoder.read_item::<bool>().await;
+    assert!(
+        matches!(first, Err(Error::InvalidBooleanValue(2))),
+        "expected InvalidBooleanValue(2), got {first:?}"
+    );
+
+    match decoder.read_item::<bool>().await {
+        Err(Error::InvalidData { message }) => {
+            assert!(message.contains("failed state"));
+        }
+        other => panic!("expected poisoned failed-state error, got {other:?}"),
+    }
+    assert!(
+        !decoder.end_marker_seen(),
+        "poisoning on an item-level error must not be mistaken for a clean End"
+    );
+}
+
 // ─────────────────────── Generic codec config threading ─────────────────────
 
 #[cfg(feature = "async-tokio")]
@@ -304,6 +475,110 @@ async fn async_decoder_read_is_cancellation_safe() {
         (a, b, c, d),
         (Some(100_000), Some(200_000), Some(300_000), None)
     );
+}
+
+/// Same cancellation-safety contract as `async_decoder_read_is_cancellation_safe`
+/// above, but targeting the *payload* fill phase specifically: that test's
+/// three `u32` items fit their header's payload in a handful of bytes, so it
+/// only ever interrupts the 13-byte header read. `PendingRead::Payload` grows
+/// its buffer in bounded increments instead of allocating the full
+/// header-claimed length up front (this wave's fix for the allocation-DoS
+/// finding), which changed what "resume" has to reconstruct; a single big
+/// item forces the header to be read in full and then interrupts partway
+/// through the multi-increment payload read.
+///
+/// This variant interrupts before *any* payload byte has arrived — `buf` has
+/// just been grown to cover the first read increment but the read that would
+/// fill it never completes.
+#[cfg(feature = "async-tokio")]
+#[tokio::test]
+async fn async_decoder_read_is_cancellation_safe_mid_payload_zero_bytes_delivered() {
+    use oxicode::streaming::AsyncStreamingDecoder;
+    use std::time::Duration;
+    use tokio::io::AsyncWriteExt;
+
+    // Comfortably larger than the internal 64 KiB read-growth increment, so a
+    // full round trip exercises more than one increment even without any
+    // interruption at all.
+    let big_item: Vec<u8> = (0..150_000u32).map(|i| (i % 256) as u8).collect();
+    let mut enc = BufferStreamingEncoder::new();
+    enc.write_item(&big_item).expect("write");
+    let full = enc.finish();
+
+    // Large enough that every `write_all` below completes immediately
+    // regardless of whether the reader has drained anything yet — the
+    // interruption under test is on the READ side only.
+    let (mut tx, rx) = tokio::io::duplex(full.len() + 64);
+    let mut decoder = AsyncStreamingDecoder::new(rx);
+
+    // Deliver only the 13-byte header — none of the payload — then interrupt.
+    tx.write_all(&full[..ChunkHeader::SIZE])
+        .await
+        .expect("write header only");
+    let interrupted =
+        tokio::time::timeout(Duration::from_millis(50), decoder.read_item::<Vec<u8>>()).await;
+    assert!(
+        interrupted.is_err(),
+        "read must be interrupted before any payload byte arrives"
+    );
+
+    // Deliver everything else and resume: no bytes lost or duplicated, and
+    // the large payload decodes back byte-exact — proving the resumable
+    // `filled`/`target_len` cursor (not `buf.len()`, which was already
+    // grown to the first increment when the read was dropped) is what
+    // `load_next_chunk_inner` actually trusts on resume.
+    tx.write_all(&full[ChunkHeader::SIZE..])
+        .await
+        .expect("write rest");
+
+    let decoded: Option<Vec<u8>> = decoder.read_item().await.expect("resume");
+    assert_eq!(decoded, Some(big_item));
+    let end: Option<Vec<u8>> = decoder.read_item().await.expect("end");
+    assert_eq!(end, None);
+}
+
+/// Same as above, but interrupts *after* part of the payload has already
+/// been received — past the first 64 KiB growth increment and partway into
+/// the second — so `filled > 0` and `buf` holds a mix of real data and
+/// reserved-but-not-yet-read padding at the moment of interruption.
+#[cfg(feature = "async-tokio")]
+#[tokio::test]
+async fn async_decoder_read_is_cancellation_safe_mid_payload_partial_bytes_delivered() {
+    use oxicode::streaming::AsyncStreamingDecoder;
+    use std::time::Duration;
+    use tokio::io::AsyncWriteExt;
+
+    let big_item: Vec<u8> = (0..150_000u32).map(|i| ((i * 7) % 256) as u8).collect();
+    let mut enc = BufferStreamingEncoder::new();
+    enc.write_item(&big_item).expect("write");
+    let full = enc.finish();
+
+    let (mut tx, rx) = tokio::io::duplex(full.len() + 64);
+    let mut decoder = AsyncStreamingDecoder::new(rx);
+
+    // Deliver the header plus ~80 KiB of payload — past the first 64 KiB
+    // increment boundary, partway into the second — then interrupt.
+    let cut = ChunkHeader::SIZE + 80_000;
+    tx.write_all(&full[..cut])
+        .await
+        .expect("write partial payload");
+    let interrupted =
+        tokio::time::timeout(Duration::from_millis(50), decoder.read_item::<Vec<u8>>()).await;
+    assert!(
+        interrupted.is_err(),
+        "read must be interrupted partway through the payload"
+    );
+
+    tx.write_all(&full[cut..]).await.expect("write rest");
+
+    let decoded: Option<Vec<u8>> = decoder.read_item().await.expect("resume");
+    assert_eq!(
+        decoded,
+        Some(big_item),
+        "no payload bytes may be lost, duplicated, or corrupted across the interruption"
+    );
+    let end: Option<Vec<u8>> = decoder.read_item().await.expect("end");
+    assert_eq!(end, None);
 }
 
 /// A gated writer that accepts only a bounded number of total bytes, then

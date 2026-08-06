@@ -141,7 +141,10 @@ fn test_pathbuf_absolute_path_file_txt_roundtrip() {
         decode_from_slice(&encoded).expect("decode absolute PathBuf failed");
     assert_eq!(decoded, original);
     assert_eq!(consumed, encoded.len());
-    assert!(decoded.is_absolute());
+    // `has_root()` rather than `is_absolute()`: on windows an absolute path
+    // also needs a prefix (`C:\`), so "/absolute/..." is rooted but not
+    // absolute there.
+    assert!(decoded.has_root());
     assert_eq!(decoded.extension().expect("extension present"), "txt");
     assert_eq!(decoded.file_name().expect("file_name present"), "file.txt");
 }

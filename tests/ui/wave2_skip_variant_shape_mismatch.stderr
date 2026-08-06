@@ -1,0 +1,5 @@
+error: #[oxicode(skip)] variant `B` aliases the discriminant of `C`, but their field shapes differ; encoding `B` would decode as a corrupted `C` and desynchronize the stream. Give the skipped variant the same field types as its successor, or remove it.
+  --> tests/ui/wave2_skip_variant_shape_mismatch.rs:12:5
+   |
+12 |     B(String),
+   |     ^

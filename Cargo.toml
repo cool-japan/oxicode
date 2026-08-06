@@ -3,7 +3,7 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.5"
+version = "0.2.6"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
 rust-version = "1.81.0"
@@ -24,8 +24,8 @@ crc32fast = { version = "1.5" }
 unty = "0.0.5"
 
 # Optional backend dependencies (compression / async)
-oxiarc-lz4 = "0.4.0"
-oxiarc-zstd = "0.4.0"
+oxiarc-lz4 = "0.4.1"
+oxiarc-zstd = "0.4.1"
 tokio = "1.53"
 
 # Dev dependencies
@@ -69,7 +69,7 @@ validation = []               # Gates the `oxicode::validation` post-decode cons
 versioning = []               # Gates the `oxicode::versioning` schema-version-header module (on by default)
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.2.5", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.6", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
 oxiarc-lz4 = { workspace = true, optional = true }
 oxiarc-zstd = { workspace = true, optional = true }

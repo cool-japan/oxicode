@@ -90,12 +90,20 @@ pub struct StreamingConfig {
     /// Maximum memory to use for buffering.
     ///
     /// On the **encoder** side this is a soft flush threshold: the pending
-    /// buffer is flushed before it would exceed `min(chunk_size, max_buffer_size)`.
+    /// buffer is flushed before it would exceed
+    /// `min(chunk_size, max_buffer_size, `[`MAX_CHUNK_SIZE`]`)`. The
+    /// [`MAX_CHUNK_SIZE`] term is always in effect even though this field is a
+    /// public, unclamped `usize` (unlike `chunk_size`, which
+    /// [`with_chunk_size`](StreamingConfig::with_chunk_size) range-checks) —
+    /// it keeps every chunk an encoder emits within what a decoder using the
+    /// default acceptance ceiling will actually accept, and keeps the on-wire
+    /// `u32` payload-length field from ever being asked to represent more
+    /// than it can hold.
     ///
     /// On the **decoder** side (when a decoder is constructed with this
     /// configuration via `new_with_configs` / `with_config`) it bounds the
     /// largest chunk payload that will be accepted and allocated, capped by the
-    /// hard [`MAX_CHUNK_SIZE`] ceiling — providing backpressure against
+    /// same hard [`MAX_CHUNK_SIZE`] ceiling — providing backpressure against
     /// allocation-DoS from a forged chunk-length header.
     pub max_buffer_size: usize,
 

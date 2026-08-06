@@ -320,8 +320,15 @@ fn test_systemtime_from_epoch_plus_duration_roundtrip() {
     let dec_since = decoded
         .duration_since(UNIX_EPOCH)
         .expect("decoded duration_since failed");
+    // Windows' SystemTime is FILETIME-backed (100 ns ticks), so sub-100 ns
+    // detail is lost before the encoder ever sees it. Compare against the
+    // pre-encode value so this asserts oxicode's fidelity rather than the
+    // platform's clock granularity.
+    let expected = original
+        .duration_since(UNIX_EPOCH)
+        .expect("pre-encode duration_since failed");
     assert_eq!(dec_since.as_secs(), 1_609_459_200);
-    assert_eq!(dec_since.subsec_nanos(), 123_456_789);
+    assert_eq!(dec_since.subsec_nanos(), expected.subsec_nanos());
 }
 
 // ===== Test 16: SystemTime before UNIX_EPOCH (pre-epoch) =====

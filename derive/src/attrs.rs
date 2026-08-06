@@ -51,6 +51,17 @@ pub(crate) struct ContainerAttrs {
     /// `#[oxicode(tag_type = "u8|u16|u32|u64")]` — enum discriminant width.
     /// Only meaningful on enums; silently ignored on structs. Defaults to `U32`.
     pub(crate) tag_type: TagType,
+    /// `#[oxicode(decode_context = "Ctx")]` — decode context of the generated
+    /// `Decode` impl. `None` keeps the historical `Context = ()` behaviour.
+    pub(crate) decode_context: Option<syn::Type>,
+    /// `#[oxicode(borrow_decode_context = "Ctx")]` — decode context of the
+    /// generated `BorrowDecode` impl.
+    pub(crate) borrow_decode_context: Option<syn::Type>,
+    /// `#[oxicode(decode_context_generic)]` — make the generated `Decode` impl
+    /// generic over the context, so the type decodes under *any* context.
+    pub(crate) decode_context_generic: bool,
+    /// `#[oxicode(borrow_decode_context_generic)]` — same for `BorrowDecode`.
+    pub(crate) borrow_decode_context_generic: bool,
 }
 
 /// Valid `rename_all` convention names.
@@ -74,6 +85,10 @@ pub(crate) fn parse_container_attrs(attrs: &[syn::Attribute]) -> syn::Result<Con
     let mut crate_path: syn::Path = default_crate_path;
     let mut transparent: bool = false;
     let mut tag_type: TagType = TagType::U32;
+    let mut decode_context: Option<syn::Type> = None;
+    let mut borrow_decode_context: Option<syn::Type> = None;
+    let mut decode_context_generic = false;
+    let mut borrow_decode_context_generic = false;
 
     for attr in attrs {
         if !attr.path().is_ident("oxicode") {
@@ -141,6 +156,36 @@ pub(crate) fn parse_container_attrs(attrs: &[syn::Attribute]) -> syn::Result<Con
                                 }
                             };
                         }
+                        "context_generic" => {
+                            decode_context_generic = true;
+                            borrow_decode_context_generic = true;
+                        }
+                        "decode_context_generic" => {
+                            decode_context_generic = true;
+                        }
+                        "borrow_decode_context_generic" => {
+                            borrow_decode_context_generic = true;
+                        }
+                        "context" | "decode_context" | "borrow_decode_context" => {
+                            let _eq: Token![=] = input.parse()?;
+                            let lit: LitStr = input.parse()?;
+                            let raw = lit.value();
+                            let ty = syn::parse_str::<syn::Type>(&raw).map_err(|e| {
+                                syn::Error::new(
+                                    lit.span(),
+                                    format!("invalid context type `{}`: {}", raw, e),
+                                )
+                            })?;
+                            match ident.to_string().as_str() {
+                                "decode_context" => decode_context = Some(ty),
+                                "borrow_decode_context" => borrow_decode_context = Some(ty),
+                                // `context` is the shorthand that sets both.
+                                _ => {
+                                    decode_context = Some(ty.clone());
+                                    borrow_decode_context = Some(ty);
+                                }
+                            }
+                        }
                         other => {
                             return Err(syn::Error::new(
                                 ident.span(),
@@ -163,6 +208,10 @@ pub(crate) fn parse_container_attrs(attrs: &[syn::Attribute]) -> syn::Result<Con
         crate_path,
         transparent,
         tag_type,
+        decode_context,
+        borrow_decode_context,
+        decode_context_generic,
+        borrow_decode_context_generic,
     })
 }
 

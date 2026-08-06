@@ -42,42 +42,84 @@ pub(crate) fn derive_encode_body(
             let variants: Vec<&syn::Variant> = data_enum.variants.iter().collect();
             let n = variants.len();
 
-            // First pass: determine the "natural" discriminant for each variant.
+            // First pass: per-variant skip flag and "natural" discriminant.
             // Natural = explicit `#[oxicode(variant = N)]` tag, or position index.
-            let natural: Vec<u64> = variants
-                .iter()
-                .enumerate()
-                .map(|(idx, v)| parse_variant_attrs(&v.attrs).map(|a| a.tag.unwrap_or(idx as u64)))
-                .collect::<Result<_, _>>()?;
+            let mut skipped: Vec<bool> = Vec::with_capacity(n);
+            let mut natural: Vec<u64> = Vec::with_capacity(n);
+            for (idx, v) in variants.iter().enumerate() {
+                let a = parse_variant_attrs(&v.attrs)?;
+                skipped.push(a.skip);
+                natural.push(a.tag.unwrap_or(idx as u64));
+            }
 
             // Second pass: for each variant, if it is marked `skip`, walk forward to
             // find the first non-skipped successor and borrow its natural discriminant.
             let mut effective: Vec<u64> = natural.clone();
             for i in 0..n {
-                let attrs_i = parse_variant_attrs(&variants[i].attrs)?;
-                if attrs_i.skip {
-                    // Find the first non-skipped successor.
-                    let successor_disc = (i + 1..n)
-                        .find(|&j| {
-                            parse_variant_attrs(&variants[j].attrs)
-                                .map(|a| !a.skip)
-                                .unwrap_or(true)
-                        })
-                        .map(|j| natural[j]);
-                    match successor_disc {
-                        Some(disc) => effective[i] = disc,
-                        // A skipped variant with no non-skipped successor has no discriminant to
-                        // alias onto: `Encode` would still emit an arm writing its natural index,
-                        // but `Decode` filters it out, so the value would fail to round-trip. Make
-                        // that a clear compile error instead of a silent latent failure.
-                        None => {
+                if !skipped[i] {
+                    continue;
+                }
+                match (i + 1..n).find(|&j| !skipped[j]) {
+                    Some(j) => {
+                        // Aliasing writes the successor's discriminant but the *skipped*
+                        // variant's own payload; on decode that payload is read back through
+                        // the successor's fields. That only round-trips without data
+                        // corruption or stream desync when the two variants carry the same
+                        // field shape (as every documented/tested use does: unit->unit,
+                        // `T(u32)`->`U(u32)`). A shape mismatch would silently mis-decode into
+                        // the successor and desynchronize everything after it, so reject it as
+                        // a compile error — extending the trailing-skip error below to the
+                        // shape-mismatched case. Field names never reach the positional wire,
+                        // so only the field *types* are compared.
+                        if variant_field_types(variants[i]) != variant_field_types(variants[j]) {
                             return Err(syn::Error::new(
                                 variants[i].ident.span(),
-                                "#[oxicode(skip)] on a variant requires a following non-skipped variant whose discriminant it can alias; a trailing skipped variant cannot be decoded",
+                                format!(
+                                    "#[oxicode(skip)] variant `{}` aliases the discriminant of `{}`, but their field shapes differ; encoding `{}` would decode as a corrupted `{}` and desynchronize the stream. Give the skipped variant the same field types as its successor, or remove it.",
+                                    variants[i].ident,
+                                    variants[j].ident,
+                                    variants[i].ident,
+                                    variants[j].ident
+                                ),
                             ));
                         }
+                        effective[i] = natural[j];
+                    }
+                    // A skipped variant with no non-skipped successor has no discriminant to
+                    // alias onto: `Encode` would still emit an arm writing its natural index,
+                    // but `Decode` filters it out, so the value would fail to round-trip. Make
+                    // that a clear compile error instead of a silent latent failure.
+                    None => {
+                        return Err(syn::Error::new(
+                            variants[i].ident.span(),
+                            "#[oxicode(skip)] on a variant requires a following non-skipped variant whose discriminant it can alias; a trailing skipped variant cannot be decoded",
+                        ));
                     }
                 }
+            }
+
+            // Reject duplicate discriminants across *decodable* (non-skipped) variants.
+            // Skipped variants intentionally alias their successor's discriminant, so they
+            // are excluded. A collision between two non-skipped variants makes the second
+            // unreachable — `Decode`'s `match` takes the first arm — so a value of the
+            // second silently mis-decodes as the first. Surface it as a compile error
+            // instead of leaving it to a confusing `unreachable_patterns` lint pointing at
+            // the `#[derive]`. `n` is small, so a linear scan is fine.
+            let mut seen: Vec<(u64, usize)> = Vec::with_capacity(n);
+            for i in 0..n {
+                if skipped[i] {
+                    continue;
+                }
+                if let Some(&(_, first)) = seen.iter().find(|&&(d, _)| d == effective[i]) {
+                    return Err(syn::Error::new(
+                        variants[i].ident.span(),
+                        format!(
+                            "duplicate enum discriminant {}: variant `{}` collides with `{}`; each decodable variant needs a distinct discriminant (set one with #[oxicode(variant = N)])",
+                            effective[i], variants[i].ident, variants[first].ident
+                        ),
+                    ));
+                }
+                seen.push((effective[i], i));
             }
 
             let variant_encodings: Vec<TokenStream2> = variants
@@ -101,10 +143,28 @@ pub(crate) fn derive_encode_body(
     }
 }
 
+/// Token-string of each field's declared type, in declaration order.
+///
+/// Used to decide whether a `#[oxicode(skip)]` variant may safely alias its
+/// successor's discriminant: aliasing only round-trips when both variants carry
+/// the same sequence of field types. Field *names* never appear on the
+/// positional binary wire, so they are deliberately excluded from the
+/// comparison — only the types matter.
+fn variant_field_types(variant: &syn::Variant) -> Vec<String> {
+    variant
+        .fields
+        .iter()
+        .map(|f| {
+            let ty = &f.ty;
+            quote! { #ty }.to_string()
+        })
+        .collect()
+}
+
 /// Generate encode body for a `#[oxicode(transparent)]` struct (exactly one field).
 fn derive_encode_transparent(
     fields: &Fields,
-    _crate_path: &syn::Path,
+    crate_path: &syn::Path,
 ) -> Result<TokenStream2, syn::Error> {
     match fields {
         Fields::Named(named) => {
@@ -123,7 +183,7 @@ fn derive_encode_transparent(
                 .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "expected field"))?;
             let field_name = &field.ident;
             Ok(quote! {
-                self.#field_name.encode(encoder)?;
+                #crate_path::Encode::encode(&self.#field_name, encoder)?;
                 Ok(())
             })
         }
@@ -138,7 +198,7 @@ fn derive_encode_transparent(
                 ));
             }
             Ok(quote! {
-                self.0.encode(encoder)?;
+                #crate_path::Encode::encode(&self.0, encoder)?;
                 Ok(())
             })
         }
@@ -154,7 +214,11 @@ fn derive_encode_transparent(
 /// `field_expr` is the token stream expression to access the field
 /// (e.g. `self.#field_name` or just `#field_name` for destructured patterns).
 /// `len_ty_str` is one of "u8", "u16", "u32", "u64".
-pub(crate) fn make_seq_len_encode_expr(field_expr: TokenStream2, len_ty_str: &str) -> TokenStream2 {
+pub(crate) fn make_seq_len_encode_expr(
+    field_expr: TokenStream2,
+    len_ty_str: &str,
+    crate_path: &syn::Path,
+) -> TokenStream2 {
     let len_ty_tokens: TokenStream2 = match len_ty_str {
         "u8" => quote! { u8 },
         "u16" => quote! { u16 },
@@ -164,9 +228,9 @@ pub(crate) fn make_seq_len_encode_expr(field_expr: TokenStream2, len_ty_str: &st
     quote! {
         {
             let __seq_len = (#field_expr).len() as #len_ty_tokens;
-            __seq_len.encode(encoder)?;
+            #crate_path::Encode::encode(&__seq_len, encoder)?;
             for __item in (#field_expr).iter() {
-                __item.encode(encoder)?;
+                #crate_path::Encode::encode(__item, encoder)?;
             }
         }
     }
@@ -189,12 +253,12 @@ fn derive_encode_struct(
                         Ok(quote! {
                             {
                                 let __bytes: &[u8] = &self.#field_name[..];
-                                (__bytes.len() as u64).encode(encoder)?;
+                                #crate_path::Encode::encode(&(__bytes.len() as u64), encoder)?;
                                 <_ as #crate_path::enc::write::Writer>::write(encoder.writer(), __bytes)?;
                             }
                         })
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_encode_expr(quote! { self.#field_name }, len_ty_str))
+                        Ok(make_seq_len_encode_expr(quote! { self.#field_name }, len_ty_str, crate_path))
                     } else if attrs.is_skipped() {
                         Ok(quote! {})
                     } else if let Some(ref path) = attrs.with_module {
@@ -202,7 +266,7 @@ fn derive_encode_struct(
                     } else if let Some(ref path) = attrs.encode_with {
                         Ok(quote! { #path(&self.#field_name, encoder)?; })
                     } else {
-                        Ok(quote! { self.#field_name.encode(encoder)?; })
+                        Ok(quote! { #crate_path::Encode::encode(&self.#field_name, encoder)?; })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -223,12 +287,12 @@ fn derive_encode_struct(
                         Ok(quote! {
                             {
                                 let __bytes: &[u8] = &self.#idx[..];
-                                (__bytes.len() as u64).encode(encoder)?;
+                                #crate_path::Encode::encode(&(__bytes.len() as u64), encoder)?;
                                 <_ as #crate_path::enc::write::Writer>::write(encoder.writer(), __bytes)?;
                             }
                         })
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_encode_expr(quote! { self.#idx }, len_ty_str))
+                        Ok(make_seq_len_encode_expr(quote! { self.#idx }, len_ty_str, crate_path))
                     } else if attrs.is_skipped() {
                         Ok(quote! {})
                     } else if let Some(ref path) = attrs.with_module {
@@ -236,7 +300,7 @@ fn derive_encode_struct(
                     } else if let Some(ref path) = attrs.encode_with {
                         Ok(quote! { #path(&self.#idx, encoder)?; })
                     } else {
-                        Ok(quote! { self.#idx.encode(encoder)?; })
+                        Ok(quote! { #crate_path::Encode::encode(&self.#idx, encoder)?; })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -267,7 +331,7 @@ fn derive_encode_variant(
     let discriminant_lit = discriminant_literal(discriminant, tag_type, variant.ident.span())?;
 
     // Generate the tag encode expression at the requested tag width.
-    let tag_encode = quote! { #discriminant_lit.encode(encoder)?; };
+    let tag_encode = quote! { #crate_path::Encode::encode(&#discriminant_lit, encoder)?; };
 
     match &variant.fields {
         Fields::Named(fields) => {
@@ -298,12 +362,12 @@ fn derive_encode_variant(
                         Ok(quote! {
                             {
                                 let __bytes: &[u8] = &#field_name[..];
-                                (__bytes.len() as u64).encode(encoder)?;
+                                #crate_path::Encode::encode(&(__bytes.len() as u64), encoder)?;
                                 <_ as #crate_path::enc::write::Writer>::write(encoder.writer(), __bytes)?;
                             }
                         })
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
-                        Ok(make_seq_len_encode_expr(quote! { #field_name }, len_ty_str))
+                        Ok(make_seq_len_encode_expr(quote! { #field_name }, len_ty_str, crate_path))
                     } else if attrs.is_skipped() {
                         Ok(quote! {})
                     } else if let Some(ref path) = attrs.with_module {
@@ -311,7 +375,7 @@ fn derive_encode_variant(
                     } else if let Some(ref path) = attrs.encode_with {
                         Ok(quote! { #path(&#field_name, encoder)?; })
                     } else {
-                        Ok(quote! { #field_name.encode(encoder)?; })
+                        Ok(quote! { #crate_path::Encode::encode(#field_name, encoder)?; })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -349,13 +413,13 @@ fn derive_encode_variant(
                         Ok(quote! {
                             {
                                 let __bytes: &[u8] = &#field_name[..];
-                                (__bytes.len() as u64).encode(encoder)?;
+                                #crate_path::Encode::encode(&(__bytes.len() as u64), encoder)?;
                                 <_ as #crate_path::enc::write::Writer>::write(encoder.writer(), __bytes)?;
                             }
                         })
                     } else if let Some(ref len_ty_str) = attrs.seq_len {
                         let field_name = &pattern_names[i];
-                        Ok(make_seq_len_encode_expr(quote! { #field_name }, len_ty_str))
+                        Ok(make_seq_len_encode_expr(quote! { #field_name }, len_ty_str, crate_path))
                     } else if attrs.is_skipped() {
                         Ok(quote! {})
                     } else if let Some(ref path) = attrs.with_module {
@@ -366,7 +430,7 @@ fn derive_encode_variant(
                         Ok(quote! { #path(&#field_name, encoder)?; })
                     } else {
                         let field_name = &pattern_names[i];
-                        Ok(quote! { #field_name.encode(encoder)?; })
+                        Ok(quote! { #crate_path::Encode::encode(#field_name, encoder)?; })
                     }
                 })
                 .collect::<Result<_, syn::Error>>()?;
@@ -382,7 +446,8 @@ fn derive_encode_variant(
             // For unit variants we want the arm to evaluate to `Ok(())` directly, so emit the tag
             // encode as an expression (no trailing `;`). The literal already carries the configured
             // tag width, so `.encode()` writes exactly that many bytes.
-            let tag_encode_expr = quote! { #discriminant_lit.encode(encoder) };
+            let tag_encode_expr =
+                quote! { #crate_path::Encode::encode(&#discriminant_lit, encoder) };
             Ok(quote! {
                 Self::#variant_name => #tag_encode_expr
             })

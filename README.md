@@ -2,14 +2,13 @@
 
 A modern binary serialization library for Rust - the successor to bincode.
 
-[![CI](https://github.com/cool-japan/oxicode/workflows/CI/badge.svg)](https://github.com/cool-japan/oxicode/actions)
 [![Crates.io](https://img.shields.io/crates/v/oxicode.svg)](https://crates.io/crates/oxicode)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![MSRV](https://img.shields.io/badge/MSRV-1.81.0-blue.svg)](https://github.com/cool-japan/oxicode)
 
 Requires Rust **1.81.0** or later.
 
-> **MSRV note:** 1.81.0 is the MSRV for the core library surface (default features, plus `alloc`/`std`/`derive`/`serde`/`checksum`/`simd`/`async-tokio` individually). The optional `compression-lz4` and `compression-zstd` features transitively depend on `oxiarc-core`, which requires Cargo's `edition2024` support and therefore needs Rust **1.85** or later to build; the same applies to some heavier dev-dependencies used only for benches/tests (not the published library). See the CI workflow's `msrv` job for the exact feature combinations verified at 1.81.0.
+> **MSRV note:** 1.81.0 is the MSRV for the core library surface (default features, plus `alloc`/`std`/`derive`/`serde`/`checksum`/`simd`/`async-tokio` individually). The optional `compression-lz4` and `compression-zstd` features transitively depend on `oxiarc-core`, which requires Cargo's `edition2024` support and therefore needs Rust **1.85** or later to build; the same applies to some heavier dev-dependencies used only for benches/tests (not the published library). See the `msrv` job in `.github/workflows/ci.yml.disabled` for the exact feature combinations verified at 1.81.0 (the workflow is currently disabled and run locally rather than in GitHub Actions).
 
 ## About
 
@@ -162,6 +161,16 @@ struct Packet<'a> {
 | `#[oxicode(crate = "path")]` | Specify a custom path to the oxicode crate |
 | `#[oxicode(transparent)]` | Treat a single-field struct as its inner type (no wrapper) |
 | `#[oxicode(tag_type = "u8"\|"u16"\|"u32"\|"u64")]` | Set the integer type used for enum discriminants (default `u32`, bincode-compatible). Non-default widths are **wire-incompatible with bincode** |
+| `#[oxicode(decode_context = "Ctx")]` | Generate `Decode<Ctx>` instead of `Decode<()>`, so the type works with `decode_from_slice_with_context` and friends. `Ctx` may be a concrete type or one of the container's own generic parameters |
+| `#[oxicode(borrow_decode_context = "Ctx")]` | Same, for the generated `BorrowDecode<'de, Ctx>` impl |
+| `#[oxicode(context = "Ctx")]` | Shorthand setting both of the above |
+| `#[oxicode(decode_context_generic)]` | Make the generated `Decode` impl generic over the context, so the type decodes under *any* context |
+| `#[oxicode(borrow_decode_context_generic)]` | Same, for `BorrowDecode` |
+| `#[oxicode(context_generic)]` | Shorthand setting both of the above |
+
+Without any of the context attributes the generated impls remain `Decode<()>` /
+`BorrowDecode<'de, ()>`, exactly as before — the wire format is unchanged either
+way, since the context never reaches the bytes.
 
 ### Variant Attributes
 
@@ -169,7 +178,11 @@ struct Packet<'a> {
 |-----------|-------------|
 | `#[oxicode(variant = 5)]` | Assign a custom discriminant value to this variant. Native Rust explicit discriminants (`enum E { A = 5 }`) are **ignored** by the derive — use this attribute instead |
 | `#[oxicode(rename = "name")]` | Accepted for serde-migration source compatibility; **no-op on the wire** (variants are positional in the binary format) |
-| `#[oxicode(skip)]` (variant-level) | Exclude the variant from the discriminant space; on encode it aliases the next non-skipped variant's discriminant. A skipped variant with no following non-skipped variant is a compile error |
+| `#[oxicode(skip)]` (variant-level) | Exclude the variant from the discriminant space; on encode it aliases the next non-skipped variant's discriminant. Two cases are compile errors: a skipped variant with no following non-skipped variant (nothing to alias onto), and a skipped variant whose field *types* differ from the successor it would alias (its payload would be read back through the successor's fields and desynchronize the stream) |
+
+Two decodable variants resolving to the same discriminant — whether by position
+or via `#[oxicode(variant = N)]` — is also a compile error, since `Decode`'s
+`match` would take the first arm and silently mis-decode values of the second.
 
 ## Supported Types (120+)
 
@@ -229,7 +242,20 @@ let items: Vec<T> = oxicode::decode_iter_from_slice::<T>(&bytes)?.collect::<Resu
 use oxicode::EncodedBytes;
 println!("{}", EncodedBytes(&bytes)); // prints hex (space-separated bytes)
 println!("{:x}", EncodedBytes(&bytes)); // prints a compact hex run
+
+// Decoding untrusted input from a stream whose length you already know
+// (file size, HTTP Content-Length, frame length): the budget lets the decoder
+// reject a forged length prefix *before* allocating that much memory.
+let decoded: T = oxicode::decode_from_buffered_read_limited(reader, oxicode::config::standard(), payload_len)?;
 ```
+
+Reading from a slice already gives the decoder an exact bound, so
+`decode_from_slice` needs no budget. `decode_from_file` / `decode_from_file_with_config`
+apply the file's size automatically. For an arbitrary `Read`, use the `*_limited`
+entry points (`decode_from_buffered_read_limited`, `decode_from_std_read_limited`,
+`oxicode::serde::decode_from_std_read_limited`) or build the reader yourself with
+`de::IoReader::with_limit`; without a bound, length-prefixed buffers are still
+materialized incrementally rather than reserved up front.
 
 ## Using with Serde
 
@@ -550,10 +576,18 @@ configs remains a deferred follow-up.)
 | `Ordering` | oxicode's native codec encodes a signed `i8` (`-1`/`0`/`1`); bincode's derive-style enum uses a `u32` tag (`0`/`1`/`2`) — which is also what oxicode's own serde path emits, so the native and serde paths disagree with each other |
 | `Duration` | decode-leniency difference (not byte layout): oxicode's decoder rejects `subsec_nanos >= 1_000_000_000`; bincode normalizes such values |
 
-One further **API-level** (not wire-level) parity gap is tracked under the
-same deferral: bincode 2's context API surface (`*_with_context` entry
-points, derive support for a non-`()` `Context`, and serde-module
-borrow/writer/reader entry points) is not yet mirrored.
+One remaining **API-level** (not wire-level) parity gap is tracked under the
+same deferral: bincode 2's serde-module entry points
+(`bincode::serde::{borrow_decode_from_slice, encode_into_writer,
+decode_from_reader, seed_decode_from_slice}`) have no `oxicode::serde`
+equivalents, and `oxicode::decode_from_reader` shares a name with bincode's
+but not its contract (it takes `std::io::Read` and returns `(D, usize)`,
+where bincode's takes its own `Reader` trait and returns `D`). The rest of
+that gap is closed as of 0.2.6: the native context entry points exist
+(`borrow_decode_from_slice_with_context`, `decode_from_std_read_with_context`,
+`decode_from_de_reader_with_context`), and the derive macros are no longer
+pinned to `Context = ()` — see `#[oxicode(decode_context = "…")]` and
+`#[oxicode(context_generic)]`.
 
 If your data crosses the bincode/oxicode boundary and contains any of the
 types above, pin both sides to the same library (or add your own
@@ -599,16 +633,16 @@ The full item-by-item deferral record lives in `TODO.md` (tagged
 
 ## Project Status
 
-**Version 0.2.5 - Production Ready**
+**Version 0.2.6 - Production Ready**
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 
-**Statistics** (as of the 0.2.5 release; see [CHANGELOG.md](CHANGELOG.md) for details):
-- **Lines of Code**: 523,697 (Rust source lines across 1,043 files)
-- **Files**: 1,043 Rust files
-- **Test Coverage**: 20,126 tests passing under `--all-features` (100% pass rate, 0 failed, 9 skipped); 15,539 under default features
-  - `oxicode_compatibility` crate: 29 dedicated cross-library tests verifying byte-for-byte identical output against bincode 2.0.1 for the covered type set
-  - 20,097+ feature, integration, property-based, and stress tests
+**Statistics** (as of the 0.2.6 release, 2026-08-06; see [CHANGELOG.md](CHANGELOG.md) for details):
+- **Lines of Code**: 525,758 (Rust source lines across 1,051 files)
+- **Files**: 1,051 Rust files
+- **Test Coverage**: 20,198 tests passing under `--all-features` (100% pass rate, 0 failed, 9 skipped); 15,601 under default features; 53 doc tests
+  - `oxicode_compatibility` crate: 35 dedicated cross-library tests verifying byte-for-byte identical output against bincode 2.0.1 for the covered type set
+  - 20,163 feature, integration, property-based, and stress tests
 - **Type Coverage**: 120+ types with full Encode/Decode support
 - **Binary Compatibility**: verified through cross-library testing for the covered type set — known divergences are documented in [Known compatibility caveats](#known-compatibility-caveats)
 - **Code Quality**: ✓ Zero unwrap(), ✓ Zero warnings, ✓ All files < 2000 lines

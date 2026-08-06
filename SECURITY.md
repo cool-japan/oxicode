@@ -75,16 +75,50 @@ Out of scope:
 - The crate maintains a `no_std` + `alloc`-only build path, minimizing
   the trusted computing base for embedded/constrained targets.
 - Untrusted-input decode paths are exercised by a `cargo-fuzz` suite
-  under `fuzz/` (`fuzz_decode_slice`, `fuzz_roundtrip`, `fuzz_streaming`,
+  under `fuzz/` (`fuzz_decode_slice`, `fuzz_decompress`, `fuzz_roundtrip`,
+  `fuzz_serde`, `fuzz_streaming`, `fuzz_streaming_std_reader`,
   `fuzz_versioned`); new decode-path features should add or extend a
   fuzz target.
 - `unsafe` usage is confined to a small number of modules
-  (`src/de/impls.rs`, `src/de/borrow_slice.rs`,
-  `src/features/impl_alloc.rs`, `src/simd/aligned.rs`) and is exercised
-  under Miri in CI.
+  (`src/de/borrow_slice.rs`, `src/de/impls.rs`, `src/enc/impls.rs`,
+  `src/features/impl_alloc.rs`, `src/simd/aligned.rs`, `src/simd/array.rs`,
+  `src/simd/copy.rs`) and is exercised under Miri.
 - Length-prefixed collections and buffers are bounds-checked against the
-  remaining input size before allocation, to avoid trivially triggering
-  out-of-memory conditions from a short malicious input.
+  input actually available before allocation, so a short malicious input
+  cannot trivially trigger an out-of-memory condition. This is two
+  independent mechanisms, one per entry point:
+  - The core `Decode`/`BorrowDecode` path (`String`, `Vec<u8>`, and the
+    derive macros' `#[oxicode(bytes)]` / `#[oxicode(seq_len = ...)]`
+    fields) uses `read_bytes_bounded` (`src/features/impl_alloc.rs`) and
+    its derive-generated equivalent: a slice-backed decoder rejects a
+    length that exceeds the bytes actually remaining *before* allocating
+    anything, and a `std::io::Read`-backed decoder grows its buffer in
+    small bounded increments that each have to be filled from the reader
+    before the next one is reserved. An IO reader can be given the same
+    exact bound as a slice when the length of the stream is known:
+    `IoReader::with_limit` / `BufferedIoReader::with_limit`, or the
+    `decode_from_std_read_limited` / `decode_from_buffered_read_limited`
+    entry points; `decode_from_file` derives the budget from the file's
+    size automatically. The serde bridge decodes its `String` / byte
+    fields through the same impls, so it inherits the bound as soon as
+    the reader has one: use `oxicode::serde::decode_from_std_read_limited`
+    (the budgeted counterpart of `oxicode::serde::decode_from_std_read`).
+    Note that a reader's *buffered* byte count is
+    deliberately **not** used as a bound — it is a lower bound on what the
+    stream can still produce, and reporting it would reject valid input.
+  - The `oxicode::streaming` module (`StreamingDecoder`,
+    `BufferStreamingDecoder`, `AsyncStreamingDecoder`) separately bounds
+    each chunk's *declared* payload length against a configurable ceiling
+    (`MAX_CHUNK_SIZE` by default) before allocating anything, and — for
+    the two reader-backed decoders (`std::io::Read` and `AsyncRead`) —
+    materializes the payload in the same style of bounded increments
+    rather than committing the full claimed length up front.
+
+  Both are independent of `claim_bytes_read` / `with_limit`, which enforce
+  the *configured* decode byte budget and are a no-op under the default
+  `NoLimit` configuration — set an explicit limit via `Config::with_limit`
+  if you also want a hard cap on total bytes/elements consumed by one
+  decode call, on top of the per-allocation bounds described above.
 
 If you are unsure whether something qualifies, please report it anyway
 through one of the private channels above — we would rather triage a

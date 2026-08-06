@@ -1,0 +1,5 @@
+error: duplicate enum discriminant 0: variant `B` collides with `A`; each decodable variant needs a distinct discriminant (set one with #[oxicode(variant = N)])
+  --> tests/ui/wave2_duplicate_discriminant.rs:11:5
+   |
+11 |     B,
+   |     ^

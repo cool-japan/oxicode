@@ -283,6 +283,19 @@ impl<'a, E: Encoder> ser::Serializer for Serializer<'a, E> {
             encoder: self.encoder,
         })
     }
+
+    /// The oxicode wire format is compact and binary, never self-describing.
+    ///
+    /// serde defaults this method to `true`. Leaving it at the default made
+    /// every `Serialize` impl that branches on human-readability take the
+    /// opposite branch from `bincode::serde`: `127.0.0.1` went on the wire as a
+    /// varint length plus ten ASCII bytes instead of a one-byte tag plus four
+    /// octets, and `uuid` as a 36-character string instead of 16 bytes. That is
+    /// both a size regression and a silent cross-library incompatibility.
+    /// `bincode` 2.0.1 returns `false` here; so do we.
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 // Compound serializers

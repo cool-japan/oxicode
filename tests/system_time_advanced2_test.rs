@@ -149,8 +149,15 @@ fn test_unix_epoch_plus_nanos_roundtrip() {
     let since = decoded
         .duration_since(UNIX_EPOCH)
         .expect("duration_since nanos failed");
+    // Windows' SystemTime is FILETIME-backed (100 ns ticks), so sub-100 ns
+    // detail is lost before the encoder ever sees it. Compare against the
+    // pre-encode value so this asserts oxicode's fidelity rather than the
+    // platform's clock granularity.
+    let expected = original
+        .duration_since(UNIX_EPOCH)
+        .expect("duration_since on the pre-encode value failed");
     assert_eq!(since.as_secs(), 0);
-    assert_eq!(since.subsec_nanos(), 999_999_999);
+    assert_eq!(since.subsec_nanos(), expected.subsec_nanos());
 }
 
 // ===== Test 5: bytes consumed equals encoded length =====
@@ -301,8 +308,15 @@ fn test_system_time_duration_since_roundtrip() {
     let since = decoded
         .duration_since(UNIX_EPOCH)
         .expect("duration_since after decode failed");
+    // Windows' SystemTime is FILETIME-backed (100 ns ticks), so sub-100 ns
+    // detail is lost before the encoder ever sees it. Compare against the
+    // pre-encode value so this asserts oxicode's fidelity rather than the
+    // platform's clock granularity.
+    let expected = original
+        .duration_since(UNIX_EPOCH)
+        .expect("duration_since on the pre-encode value failed");
     assert_eq!(since.as_secs(), secs);
-    assert_eq!(since.subsec_nanos(), nanos);
+    assert_eq!(since.subsec_nanos(), expected.subsec_nanos());
 }
 
 // ===== Test 15: UNIX_EPOCH with fixed_int is exactly 12 bytes (8+4) =====
@@ -373,9 +387,16 @@ fn test_system_time_subsecond_precision() {
         let since = decoded
             .duration_since(UNIX_EPOCH)
             .expect("duration_since subsecond failed");
+        // Windows' SystemTime is FILETIME-backed (100 ns ticks), so sub-100 ns
+        // detail is lost before the encoder ever sees it. Compare against the
+        // pre-encode value so this asserts oxicode's fidelity rather than the
+        // platform's clock granularity.
+        let expected = t
+            .duration_since(UNIX_EPOCH)
+            .expect("duration_since on the pre-encode value failed");
         assert_eq!(
             since.subsec_nanos(),
-            nanos,
+            expected.subsec_nanos(),
             "nanos must be preserved for nanos={nanos}"
         );
     }

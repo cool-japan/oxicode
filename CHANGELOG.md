@@ -5,6 +5,201 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-08-06
+
+A follow-on hardening release to 0.2.5, concentrated in three areas: the serde
+bridge (which had its own decode path and therefore missed several of 0.2.5's
+protections), allocation bounds for length-prefixed and streaming input, and
+decode contexts (previously usable only from hand-written impls). One change is
+**wire-format relevant** — serde's `is_human_readable` now returns `false`,
+restoring byte compatibility with `bincode::serde` for types that branch on it
+(`IpAddr`, `uuid`, `chrono`, …). See **Fixed** for the migration note; nothing
+else in this release changes the bytes produced for input that already encoded
+correctly.
+
+### Added
+
+- **Bounded-length decode entry points**: `decode_from_buffered_read_limited`,
+  `decode_from_std_read_limited`, and the serde counterpart
+  `serde::decode_from_std_read_limited`. Hand the decoder the real length of
+  the payload — a file size, an HTTP `Content-Length`, the frame length of a
+  length-delimited protocol — and a field claiming more bytes than the stream
+  can physically hold is rejected with `Error::UnexpectedEnd` *before* an
+  allocation of that size is attempted, exactly as it already was for slice
+  input. Reads past the budget also stop at the budget instead of running into
+  the next message.
+- **Byte-budgeted readers**: `de::IoReader::with_limit` / `set_limit` /
+  `remaining_limit`, and `de::read::BufferedIoReader::with_limit`. These are
+  what make the bounded entry points above composable with a hand-built reader.
+- `de::Reader::remaining_bytes` and `de::Decoder::remaining_reader_bytes` — an
+  exact upper bound on the input still obtainable, when it is cheaply knowable.
+  Slice-backed readers answer exactly, budgeted IO readers answer with their
+  remaining budget, and unbounded streams keep the default `None` (in which case
+  length-prefixed decoding falls back to materializing incrementally).
+- **Context-aware decode entry points**: `borrow_decode_from_slice_with_context`
+  (zero-copy counterpart of `decode_from_slice_with_context`),
+  `decode_from_std_read_with_context`, and `decode_from_de_reader_with_context`
+  (the most general form — takes a reader the caller built, so a budgeted
+  `IoReader::with_limit` can be combined with a context).
+- **Decode contexts in the derive macros**. `#[oxicode(decode_context = "Ctx")]`
+  and `#[oxicode(borrow_decode_context = "Ctx")]` generate `Decode<Ctx>` /
+  `BorrowDecode<'de, Ctx>` instead of the unit context (`#[oxicode(context =
+  "Ctx")]` sets both), and `#[oxicode(decode_context_generic)]` /
+  `#[oxicode(borrow_decode_context_generic)]` / `#[oxicode(context_generic)]`
+  make the generated impl generic over the context so the type decodes under
+  *any* of them. The auto-generated bounds name the same context, and the
+  context parameter itself is never given a `Decode` bound of its own.
+- **Two new compile-time rejections in `#[derive(Encode)]`**, both replacing a
+  silent mis-decode with a named error:
+  - duplicate discriminants between decodable variants — `Decode`'s `match`
+    takes the first arm, so the second variant was unreachable and its values
+    silently decoded as the first;
+  - a `#[oxicode(skip)]` variant whose field *types* differ from those of the
+    successor whose discriminant it aliases — the skipped variant's payload
+    would be read back through the successor's fields, corrupting it and
+    desynchronizing everything after it in the stream.
+- New fuzz target `fuzz_serde` covering the serde bridge end to end.
+
+### Changed
+
+- **All built-in `Decode` / `BorrowDecode` impls are now generic over the decode
+  context** (`impl<Context> Decode<Context> for T`, where they previously
+  implemented only `Decode<()>`). Primitives, arrays, tuples, `Option`,
+  `Result`, `PhantomData`, the `core` / `alloc` / `std` types and the atomics
+  can therefore be fields of a context-carrying or context-generic derived type.
+  `Decode<Context = ()>` still defaults, so existing code compiles unchanged.
+  `impl_borrow_decode!` gained matching forms: `(Ty)` forwards under any
+  context, `(Ty, Ctx)` under one named context, `(Ty, unit_context)` pins to the
+  historical unit context.
+- `decode_from_file_with_config` now uses the file's size as the reader's byte
+  budget, so a length prefix claiming more bytes than the file physically
+  contains is rejected before that much memory is reserved. Sources with no
+  determinable length (a named pipe, a `/proc` entry, a file longer than
+  `usize::MAX` on a 32-bit target) decode unbounded, as before.
+- Streaming chunk payloads are materialized incrementally in bounded 64 KiB
+  steps instead of a single `vec![0u8; payload_len]` up front, in both
+  `StreamingDecoder` and `AsyncStreamingDecoder`. A chunk header is 13 bytes; a
+  peer that sends one and then stalls previously still cost the receiver a full
+  bound-sized allocation (up to `MAX_CHUNK_SIZE`, 16 MiB by default) before a
+  single payload byte had actually arrived. The allocation now tracks bytes
+  really received. The async path keeps this cancellation-safe: the buffer grows
+  before the `.await`, and `filled` — advanced only after a completed `read` —
+  stays the sole record of what was confirmed received.
+- Length-prefixed allocation no longer trusts the claimed length in one step.
+  Element containers (`Vec`, `BinaryHeap`, `VecDeque`, …) pre-reserve at most
+  4096 elements rather than the full decoded count, and still grow to whatever
+  the input legitimately contains. Byte buffers (`String`, `Vec<u8>`, and the
+  `#[oxicode(bytes)]` derive path) go through a shared bounded reader: the
+  length is rejected outright when the reader knows its remaining input is
+  shorter, and otherwise the buffer caps its first allocation at 16 MiB and
+  grows in 16 KiB steps, each filled from the reader before the next is
+  reserved. A reader's `remaining_bytes` is only an *upper* bound, so a
+  deliberately generous budget ("1 GiB, to be safe") could otherwise still let
+  nine bytes of forged length prefix commit a gigabyte at once.
+- Derive-generated code no longer resolves items through the *invoking* crate's
+  prelude: `Vec` and the `#[oxicode(bytes)]` read helper now route through a new
+  `#[doc(hidden)]` `oxicode::__private` module, `Encode` calls are emitted as
+  `#crate_path::Encode::encode(&value, encoder)`, and `Result` is written
+  `::core::result::Result`. This fixes `#![no_std] + alloc` call sites (where
+  `Vec` is never implicitly in scope) and removes the possibility of an
+  unrelated same-named item in the calling crate shadowing the intended one.
+- `AsyncStreamingEncoder::finish` is now documented as **not** cancellation-safe
+  — a correction, as the module docs previously grouped it with the cancel-safe
+  methods. It takes `self` by value, so a `finish` future dropped mid-await
+  drops the encoder together with any buffered chunk data and the unwritten
+  `End` marker, leaving the stream unterminated. Drive it to completion rather
+  than racing it in a cancellable `select!`.
+- `SimdCapability`'s derived `Ord` / `PartialOrd` is documented as meaningful
+  only *within* one target-architecture family: `Neon` sorts numerically above
+  `Avx512` although the two are never detected on the same build and are not
+  comparable in strength. `matches!` is the safe idiom for any comparison not
+  already confined to one architecture by `#[cfg]`.
+
+### Fixed
+
+- **serde: `is_human_readable` now returns `false`** on the serializer and both
+  deserializers, matching `bincode` 2.0.1. It had been left at serde's `true`
+  default, so every `Serialize` / `Deserialize` impl that branches on
+  human-readability took the opposite branch from `bincode::serde`: `IpAddr`
+  encoded as a length-prefixed ASCII string rather than a one-byte tag plus raw
+  octets, and likewise for `uuid`, `chrono`, and any third-party type using the
+  same idiom. It was also internally inconsistent — the human-readable branch is
+  entitled to call `deserialize_any`, which this format rejects.
+  **Migration:** bytes written by 0.2.5 or earlier for such types will not
+  decode under 0.2.6, and vice versa; re-encode any persisted data containing
+  them. Plain structs, enums, collections and primitives are entirely
+  unaffected, and 0.2.6 is byte-compatible with `bincode::serde` again.
+- **serde: infinite decode loop from nine bytes of input.** `SeqAccess` used the
+  in-band sentinel `usize::MAX` to mean "length driven by the visitor, not by
+  the wire". A wire length of `u64::MAX` collided with it, after which the
+  counter never decremented and `next_element_seed` returned `Some(..)` forever.
+  The sentinel is replaced by `Option<usize>`, with explicit `from_wire` /
+  `from_schema` / `unbounded` constructors.
+- **serde: uncatchable stack overflow on deeply nested input.** The bridge
+  descends through visitor callbacks rather than through `Decode` impls, so it
+  never passed through the recursion-depth guard added for the native path — a
+  crafted payload for something like `enum Tree { Leaf, Node(Box<Tree>) }`
+  recursed roughly one stack frame per input byte and aborted the process. The
+  `Option`, newtype-struct, seq, map and enum descents are now wrapped in the
+  guard, which stays balanced on the error path.
+- **serde: unchecked length prefixes and unbudgeted containers.** Collection
+  lengths are decoded with a checked `usize::try_from` (returning
+  `Error::OutsideUsizeRange`) instead of a truncating `as usize` cast, and
+  sequences and maps now claim their length against the configured decode limit
+  before any element is decoded, each element unclaiming its share as it goes —
+  the same convergence `Vec<T>::decode` already performed.
+- **Undefined behaviour in `AlignedVec<T>` for a zero-sized `T`.** The
+  allocating paths computed a zero-size `Layout` and passed it to
+  `alloc::alloc::alloc` / `realloc` / `dealloc`, which the `GlobalAlloc`
+  contract forbids — reachable from entirely safe downstream code, since
+  `with_capacity` is a safe public constructor and `T` is unconstrained. ZSTs
+  now keep `NonNull::dangling()` and never reach the allocator, while live
+  elements are still dropped (a ZST may have a meaningful `Drop`).
+- **Streaming decoders now poison on item-level errors**, not only chunk-level
+  ones. `chunk.offset` was not advanced when an item failed to decode, so a
+  caller looping past the error re-decoded the same bytes forever instead of
+  receiving a deterministic failed-state error, contradicting the documented
+  poisoning contract.
+- **Forged chunk `item_count` is rejected up front.** A data chunk with
+  `payload_len > 0` and `item_count > payload_len` is unrepresentable output —
+  every non-zero-sized item consumes at least one payload byte — and is now
+  refused before the decoder trusts `item_count` as its per-item loop bound.
+  Zero-sized elements legitimately produce `payload_len == 0` with a non-zero
+  `item_count` and are still accepted.
+- **`#[oxicode(bytes)]` derive fields no longer reserve the claimed length up
+  front.** The generated code did `Vec::with_capacity(len)` + `resize` from an
+  attacker-controlled `u64`; it now goes through the same bounded
+  `read_bytes_bounded` helper as the built-in `String` / `Vec<u8>` impls, so the
+  length is either rejected against the reader's known remainder or the buffer
+  is filled in bounded steps and fails on the first short read.
+- Derived `Decode` / `BorrowDecode` impls call field decoders through an
+  explicit `<Ty as Decode<_>>::decode` (rather than inherent-method syntax),
+  which is what lets a derived type mix context-generic fields with concrete
+  ones without inference failures.
+
+### Documentation
+
+- The serde module now documents which serde attributes this non-self-describing
+  format cannot support, and why: `#[serde(flatten)]`, internally/adjacently
+  tagged enums, `#[serde(untagged)]`, and anything reaching `deserialize_any` /
+  `deserialize_ignored_any` fail at runtime; `#[serde(skip_serializing_if)]` is
+  worse — it compiles, appears to work, and silently desynchronizes every field
+  after the omitted one, so it must not be used with oxicode. Also notes that
+  `collect_str` is deliberately *not* rejected (unlike `bincode::serde`), so
+  `Display`-based types serialize as length-prefixed UTF-8 strings.
+- `BorrowableSliceElement`'s safety invariants are stated precisely: implementors
+  must have **no padding bytes**, and alignment (not just size) must be
+  compatible with reading directly out of an arbitrary buffer at an
+  attacker-influenced offset — the built-in impl enforces that with a runtime
+  address check, and a custom implementor must provide an equivalent.
+- `Decoder::remaining_reader_bytes` documents why `config.with_limit::<N>()`
+  cannot substitute for a reader-supplied bound in either direction (claims do
+  not track consumed bytes exactly under variable-length encodings, and the
+  remaining budget is already debited by the time a bound would be consulted).
+
+### Dependencies
+- `oxiarc-lz4` / `oxiarc-zstd` 0.4.0 → 0.4.1 (upstream release).
+
 ## [0.2.5] - 2026-07-30
 
 A hardening-focused release: a coordinated internal audit found and fixed a
@@ -580,6 +775,7 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 ---
 
+[0.2.6]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.6
 [0.2.5]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.5
 [0.2.4]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.4
 [0.2.3]: https://github.com/cool-japan/oxicode/releases/tag/v0.2.3

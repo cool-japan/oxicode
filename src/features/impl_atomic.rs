@@ -18,15 +18,15 @@ impl Encode for AtomicBool {
 }
 
 #[cfg(target_has_atomic = "8")]
-impl Decode for AtomicBool {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for AtomicBool {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(AtomicBool::new(bool::decode(decoder)?))
     }
 }
 
 #[cfg(target_has_atomic = "8")]
-impl<'__de> BorrowDecode<'__de> for AtomicBool {
-    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+impl<'__de, Context> BorrowDecode<'__de, Context> for AtomicBool {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         Ok(AtomicBool::new(bool::decode(decoder)?))
@@ -44,15 +44,15 @@ macro_rules! impl_atomic_int {
         }
 
         #[cfg($cfg)]
-        impl Decode for $atomic {
-            fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+        impl<Context> Decode<Context> for $atomic {
+            fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
                 Ok(<$atomic>::new(<$inner>::decode(decoder)?))
             }
         }
 
         #[cfg($cfg)]
-        impl<'__de> BorrowDecode<'__de> for $atomic {
-            fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+        impl<'__de, Context> BorrowDecode<'__de, Context> for $atomic {
+            fn borrow_decode<D: BorrowDecoder<'__de, Context = Context>>(
                 decoder: &mut D,
             ) -> Result<Self, Error> {
                 Ok(<$atomic>::new(<$inner>::decode(decoder)?))
@@ -94,15 +94,15 @@ impl Encode for AtomicUsize {
 }
 
 #[cfg(target_has_atomic = "ptr")]
-impl Decode for AtomicUsize {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for AtomicUsize {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(AtomicUsize::new(usize::decode(decoder)?))
     }
 }
 
 #[cfg(target_has_atomic = "ptr")]
-impl<'__de> BorrowDecode<'__de> for AtomicUsize {
-    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+impl<'__de, Context> BorrowDecode<'__de, Context> for AtomicUsize {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         Ok(AtomicUsize::new(usize::decode(decoder)?))
@@ -117,15 +117,15 @@ impl Encode for AtomicIsize {
 }
 
 #[cfg(target_has_atomic = "ptr")]
-impl Decode for AtomicIsize {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for AtomicIsize {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(AtomicIsize::new(isize::decode(decoder)?))
     }
 }
 
 #[cfg(target_has_atomic = "ptr")]
-impl<'__de> BorrowDecode<'__de> for AtomicIsize {
-    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+impl<'__de, Context> BorrowDecode<'__de, Context> for AtomicIsize {
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         Ok(AtomicIsize::new(isize::decode(decoder)?))
@@ -140,14 +140,16 @@ impl<T: Encode> Encode for core::mem::ManuallyDrop<T> {
     }
 }
 
-impl<T: Decode> Decode for core::mem::ManuallyDrop<T> {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context, T: Decode<Context>> Decode<Context> for core::mem::ManuallyDrop<T> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(core::mem::ManuallyDrop::new(T::decode(decoder)?))
     }
 }
 
-impl<'__de, T: BorrowDecode<'__de>> BorrowDecode<'__de> for core::mem::ManuallyDrop<T> {
-    fn borrow_decode<D: BorrowDecoder<'__de, Context = ()>>(
+impl<'__de, Context, T: BorrowDecode<'__de, Context>> BorrowDecode<'__de, Context>
+    for core::mem::ManuallyDrop<T>
+{
+    fn borrow_decode<D: BorrowDecoder<'__de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         Ok(core::mem::ManuallyDrop::new(T::borrow_decode(decoder)?))

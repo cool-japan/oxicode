@@ -33,11 +33,15 @@ use std::time::{Duration, SystemTime};
 
 #[test]
 fn systemtime_post_epoch_self_roundtrip_stable() {
-    let value = SystemTime::UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
+    // The nanosecond component must stay a multiple of 100: windows'
+    // SystemTime is FILETIME-backed (100 ns ticks) and would truncate a finer
+    // value before the encoder ever sees it, making the committed byte
+    // literal platform-dependent for no good reason.
+    let value = SystemTime::UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_700);
     let bytes = oxicode::encode_to_vec(&value).expect("encode failed");
     assert_eq!(
         bytes,
-        &[0xfc, 0x00, 0xe2, 0xa7, 0xca, 0xfc, 0x15, 0xcd, 0x5b, 0x07],
+        &[0xfc, 0x00, 0xe2, 0xa7, 0xca, 0xfc, 0xbc, 0xcc, 0x5b, 0x07],
         "SystemTime post-epoch wire format changed unexpectedly"
     );
     let (decoded, _): (SystemTime, _) = oxicode::decode_from_slice(&bytes).expect("decode failed");

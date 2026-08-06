@@ -5,6 +5,26 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 
 /// Represents the SIMD capability level of the current CPU.
+///
+/// # `Ord`/`PartialOrd` are only meaningful *within* a target architecture
+///
+/// The derived ordering is a single linear scale (`Scalar < Sse42 < Avx2 <
+/// Avx512 < Neon`) so that it has a well-defined total order at all, but the
+/// x86/x86_64 tiers (`Scalar`, `Sse42`, `Avx2`, `Avx512`) and the ARM tier
+/// (`Neon`) can never both be *detected* on the same build — `detect_capability`
+/// only ever returns `Neon` on `aarch64`/`arm`, and only ever returns one of
+/// the other four on `x86`/`x86_64`. Comparing across those two families is
+/// therefore never meaningful, even though the derive makes it compile:
+/// `SimdCapability::Neon > SimdCapability::Avx512` is `true` numerically, but
+/// does **not** mean "NEON is a stronger capability than AVX-512". Do not
+/// write comparisons like `detect_capability() >= SimdCapability::Avx2`
+/// (the idiom used in `src/simd/copy.rs`) unless the surrounding code is
+/// already gated to a single architecture family with `#[cfg(target_arch =
+/// ...)]` — otherwise the comparison can silently take the wrong branch if
+/// this enum's variants are ever reordered, or (more subtly) it invites a
+/// reader to assume a meaningful cross-family ranking that does not exist.
+/// Prefer `matches!(cap, SimdCapability::Avx2 | SimdCapability::Avx512)`
+/// for any comparison not already confined to one architecture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum SimdCapability {
@@ -16,7 +36,10 @@ pub enum SimdCapability {
     Avx2 = 2,
     /// AVX-512 (512-bit, x86_64)
     Avx512 = 3,
-    /// NEON (128-bit, ARM)
+    /// NEON (128-bit, ARM). Numerically the highest tier (see the `Ord`
+    /// caveat on this type's own docs above) but **not** comparable in
+    /// strength to the x86/x86_64 tiers below it — it is a different
+    /// architecture's capability, never detected alongside them.
     Neon = 4,
 }
 
@@ -240,10 +263,23 @@ mod tests {
 
     #[test]
     fn test_simd_capability_ordering() {
-        // Verify capability ordering makes sense
+        // Verify capability ordering makes sense *within* the x86/x86_64 tiers.
         assert!(SimdCapability::Scalar < SimdCapability::Sse42);
         assert!(SimdCapability::Sse42 < SimdCapability::Avx2);
         assert!(SimdCapability::Avx2 < SimdCapability::Avx512);
+    }
+
+    /// Pins the documented cross-architecture-family caveat on `SimdCapability`'s
+    /// `Ord` impl: `Neon` sorts numerically above every x86/x86_64 tier,
+    /// including `Avx512`, even though the two are never detected on the same
+    /// build and are not meaningfully comparable. This is intentional (see the
+    /// type-level doc), not a bug — the test exists so that if a future change
+    /// reorders the enum to "fix" this, it fails loudly here instead of
+    /// silently changing the meaning of any existing `>=`-style comparison.
+    #[test]
+    fn test_neon_sorts_above_x86_tiers_but_is_not_comparable_in_strength() {
+        assert!(SimdCapability::Neon > SimdCapability::Avx512);
+        assert!(SimdCapability::Neon > SimdCapability::Scalar);
     }
 
     #[test]

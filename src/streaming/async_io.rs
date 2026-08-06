@@ -5,8 +5,8 @@
 //!
 //! # Cancellation safety
 //!
-//! Both the async encoder and decoder are cancellation-safe: if a `read_item`,
-//! `write_item`, `read_all`, `write_all`, or `finish` future is dropped
+//! The per-item and bulk transfer methods are cancellation-safe: if a
+//! `read_item`, `write_item`, `read_all`, or `write_all` future is dropped
 //! mid-await (for example because it lost a `tokio::select!` race or timed out),
 //! no bytes are lost or duplicated and the stream is not corrupted. Partially
 //! read or written frame data is retained inside the encoder/decoder and is
@@ -14,8 +14,17 @@
 //! cursor in the struct and driving the transfer with the cancel-safe
 //! [`AsyncReadExt::read`] / [`AsyncWriteExt::write`] primitives rather than the
 //! non-cancel-safe `read_exact` / `write_all`.
+//!
+//! `finish` is the exception: it consumes the encoder by value
+//! ([`AsyncStreamingEncoder::finish`]), so a `finish` future dropped mid-await
+//! drops the encoder along with any still-buffered chunk data and the
+//! terminating `End` marker — the stream is left unterminated and there is no
+//! encoder left to resume from. Do **not** race a `finish` future in a
+//! `select!` you might cancel; drive it to completion (await it directly, or
+//! guard it with a timeout that you treat as fatal for the stream).
 
 use super::chunk::ChunkHeader;
+use super::decoder::PAYLOAD_READ_STEP;
 use super::{StreamingConfig, StreamingProgress, MAX_CHUNK_SIZE};
 use crate::config::Config;
 use crate::de::{Decode, DecoderImpl, SliceReader};
@@ -228,7 +237,15 @@ impl<W: AsyncWrite + Unpin, C: Config> AsyncStreamingEncoder<W, C> {
         self.drain_pending().await
     }
 
-    /// Finish the stream, writing any remaining data and the end marker.
+    /// Finish the stream, writing any remaining buffered data and the `End` marker.
+    ///
+    /// Unlike [`write_item`](Self::write_item) / [`write_all`](Self::write_all),
+    /// this method is **not** cancellation-safe: it takes `self` by value, so if
+    /// the returned future is dropped mid-await the encoder — together with any
+    /// buffered chunk data and the unwritten `End` marker — is dropped with it,
+    /// leaving the stream unterminated (a reader then sees
+    /// [`Error::UnexpectedEnd`]). Await it to completion rather than racing it in
+    /// a cancellable `select!`. See the module-level "Cancellation safety" note.
     pub async fn finish(mut self) -> Result<W> {
         // Flush remaining buffer (also drains any interrupted flush).
         self.flush_chunk().await?;
@@ -265,8 +282,14 @@ impl<W: AsyncWrite + Unpin, C: Config> AsyncStreamingEncoder<W, C> {
 /// Uses tokio's async IO traits for non-blocking decoding operations.
 ///
 /// The `C` type parameter selects the codec configuration; it must match the
-/// encoder's. See the module-level docs above for the robustness and
-/// cancellation-safety guarantees.
+/// encoder's. See the module-level docs above for the cancellation-safety
+/// guarantees.
+///
+/// Shares the sync [`StreamingDecoder`](super::StreamingDecoder)'s poisoning
+/// guarantee: once any decode error occurs (chunk-level or item-level), the
+/// decoder is poisoned and every subsequent call returns a deterministic
+/// error rather than misinterpreting payload bytes as a fresh chunk header or
+/// re-attempting a decode that will only fail the same way again.
 ///
 /// # Example
 ///
@@ -316,9 +339,17 @@ enum PendingRead {
         filled: usize,
     },
     /// Filling the chunk payload (allocated after the header was parsed).
+    ///
+    /// `buf` holds only the bytes actually read so far — `buf.len() == filled`
+    /// is the loop invariant between polls — rather than being pre-sized to
+    /// the full header-claimed `target_len` up front. This is what stops a
+    /// forged (or merely large-and-then-stalled) `payload_len` from costing a
+    /// single huge allocation before any payload byte has actually arrived;
+    /// see the growth strategy in [`AsyncStreamingDecoder::load_next_chunk_inner`].
     Payload {
         buf: alloc::vec::Vec<u8>,
         filled: usize,
+        target_len: usize,
         item_count: u32,
     },
 }
@@ -413,7 +444,20 @@ impl<R: AsyncRead + Unpin, C: Config> AsyncStreamingDecoder<R, C> {
 
         let reader = SliceReader::new(&chunk.data[chunk.offset..]);
         let mut decoder = DecoderImpl::new(reader, self.codec_config);
-        let item = T::decode(&mut decoder)?;
+        let item = match T::decode(&mut decoder) {
+            Ok(item) => item,
+            Err(e) => {
+                // Poison on item-level errors too, matching the documented
+                // contract and the chunk-level poisoning in `load_next_chunk`
+                // below: without this, `chunk.offset` is never advanced on a
+                // failed decode, so a caller that loops past the error would
+                // re-decode the exact same bytes forever instead of getting a
+                // deterministic failed-state error on the next call.
+                self.poisoned = true;
+                self.finished = true;
+                return Err(e);
+            }
+        };
 
         let bytes_consumed = chunk.data[chunk.offset..].len() - decoder.reader().slice.len();
         chunk.offset += bytes_consumed;
@@ -508,8 +552,9 @@ impl<R: AsyncRead + Unpin, C: Config> AsyncStreamingDecoder<R, C> {
                     }
 
                     *pending = PendingRead::Payload {
-                        buf: alloc::vec![0u8; header.payload_len as usize],
+                        buf: alloc::vec::Vec::new(),
                         filled: 0,
+                        target_len: header.payload_len as usize,
                         item_count: header.item_count,
                     };
                     break;
@@ -519,17 +564,38 @@ impl<R: AsyncRead + Unpin, C: Config> AsyncStreamingDecoder<R, C> {
         }
 
         // Phase 2: fill the payload (resuming from a partial fill).
+        //
+        // `buf` grows in bounded `PAYLOAD_READ_STEP` increments instead of
+        // being pre-sized to `target_len` up front (see the `Payload` variant
+        // doc), so a header that claims a huge payload and then stalls costs
+        // at most one increment, not the whole claimed length. This must stay
+        // cancellation-safe: `buf`'s growth (`resize`) happens before the
+        // `.await` and is idempotent (re-polling after a previous poll grew
+        // `buf` but was then dropped before its `read()` completed just sees
+        // `buf.len()` already covering the target and skips the resize).
+        // `filled` — not `buf.len()` — is the sole source of truth for how
+        // many bytes are actually confirmed received, and it is only ever
+        // advanced *after* a `read()` call completes, never before.
         loop {
             let Self {
                 reader, pending, ..
             } = &mut *self;
             match pending {
-                PendingRead::Payload { buf, filled, .. } => {
-                    if *filled >= buf.len() {
+                PendingRead::Payload {
+                    buf,
+                    filled,
+                    target_len,
+                    ..
+                } => {
+                    if *filled >= *target_len {
                         break;
                     }
+                    let want_end = core::cmp::min(*filled + PAYLOAD_READ_STEP, *target_len);
+                    if buf.len() < want_end {
+                        buf.resize(want_end, 0u8);
+                    }
                     let n = reader
-                        .read(&mut buf[*filled..])
+                        .read(&mut buf[*filled..want_end])
                         .await
                         .map_err(|e| Error::Io {
                             kind: e.kind(),
@@ -537,7 +603,7 @@ impl<R: AsyncRead + Unpin, C: Config> AsyncStreamingDecoder<R, C> {
                         })?;
                     if n == 0 {
                         return Err(Error::UnexpectedEnd {
-                            additional: buf.len() - *filled,
+                            additional: *target_len - *filled,
                         });
                     }
                     *filled += n;

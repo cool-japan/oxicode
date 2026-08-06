@@ -31,13 +31,13 @@ where
     }
 }
 
-impl<K, V, S> Decode for HashMap<K, V, S>
+impl<Context, K, V, S> Decode<Context> for HashMap<K, V, S>
 where
-    K: Decode + Eq + Hash,
-    V: Decode,
+    K: Decode<Context> + Eq + Hash,
+    V: Decode<Context>,
     S: BuildHasher + Default,
 {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         crate::de::decode_with_depth_guard(decoder, |decoder| {
             let raw_len = u64::decode(decoder)?;
             let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
@@ -74,12 +74,12 @@ where
     }
 }
 
-impl<T, S> Decode for HashSet<T, S>
+impl<Context, T, S> Decode<Context> for HashSet<T, S>
 where
-    T: Decode + Eq + Hash,
+    T: Decode<Context> + Eq + Hash,
     S: BuildHasher + Default,
 {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         crate::de::decode_with_depth_guard(decoder, |decoder| {
             let raw_len = u64::decode(decoder)?;
             let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
@@ -110,8 +110,8 @@ impl<T: Encode> Encode for Mutex<T> {
     }
 }
 
-impl<T: Decode> Decode for Mutex<T> {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context, T: Decode<Context>> Decode<Context> for Mutex<T> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(Mutex::new(T::decode(decoder)?))
     }
 }
@@ -127,8 +127,8 @@ impl<T: Encode> Encode for RwLock<T> {
     }
 }
 
-impl<T: Decode> Decode for RwLock<T> {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context, T: Decode<Context>> Decode<Context> for RwLock<T> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         Ok(RwLock::new(T::decode(decoder)?))
     }
 }
@@ -170,8 +170,8 @@ impl Encode for PathBuf {
     }
 }
 
-impl Decode for PathBuf {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for PathBuf {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         #[cfg(unix)]
         {
             use std::ffi::OsStr;
@@ -181,8 +181,7 @@ impl Decode for PathBuf {
             let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
             decoder.claim_bytes_read(len)?;
 
-            let mut bytes = alloc::vec![0u8; len];
-            decoder.reader().read(&mut bytes)?;
+            let bytes = crate::features::impl_alloc::read_bytes_bounded(decoder, len)?;
 
             Ok(PathBuf::from(OsStr::from_bytes(&bytes)))
         }
@@ -231,8 +230,8 @@ impl Encode for IpAddr {
     }
 }
 
-impl Decode for IpAddr {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for IpAddr {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let variant = u8::decode(decoder)?;
         match variant {
             0 => Ok(IpAddr::V4(Ipv4Addr::decode(decoder)?)),
@@ -252,8 +251,8 @@ impl Encode for Ipv4Addr {
     }
 }
 
-impl Decode for Ipv4Addr {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for Ipv4Addr {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let mut octets = [0u8; 4];
         decoder.reader().read(&mut octets)?;
         Ok(Ipv4Addr::from(octets))
@@ -268,8 +267,8 @@ impl Encode for Ipv6Addr {
     }
 }
 
-impl Decode for Ipv6Addr {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for Ipv6Addr {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let mut octets = [0u8; 16];
         decoder.reader().read(&mut octets)?;
         Ok(Ipv6Addr::from(octets))
@@ -293,8 +292,8 @@ impl Encode for SocketAddr {
     }
 }
 
-impl Decode for SocketAddr {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for SocketAddr {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let variant = u8::decode(decoder)?;
         match variant {
             0 => Ok(SocketAddr::V4(SocketAddrV4::decode(decoder)?)),
@@ -315,8 +314,8 @@ impl Encode for SocketAddrV4 {
     }
 }
 
-impl Decode for SocketAddrV4 {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for SocketAddrV4 {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let ip = Ipv4Addr::decode(decoder)?;
         let port = u16::decode(decoder)?;
         Ok(SocketAddrV4::new(ip, port))
@@ -334,8 +333,8 @@ impl Encode for SocketAddrV6 {
     }
 }
 
-impl Decode for SocketAddrV6 {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for SocketAddrV6 {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let ip = Ipv6Addr::decode(decoder)?;
         let port = u16::decode(decoder)?;
         let flowinfo = u32::decode(decoder)?;
@@ -355,14 +354,13 @@ impl Encode for CString {
     }
 }
 
-impl Decode for CString {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for CString {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let raw_len = u64::decode(decoder)?;
         let len = usize::try_from(raw_len).map_err(|_| Error::OutsideUsizeRange(raw_len))?;
         decoder.claim_bytes_read(len)?;
 
-        let mut bytes = alloc::vec![0u8; len];
-        decoder.reader().read(&mut bytes)?;
+        let bytes = crate::features::impl_alloc::read_bytes_bounded(decoder, len)?;
 
         // Verify no null bytes in the middle
         if bytes.contains(&0) {
@@ -420,8 +418,8 @@ impl Encode for std::ffi::OsString {
 }
 
 #[cfg(not(target_family = "wasm"))]
-impl Decode for std::ffi::OsString {
-    fn decode<D: Decoder<Context = ()>>(decoder: &mut D) -> Result<Self, Error> {
+impl<Context> Decode<Context> for std::ffi::OsString {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, Error> {
         let s = String::decode(decoder)?;
         Ok(std::ffi::OsString::from(s))
     }
@@ -444,12 +442,12 @@ crate::impl_borrow_decode!(std::ffi::OsString);
 // such as `HashSet<&'de str>` / `HashMap<&'de str, u32>` compile rather than
 // being blocked by a `Decode + 'static` delegation.
 
-impl<'de, T, S> crate::de::BorrowDecode<'de> for HashSet<T, S>
+impl<'de, Context, T, S> crate::de::BorrowDecode<'de, Context> for HashSet<T, S>
 where
-    T: crate::de::BorrowDecode<'de> + Eq + Hash,
+    T: crate::de::BorrowDecode<'de, Context> + Eq + Hash,
     S: BuildHasher + Default,
 {
-    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         crate::de::decode_with_depth_guard(decoder, |decoder| {
@@ -466,13 +464,13 @@ where
     }
 }
 
-impl<'de, K, V, S> crate::de::BorrowDecode<'de> for HashMap<K, V, S>
+impl<'de, Context, K, V, S> crate::de::BorrowDecode<'de, Context> for HashMap<K, V, S>
 where
-    K: crate::de::BorrowDecode<'de> + Eq + Hash,
-    V: crate::de::BorrowDecode<'de>,
+    K: crate::de::BorrowDecode<'de, Context> + Eq + Hash,
+    V: crate::de::BorrowDecode<'de, Context>,
     S: BuildHasher + Default,
 {
-    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         crate::de::decode_with_depth_guard(decoder, |decoder| {
@@ -491,16 +489,20 @@ where
     }
 }
 
-impl<'de, T: crate::de::Decode + 'static> crate::de::BorrowDecode<'de> for Mutex<T> {
-    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+impl<'de, Context, T: crate::de::Decode<Context> + 'static> crate::de::BorrowDecode<'de, Context>
+    for Mutex<T>
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         Mutex::<T>::decode(decoder)
     }
 }
 
-impl<'de, T: crate::de::Decode + 'static> crate::de::BorrowDecode<'de> for RwLock<T> {
-    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = ()>>(
+impl<'de, Context, T: crate::de::Decode<Context> + 'static> crate::de::BorrowDecode<'de, Context>
+    for RwLock<T>
+{
+    fn borrow_decode<D: crate::de::BorrowDecoder<'de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, Error> {
         RwLock::<T>::decode(decoder)

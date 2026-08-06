@@ -19,7 +19,7 @@
 //! [`deserialize_bytes`]: serde::Deserializer::deserialize_bytes
 //! [`BorrowDecoder`]: crate::de::BorrowDecoder
 
-use super::de::DeError;
+use super::de::{claim_container, decode_length, with_recursion_guard, DeError};
 use crate::de::BorrowDecoder;
 use serde::de;
 
@@ -164,7 +164,9 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
         let variant = u8::decode(self.decoder).map_err(DeError::Codec)?;
         match variant {
             0 => visitor.visit_none(),
-            1 => visitor.visit_some(self),
+            1 => with_recursion_guard(self.decoder, |decoder| {
+                visitor.visit_some(BorrowedDeserializer::new(decoder))
+            }),
             _ => Err(DeError::from_static("Invalid Option variant")),
         }
     }
@@ -186,13 +188,17 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
         _name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        visitor.visit_newtype_struct(self)
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_newtype_struct(BorrowedDeserializer::new(decoder))
+        })
     }
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        use crate::de::Decode;
-        let len = u64::decode(self.decoder).map_err(DeError::Codec)? as usize;
-        visitor.visit_seq(SeqAccess::new(self.decoder, len))
+        let len = decode_length(self.decoder)?;
+        claim_container(self.decoder, len, 1)?;
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_seq(SeqAccess::from_wire(decoder, len))
+        })
     }
 
     fn deserialize_tuple<V: de::Visitor<'de>>(
@@ -200,7 +206,10 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
         len: usize,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        visitor.visit_seq(SeqAccess::new(self.decoder, len))
+        // `len` comes from the type's schema, not the wire.
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_seq(SeqAccess::from_schema(decoder, len))
+        })
     }
 
     fn deserialize_tuple_struct<V: de::Visitor<'de>>(
@@ -213,9 +222,11 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
     }
 
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        use crate::de::Decode;
-        let len = u64::decode(self.decoder).map_err(DeError::Codec)? as usize;
-        visitor.visit_map(MapAccess::new(self.decoder, len))
+        let len = decode_length(self.decoder)?;
+        claim_container(self.decoder, len, 2)?;
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_map(MapAccess::new(decoder, len))
+        })
     }
 
     fn deserialize_struct<V: de::Visitor<'de>>(
@@ -224,7 +235,9 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        visitor.visit_seq(SeqAccess::new(self.decoder, usize::MAX))
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_seq(SeqAccess::unbounded(decoder))
+        })
     }
 
     fn deserialize_enum<V: de::Visitor<'de>>(
@@ -233,7 +246,9 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        visitor.visit_enum(EnumAccess::new(self.decoder))
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_enum(EnumAccess::new(decoder))
+        })
     }
 
     fn deserialize_identifier<V: de::Visitor<'de>>(
@@ -251,20 +266,57 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::Deserializer<'de>
             "deserialize_ignored_any not supported",
         ))
     }
+
+    /// The oxicode wire format is compact and binary, never self-describing.
+    ///
+    /// See [`super::de::Deserializer::is_human_readable`] for the full
+    /// rationale; both deserializers must agree with the serializer.
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 // Compound deserializers (borrowed variants).
 
 struct SeqAccess<'a, D> {
     decoder: &'a mut D,
-    remaining: usize,
+    /// Number of elements still to be produced; `None` when the visitor, not a
+    /// wire length prefix, dictates the count. See the owned deserializer's
+    /// `SeqAccess` for why the previous `usize::MAX` sentinel was unsound.
+    remaining: Option<usize>,
+    /// Bytes to hand back per element, matching what `claim_container`
+    /// reserved. Zero when the length came from the type's schema.
+    unclaim_per_element: usize,
 }
 
 impl<'a, D> SeqAccess<'a, D> {
-    fn new(decoder: &'a mut D, len: usize) -> Self {
+    /// Create a sequence whose length was read from the wire and reserved with
+    /// `claim_container`.
+    fn from_wire(decoder: &'a mut D, len: usize) -> Self {
         Self {
             decoder,
-            remaining: len,
+            remaining: Some(len),
+            unclaim_per_element: 1,
+        }
+    }
+
+    /// Create a sequence whose length comes from the type's schema (tuples,
+    /// tuple variants). Nothing was claimed up front, so nothing is unclaimed.
+    fn from_schema(decoder: &'a mut D, len: usize) -> Self {
+        Self {
+            decoder,
+            remaining: Some(len),
+            unclaim_per_element: 0,
+        }
+    }
+
+    /// Create a sequence whose length is dictated by the visitor rather than by
+    /// a wire-encoded length prefix.
+    fn unbounded(decoder: &'a mut D) -> Self {
+        Self {
+            decoder,
+            remaining: None,
+            unclaim_per_element: 0,
         }
     }
 }
@@ -276,22 +328,20 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::SeqAccess<'de> for SeqAcc
         &mut self,
         seed: T,
     ) -> Result<Option<T::Value>, Self::Error> {
-        if self.remaining == 0 {
-            return Ok(None);
-        }
-        if self.remaining != usize::MAX {
-            self.remaining -= 1;
+        match self.remaining {
+            Some(0) => return Ok(None),
+            Some(ref mut remaining) => {
+                *remaining -= 1;
+                self.decoder.unclaim_bytes_read(self.unclaim_per_element);
+            }
+            None => {}
         }
         seed.deserialize(BorrowedDeserializer::new(self.decoder))
             .map(Some)
     }
 
     fn size_hint(&self) -> Option<usize> {
-        if self.remaining == usize::MAX {
-            None
-        } else {
-            Some(self.remaining)
-        }
+        self.remaining
     }
 }
 
@@ -320,6 +370,7 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::MapAccess<'de> for MapAcc
             return Ok(None);
         }
         self.remaining -= 1;
+        self.decoder.unclaim_bytes_read(1);
         seed.deserialize(BorrowedDeserializer::new(self.decoder))
             .map(Some)
     }
@@ -328,6 +379,7 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::MapAccess<'de> for MapAcc
         &mut self,
         seed: V,
     ) -> Result<V::Value, Self::Error> {
+        self.decoder.unclaim_bytes_read(1);
         seed.deserialize(BorrowedDeserializer::new(self.decoder))
     }
 
@@ -380,7 +432,9 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::VariantAccess<'de> for Va
         self,
         seed: T,
     ) -> Result<T::Value, Self::Error> {
-        seed.deserialize(BorrowedDeserializer::new(self.decoder))
+        with_recursion_guard(self.decoder, |decoder| {
+            seed.deserialize(BorrowedDeserializer::new(decoder))
+        })
     }
 
     fn tuple_variant<V: de::Visitor<'de>>(
@@ -388,7 +442,9 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::VariantAccess<'de> for Va
         len: usize,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        visitor.visit_seq(SeqAccess::new(self.decoder, len))
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_seq(SeqAccess::from_schema(decoder, len))
+        })
     }
 
     fn struct_variant<V: de::Visitor<'de>>(
@@ -396,6 +452,8 @@ impl<'de, 'a, D: BorrowDecoder<'de, Context = ()>> de::VariantAccess<'de> for Va
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        visitor.visit_seq(SeqAccess::new(self.decoder, usize::MAX))
+        with_recursion_guard(self.decoder, |decoder| {
+            visitor.visit_seq(SeqAccess::unbounded(decoder))
+        })
     }
 }

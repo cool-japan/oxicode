@@ -84,7 +84,7 @@
 use oxicode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
 
 // ===== 1. PathBuf with simple filename roundtrip =====
 
@@ -431,11 +431,16 @@ fn test_pathbuf_binary_representation_components() {
     assert_eq!(consumed, encoded.len(), "all bytes should be consumed");
     assert_eq!(path, decoded);
 
+    // Match on `Component::Normal` rather than filtering out the literal "/":
+    // the root component renders as "/" on unix but "\\" on windows, so a
+    // string filter would leave it in the list on windows.
     let expected_components = ["workspace", "oxicode", "src", "features", "serde.rs"];
     let decoded_parts: Vec<&str> = decoded
         .components()
-        .filter_map(|c| c.as_os_str().to_str())
-        .filter(|s| *s != "/")
+        .filter_map(|c| match c {
+            Component::Normal(part) => part.to_str(),
+            _ => None,
+        })
         .collect();
     assert_eq!(decoded_parts, expected_components);
     assert_eq!(decoded.extension().expect("extension"), "rs");
