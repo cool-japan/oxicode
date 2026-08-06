@@ -633,7 +633,7 @@ The full item-by-item deferral record lives in `TODO.md` (tagged
 
 ## Project Status
 
-**Version 0.2.6 - Production Ready**
+**Version 0.2.7 - Production Ready**
 
 All core features and enhancements complete. See [CHANGELOG.md](CHANGELOG.md) for details.
 

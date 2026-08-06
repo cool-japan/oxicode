@@ -10,7 +10,7 @@
 
 ## Current status (2026-08-06)
 
-- **Version 0.2.6** on branch `0.2.6` — the release this document describes.
+- **Version 0.2.7** on branch `0.2.7` — the release this document describes.
 - The 0.2.5 production-hardening program is **complete**: 107 of 119
   adversarially-verified audit findings fixed — decode-time DoS mitigation
   (container claim accounting, decompression caps, recursion guard, checked

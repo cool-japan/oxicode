@@ -3,7 +3,7 @@ members = ["derive", "compatibility"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.6"
+version = "0.2.7"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
 edition = "2021"
 rust-version = "1.81.0"
@@ -69,7 +69,7 @@ validation = []               # Gates the `oxicode::validation` post-decode cons
 versioning = []               # Gates the `oxicode::versioning` schema-version-header module (on by default)
 
 [dependencies]
-oxicode_derive = { path = "derive", version = "0.2.6", optional = true }
+oxicode_derive = { path = "derive", version = "0.2.7", optional = true }
 serde = { workspace = true, optional = true, features = ["alloc"] }
 oxiarc-lz4 = { workspace = true, optional = true }
 oxiarc-zstd = { workspace = true, optional = true }

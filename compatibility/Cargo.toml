@@ -14,7 +14,7 @@ categories = ["encoding", "development-tools::testing"]
 publish = false
 
 [dependencies]
-oxicode = { path = "..", version = "0.2.6", features = ["serde"] }
+oxicode = { path = "..", version = "0.2.7", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 
 
