@@ -24,8 +24,8 @@ crc32fast = { version = "1.5" }
 unty = "0.0.5"
 
 # Optional backend dependencies (compression / async)
-oxiarc-lz4 = "0.4.1"
-oxiarc-zstd = "0.4.1"
+oxiarc-lz4 = "0.4.2"
+oxiarc-zstd = "0.4.2"
 tokio = "1.53"
 
 # Dev dependencies

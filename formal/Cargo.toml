@@ -1,0 +1,53 @@
+# Standalone package: deliberately its own `[workspace]` so it is NOT a
+# member of the parent `oxicode` workspace/package. It lands inside the
+# `oxicode` package directory (`../oxicode/Cargo.toml` is both `[workspace]`
+# and `[package]`), but a nested manifest with its own `[workspace]` is
+# invisible to the parent build and to `cargo package` (verified in
+# `formal/../README.md` "Package hygiene" section and in the Phase 2b E4
+# report). Contributed per cargo-formal Phase 2b, design v1.1 §4 / §7.3
+# item 5, harness inventory I0-d §5.4.
+[workspace]
+
+[package]
+name = "oxicode-formal"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "cargo-formal harnesses over oxicode's public varint/fixed-array codec API"
+
+[dependencies]
+# `default-features = false`: no std, no alloc, no derive. None of the
+# targeted public functions (encode_to_fixed_array*, decode_from_slice*,
+# SliceWriter, SliceReader) is feature-gated (measured, I0-d §1).
+oxicode = { path = "..", default-features = false }
+# Becomes a crates.io version once `oxiformal` is published.
+oxiformal = { path = "../../cargo-formal/crates/oxiformal" }
+
+[package.metadata.formal]
+schema = 1
+default-layers = ["hygiene", "bmc", "contract"]
+unwind = 12
+budget = { max-conflicts = 200000, timeout-ms = 30000, seed = 1 }
+# Explicit, not the D1 default: the default ("every path dependency whose
+# `cargo metadata` source is null") would sweep in `unty` too. Only `oxicode`
+# itself needs a body-lowered/instance-lowered walk for these harnesses.
+dep-crates = ["oxicode"]
+
+[[package.metadata.formal.target]]
+path = "src/lib.rs"
+layers = ["hygiene", "bmc", "contract"]
+
+[lints.rust]
+unsafe_code = "forbid"
+# `formal` is set by the `cargo-formal` driver build; `oxiformal_runtime_checks`
+# is set via RUSTFLAGS for the randomized-execution build.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(formal)', 'cfg(oxiformal_runtime_checks)'] }
+
+[lints.clippy]
+unwrap_used = "deny"
+
+[profile.dev]
+# Left at the Rust default (`overflow-checks = true`, implied by
+# `debug-assertions`): the point of the `RUSTFLAGS="--cfg
+# oxiformal_runtime_checks" cargo test` build is that any arithmetic the L1
+# encoder calls refuted panics at exactly the same place.

@@ -1,0 +1,154 @@
+# Machine-readable mirror of the "Expected L1 verdict" doc comment on every
+# `#[harness]` entry point in this package, in exactly the format
+# `examples/checked-arith/EXPECTED.toml` / `examples/ecosystem/oxicode-varint/EXPECTED.toml`
+# use.
+#
+# **MEASURED, not predicted** (2026-09-08, release CLI + release driver with
+# dependency-body lowering (D1) and on-demand monomorphic instance lowering
+# (D2), OxiZ 0.3.3). This package targets `oxicode`'s **real, public** API
+# (`encode_to_fixed_array`, `decode_from_slice`, ...) rather than the
+# in-repository vendored twin `examples/ecosystem/oxicode-varint`, which
+# vendored the `pub(crate)` varint functions directly. That difference is the
+# whole story of this file's tally.
+#
+# Naming. A property key is the word the **encoder actually mints**, never a
+# description:
+#
+#   * a user-written `oxiformal::assert(..)` is `assert`; a second distinct
+#     assertion raised at the *same* source site is `assert-2`, a third
+#     `assert-3`, and so on.
+#   * an `#[ensures]` clause checked through `#[proof_for_contract]` is
+#     `ensures`, and is reported under layer `contract`.
+#   * everything else is the design §9 closed vocabulary MIR's own inserted
+#     checks produce: `arith-overflow`, `shift-overflow`, `bounds-check`,
+#     `division-by-zero`, `remainder-by-zero`, `division-overflow`,
+#     `neg-overflow`, `unwrap`, `expect`, `panic`, `slice-range`,
+#     `unwinding-assertion`.
+#   * the pseudo-key `harness` is a **whole-harness** verdict and nothing
+#     else: `"proved"` means "no obligation of this harness is anything but
+#     proved" (including a harness that raises none at all), and
+#     `"unsupported"` covers both `Verdict::Unsupported` and
+#     `Verdict::Unverifiable`.
+#
+# Keying rule. `[harness.expected]` is a map, so several obligations of one
+# harness that carry the same property name at *different* source sites
+# share one row. The row records the **worst** of their verdicts (`refuted`
+# > `timeout` > `unknown` > `unsupported`/`unverifiable` > `proved`); where
+# the sites disagree, a row comment says so. Every row in this file is the
+# whole-harness `harness = "unsupported"` case: each of the nine harnesses
+# below produced exactly one `bmc`-layer item in `report.json` — a
+# whole-harness `verdict.kind = "unsupported"`, `verdict.reason = "no-body"`
+# anchored at the blocking call site (the driver refused to lower a body for
+# that instance before symbolic execution could run at all). No
+# per-obligation check (`assert`, `arith-overflow`, `bounds-check`, ...) was
+# ever raised for any of the nine, so the worst-of-sites rule has nothing to
+# arbitrate here, and no other layer produced anything for this package
+# (`contract`: 0/0; `theorem`: not run).
+#
+# Measured tally (2026-09-08): 9 property rows over 9 harnesses — 0 proved,
+# 0 refuted, 0 unknown, 0 timeout, **9 unsupported**. The run's own layer
+# counters: `hygiene` pass (2 files scanned, 0 unsafe sites, 0 warnings);
+# `bmc` 0 proved / 0 refuted / 0 timeout / 0 unknown / 9 unsupported /
+# 0 unverifiable; `contract` 0 proved / 0 refuted; `theorem` not run.
+# `dependency bodies: 42 lowered (6 reachable)`; `instances: 68 lowered
+# (68 reachable)`. `coverage`: 0 harnesses annotated (no `#[requires]`/
+# `#[ensures]` in this package), 9 harnesses total.
+#
+# Root cause, identical for all nine rows (see `src/harness.rs` module docs
+# for the full account): every harness calls `encode_to_fixed_array`/
+# `decode_from_slice`, and every one of oxicode's own `Encode`/`Decode` impls
+# reaches the varint codec through `encoder.writer()` /`decoder.reader()`
+# (`<EncoderImpl<W, C> as Encoder>::writer`, `<DecoderImpl<R, C> as
+# Decoder>::reader`). Both impls define their associated type as exactly
+# their own generic parameter (`type W = W;` / `type R = R;`); at the
+# monomorphic instance the driver reports
+# `unsupported-type(<EncoderImpl<SliceWriter<'_>, Configuration> as
+# Encoder>::W)` (symmetrically `::R` on the decode side) rather than
+# normalizing the projection to the concrete `SliceWriter<'_>`/`SliceReader<'_>`
+# the substitution implies. `FORMAL_LOG=debug` confirms the driver otherwise
+# performs D1/D2 correctly for this crate: 68 monomorphic instances lowered
+# with bodies, including every `varint_encode_*`/`varint_decode_*` function
+# and every per-type `Encode`/`Decode` impl for `u16`/`u32`/`u64`/`i32`/`i64`
+# — only the two accessor methods' *instances* fail, and they gate every
+# harness identically because there is no public route into the codec that
+# skips them.
+#
+# `solver-model-rejected` count: **0**. No VC from this package ever reached
+# OxiZ — `report.json`'s own summary line is "oxicode-formal (0 VCs, 0
+# cached)" — so the OxiZ 0.3.3 pin (upstream U-Z10) is *not* what limits this
+# package, unlike the vendored twin (`oxicode-varint`, whose EXPECTED.toml
+# records 2 rows blocked by `solver-model-rejected`). Moving the pin to a
+# release with U-Z10 fixed changes nothing here; only a driver fix to the
+# `Self::W`/`Self::R` projection above would.
+#
+# The vendored twin (`examples/ecosystem/oxicode-varint`) measured 176
+# proved / 1 refuted / 2 unknown on the *same* D1/D2 driver because its
+# harnesses call the raw, vendored `varint_encode_*`/`varint_decode_*`
+# functions through its own hand-rolled `Writer`/`Reader` generics, never
+# through `oxicode`'s real `Encoder`/`Decoder`/`EncoderImpl`/`DecoderImpl`
+# dispatch (`oxicode::varint` is `pub(crate)`, which is why it was vendored
+# rather than called). This package is the first measurement of that real
+# dispatch layer, and it is what surfaced this finding.
+
+[[harness]]
+name = "varint_u16_roundtrip_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:44 (u16::encode -> encoder.writer())
+"harness" = "unsupported"
+
+[[harness]]
+name = "varint_u32_roundtrip_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:58 (u32::encode -> encoder.writer())
+"harness" = "unsupported"
+
+[[harness]]
+name = "varint_u64_roundtrip_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:72 (u64::encode -> encoder.writer())
+"harness" = "unsupported"
+
+[[harness]]
+name = "varint_u64_bound_is_tight_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:72 (u64::encode -> encoder.writer(), N = U64_BOUND - 1)
+"harness" = "unsupported"
+
+[[harness]]
+name = "fixed_int_roundtrip_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:76 (u64::encode, IntEncoding::Fixed arm -> encoder.writer())
+"harness" = "unsupported"
+
+[[harness]]
+name = "zigzag_i32_roundtrip_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:136 (i32::encode -> encoder.writer())
+"harness" = "unsupported"
+
+[[harness]]
+name = "zigzag_i64_roundtrip_harness"
+
+[harness.expected]
+# blocked at src/enc/impls.rs:150 (i64::encode -> encoder.writer())
+"harness" = "unsupported"
+
+[[harness]]
+name = "decode_rejects_a_wide_tag_harness"
+
+[harness.expected]
+# blocked at src/de/impls.rs:60 (u16::decode -> decoder.reader())
+"harness" = "unsupported"
+
+[[harness]]
+name = "decode_never_panics_on_arbitrary_bytes_harness"
+
+[harness.expected]
+# blocked at src/de/impls.rs:98 (u64::decode -> decoder.reader())
+"harness" = "unsupported"
