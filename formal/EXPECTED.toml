@@ -1,15 +1,18 @@
-# Machine-readable mirror of the "Expected L1 verdict" doc comment on every
+# Machine-readable mirror of the "Measured L1 verdict" doc comment on every
 # `#[harness]` entry point in this package, in exactly the format
-# `examples/checked-arith/EXPECTED.toml` / `examples/ecosystem/oxicode-varint/EXPECTED.toml`
-# use.
+# `cargo-formal`'s own `examples/checked-arith/EXPECTED.toml` and
+# `examples/ecosystem/oxicode-varint/EXPECTED.toml` use.
 #
-# **MEASURED, not predicted** (2026-09-08, release CLI + release driver with
-# dependency-body lowering (D1) and on-demand monomorphic instance lowering
-# (D2), OxiZ 0.3.3). This package targets `oxicode`'s **real, public** API
-# (`encode_to_fixed_array`, `decode_from_slice`, ...) rather than the
-# in-repository vendored twin `examples/ecosystem/oxicode-varint`, which
-# vendored the `pub(crate)` varint functions directly. That difference is the
-# whole story of this file's tally.
+# **MEASURED, not predicted** (2026-09-14, release `cargo-formal` 0.1.0 CLI +
+# release `formal-driver` with dependency-body lowering (D1) and on-demand
+# monomorphic instance lowering (D2), OxiZ 0.3.3, rustc nightly-2026-06-20).
+# The harnesses call the **real, public** API of the `oxicode` crate by path
+# (`encode_to_fixed_array`, `decode_from_slice`, and their `_with_config`
+# variants); `[package.metadata.formal] dep-crates` names `oxicode`, and the
+# run lowered 42 dependency bodies (6 reachable) plus 68 monomorphic instances
+# (68 reachable) into the verification conditions -- 224 of them, 0 cached,
+# 6 s wall, exit 0. No verdict below was written before the run that produced
+# it.
 #
 # Naming. A property key is the word the **encoder actually mints**, never a
 # description:
@@ -18,137 +21,191 @@
 #     assertion raised at the *same* source site is `assert-2`, a third
 #     `assert-3`, and so on.
 #   * an `#[ensures]` clause checked through `#[proof_for_contract]` is
-#     `ensures`, and is reported under layer `contract`.
-#   * everything else is the design §9 closed vocabulary MIR's own inserted
-#     checks produce: `arith-overflow`, `shift-overflow`, `bounds-check`,
-#     `division-by-zero`, `remainder-by-zero`, `division-overflow`,
-#     `neg-overflow`, `unwrap`, `expect`, `panic`, `slice-range`,
-#     `unwinding-assertion`.
-#   * the pseudo-key `harness` is a **whole-harness** verdict and nothing
-#     else: `"proved"` means "no obligation of this harness is anything but
-#     proved" (including a harness that raises none at all), and
-#     `"unsupported"` covers both `Verdict::Unsupported` and
-#     `Verdict::Unverifiable`.
+#     `ensures`, and is reported under layer `contract`. This package has none.
+#   * everything else is the design section 9 closed vocabulary MIR's own
+#     inserted checks produce: `arith-overflow`, `shift-overflow`,
+#     `bounds-check`, `division-by-zero`, `remainder-by-zero`,
+#     `division-overflow`, `neg-overflow`, `unwrap`, `expect`, `panic`,
+#     `slice-range`, `unwinding-assertion`. The suffixed forms the encoder
+#     mints for distinct checks at one site (`arith-overflow-2`,
+#     `slice-range-3`, ...) occur in this run and are separate keys.
+#   * the pseudo-key `harness` is a **whole-harness** verdict and nothing else:
+#     `"proved"` means "no obligation of this harness is anything but proved"
+#     (including a harness that raises none at all), and `"unsupported"` covers
+#     both `Verdict::Unsupported` and `Verdict::Unverifiable`. It is used here
+#     for exactly one harness -- the one that states no assertion of its own.
+#
+# What is listed. Every obligation the harness is *about* -- its `assert`s,
+# plus its `unwinding-assertion` where it has one (this run raised **no**
+# `unwinding-assertion` obligation anywhere, so no harness has such a row; the
+# absence is not evidence that any `unwind` bound was or was not enough) --
+# and every incidental MIR-inserted check whose verdict is **not** `proved`
+# (there are none: all 6 non-proved obligations in this run are `assert`s).
+# Incidental checks that came out `proved` are deliberately not enumerated:
+# they are numerous (`arith-overflow`, `bounds-check`, `slice-range`,
+# `shift-overflow`, `neg-overflow` inside `oxicode`'s own lowered bodies),
+# they carry no information, and listing them would make this file a copy of
+# `report.json` rather than a statement of intent.
 #
 # Keying rule. `[harness.expected]` is a map, so several obligations of one
-# harness that carry the same property name at *different* source sites
-# share one row. The row records the **worst** of their verdicts (`refuted`
-# > `timeout` > `unknown` > `unsupported`/`unverifiable` > `proved`); where
-# the sites disagree, a row comment says so. Every row in this file is the
-# whole-harness `harness = "unsupported"` case: each of the nine harnesses
-# below produced exactly one `bmc`-layer item in `report.json` — a
-# whole-harness `verdict.kind = "unsupported"`, `verdict.reason = "no-body"`
-# anchored at the blocking call site (the driver refused to lower a body for
-# that instance before symbolic execution could run at all). No
-# per-obligation check (`assert`, `arith-overflow`, `bounds-check`, ...) was
-# ever raised for any of the nine, so the worst-of-sites rule has nothing to
-# arbitrate here, and no other layer produced anything for this package
-# (`contract`: 0/0; `theorem`: not run).
+# harness that carry the same property name at *different* source sites share
+# one row. The row records the **worst** of their verdicts (`refuted` >
+# `timeout` > `unknown` > `unsupported`/`unverifiable` > `proved`), and a row
+# comment says how many sites there are and how they came out, in the form
+# "N sites: a proved, b unknown (site file:line, solver-model-rejected on
+# OxiZ 0.3.3)". Six rows in this file use that rule non-trivially; the rest
+# are uniform across their sites.
 #
-# Measured tally (2026-09-08): 9 property rows over 9 harnesses — 0 proved,
-# 0 refuted, 0 unknown, 0 timeout, **9 unsupported**. The run's own layer
-# counters: `hygiene` pass (2 files scanned, 0 unsafe sites, 0 warnings);
-# `bmc` 0 proved / 0 refuted / 0 timeout / 0 unknown / 9 unsupported /
-# 0 unverifiable; `contract` 0 proved / 0 refuted; `theorem` not run.
-# `dependency bodies: 42 lowered (6 reachable)`; `instances: 68 lowered
-# (68 reachable)`. `coverage`: 0 harnesses annotated (no `#[requires]`/
-# `#[ensures]` in this package), 9 harnesses total.
+# Measured tally (2026-09-14): 9 property rows over 9 harnesses -- 3 proved /
+# 0 refuted / **6 unknown** / 0 timeout / 0 unsupported. The run's own layer
+# counters, which include the incidental `proved` rows this file does not
+# enumerate, are: `hygiene` pass (2 files scanned, 0 errors, 0 warnings,
+# 0 notes, 0 unsafe sites); `bmc` 218 proved / 0 refuted / 6 unknown /
+# 0 timeout / 0 unsupported / 0 unverifiable over 224 obligations, every one of
+# the 224 backed by a `reproduction` evidence record; `contract` 0 proved /
+# 0 refuted (this package has no `#[requires]`/`#[ensures]`); `theorem` not
+# run. `coverage`: 0 of 0 public functions annotated, 9 harnesses.
 #
-# Root cause, identical for all nine rows (see `src/harness.rs` module docs
-# for the full account): every harness calls `encode_to_fixed_array`/
-# `decode_from_slice`, and every one of oxicode's own `Encode`/`Decode` impls
-# reaches the varint codec through `encoder.writer()` /`decoder.reader()`
-# (`<EncoderImpl<W, C> as Encoder>::writer`, `<DecoderImpl<R, C> as
-# Decoder>::reader`). Both impls define their associated type as exactly
-# their own generic parameter (`type W = W;` / `type R = R;`); at the
-# monomorphic instance the driver reports
-# `unsupported-type(<EncoderImpl<SliceWriter<'_>, Configuration> as
-# Encoder>::W)` (symmetrically `::R` on the decode side) rather than
-# normalizing the projection to the concrete `SliceWriter<'_>`/`SliceReader<'_>`
-# the substitution implies. `FORMAL_LOG=debug` confirms the driver otherwise
-# performs D1/D2 correctly for this crate: 68 monomorphic instances lowered
-# with bodies, including every `varint_encode_*`/`varint_decode_*` function
-# and every per-type `Encode`/`Decode` impl for `u16`/`u32`/`u64`/`i32`/`i64`
-# — only the two accessor methods' *instances* fail, and they gate every
-# harness identically because there is no public route into the codec that
-# skips them.
+# `solver-model-rejected` count: **6** -- every non-proved obligation in the
+# run, and nothing else. cargo-formal is pinned to OxiZ 0.3.3, whose model gate
+# (upstream item U-Z10) turns a solver model that does not satisfy the
+# verification condition into `unknown` rather than an invented
+# counterexample; the driver's mandatory model check refused all six. U-Z10 is
+# fixed in the `../oxiz` working tree (unreleased); the pin stays at `=0.3.3`
+# until that release ships, and these six rows are *expected* to move to
+# `proved` when it does -- no 0.3.4 run has been measured, so that is an
+# expectation and not a measurement.
 #
-# `solver-model-rejected` count: **0**. No VC from this package ever reached
-# OxiZ — `report.json`'s own summary line is "oxicode-formal (0 VCs, 0
-# cached)" — so the OxiZ 0.3.3 pin (upstream U-Z10) is *not* what limits this
-# package, unlike the vendored twin (`oxicode-varint`, whose EXPECTED.toml
-# records 2 rows blocked by `solver-model-rejected`). Moving the pin to a
-# release with U-Z10 fixed changes nothing here; only a driver fix to the
-# `Self::W`/`Self::R` projection above would.
+# History, not current state. Before Phase 2b's `P2-14` landed, every harness
+# in this package was a whole-harness `unsupported(no-body)` and this file
+# recorded nine such rows. The cause was specific: `oxicode` reaches its varint
+# codec only through `encoder.writer()`/`decoder.reader()`, and the driver did
+# not normalize the associated-type projection in those accessors' *monomorphic
+# instance* signatures -- `<EncoderImpl<SliceWriter<'_>, Configuration> as
+# Encoder>::W` (symmetrically `::R`) survived un-normalized, so every instance
+# was refused before its body was ever requested, and no verification condition
+# from this package reached OxiZ at all. `P2-14` normalizes an instance
+# signature with the **fallible** normalizer under
+# `TypingEnv::fully_monomorphized()` (see `cargo-formal`'s `CHANGELOG.md`,
+# `P2-14` bullet), which is exactly what those two accessors needed. All nine
+# harnesses now encode, and the remaining six `unknown`s are a solver-pin
+# matter, not a driver matter.
 #
-# The vendored twin (`examples/ecosystem/oxicode-varint`) measured 176
-# proved / 1 refuted / 2 unknown on the *same* D1/D2 driver because its
-# harnesses call the raw, vendored `varint_encode_*`/`varint_decode_*`
-# functions through its own hand-rolled `Writer`/`Reader` generics, never
+# The vendored twin (`cargo-formal`'s `examples/ecosystem/oxicode-varint`,
+# which vendored five `pub(crate)` files of `oxicode/src/varint/` because the
+# driver could not lower a path dependency's bodies at all before Phase 2b)
+# measured 176 proved / 1 refuted / 2 unknown. Its harnesses bypass real
+# dispatch with hand-rolled `Writer`/`Reader` generics; this package goes
 # through `oxicode`'s real `Encoder`/`Decoder`/`EncoderImpl`/`DecoderImpl`
-# dispatch (`oxicode::varint` is `pub(crate)`, which is why it was vendored
-# rather than called). This package is the first measurement of that real
-# dispatch layer, and it is what surfaced this finding.
+# dispatch (68 instances lowered). Both now encode. The twin's
+# `varint_u64_bound_is_tight_harness` is `refuted` while this package's
+# same-named harness is `proved` because they state different propositions:
+# the twin asserts an 8-byte writer holds a `u64` (false, counterexample
+# `u64::MAX`); this package asserts the biconditional
+# `result.is_err() == (value > u32::MAX as u64)` (true). The twin's two
+# `unknown`s sit on the same inner-decode `Err(_) => assert(false)` arm as
+# five of this package's six -- in the twin at its `src/harness.rs:200:19`
+# and `:220:19`, here at `:151:23`, `:173:23`, `:195:23`, `:270:23` and
+# `:290:23`; its `decoded == value` equalities (`:199:24`, `:219:24`) are
+# proved too. Same root cause (U-Z10) and the same shape of site. The only
+# site this package has that the twin does not is the wide-tag check
+# (`:315:5`).
 
 [[harness]]
 name = "varint_u16_roundtrip_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:44 (u16::encode -> encoder.writer())
-"harness" = "unsupported"
+# 3 sites: 2 proved, 1 unknown (site src/harness.rs:151:23,
+# solver-model-rejected on OxiZ 0.3.3). The unknown is the `Err(_) =>
+# assert(false)` arm of the *inner* `decode_from_slice` match -- "decoding the
+# bytes the encoder just produced cannot fail". Both equality asserts are
+# proved: `decoded == value` (`:148`) and `consumed == written` (`:149`). The
+# outer `Err(_) => assert(false)` arm (`:153`, encode failure) has no item in
+# `report.json`. 23 obligations total, 22 proved.
+"assert" = "unknown"
 
 [[harness]]
 name = "varint_u32_roundtrip_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:58 (u32::encode -> encoder.writer())
-"harness" = "unsupported"
+# 3 sites: 2 proved, 1 unknown (site src/harness.rs:173:23,
+# solver-model-rejected on OxiZ 0.3.3) -- the inner-decode `Err` arm again;
+# `decoded == value` (`:170`) and `consumed == written` (`:171`) are proved.
+# No item for the outer `Err` arm (`:175`). 30 obligations total, 29 proved.
+"assert" = "unknown"
 
 [[harness]]
 name = "varint_u64_roundtrip_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:72 (u64::encode -> encoder.writer())
-"harness" = "unsupported"
+# 3 sites: 2 proved, 1 unknown (site src/harness.rs:195:23,
+# solver-model-rejected on OxiZ 0.3.3) -- the inner-decode `Err` arm;
+# `decoded == value` (`:192`) and `consumed == written` (`:193`) are proved.
+# No item for the outer `Err` arm (`:197`). 41 obligations total, 40 proved.
+"assert" = "unknown"
 
 [[harness]]
 name = "varint_u64_bound_is_tight_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:72 (u64::encode -> encoder.writer(), N = U64_BOUND - 1)
-"harness" = "unsupported"
+# 1 site: 1 proved (src/harness.rs:220:5). The whole harness is proved:
+# 20 obligations, all proved. This is the biconditional
+# `result.is_err() == (value > u32::MAX as u64)` over an 8-byte buffer -- the
+# statement that makes `U64_BOUND = 9` tight -- and it is established for
+# every `u64`.
+"assert" = "proved"
 
 [[harness]]
 name = "fixed_int_roundtrip_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:76 (u64::encode, IntEncoding::Fixed arm -> encoder.writer())
-"harness" = "unsupported"
+# 3 sites: 3 proved (src/harness.rs:239:13, :242:21, :243:21). The whole
+# harness is proved: 13 obligations, all proved. Neither the inner `Err` arm
+# (`:245`) nor the outer one (`:248`) has an item in `report.json`.
+"assert" = "proved"
 
 [[harness]]
 name = "zigzag_i32_roundtrip_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:136 (i32::encode -> encoder.writer())
-"harness" = "unsupported"
+# 3 sites: 2 proved, 1 unknown (site src/harness.rs:270:23,
+# solver-model-rejected on OxiZ 0.3.3) -- the inner-decode `Err` arm;
+# `decoded == value` (`:267`) and `consumed == written` (`:268`) are proved,
+# so the zigzag round trip itself is established, including at `i32::MIN`.
+# No item for the outer `Err` arm (`:272`). 33 obligations total, 32 proved.
+"assert" = "unknown"
 
 [[harness]]
 name = "zigzag_i64_roundtrip_harness"
 
 [harness.expected]
-# blocked at src/enc/impls.rs:150 (i64::encode -> encoder.writer())
-"harness" = "unsupported"
+# 3 sites: 2 proved, 1 unknown (site src/harness.rs:290:23,
+# solver-model-rejected on OxiZ 0.3.3) -- the inner-decode `Err` arm;
+# `decoded == value` (`:287`) and `consumed == written` (`:288`) are proved.
+# No item for the outer `Err` arm (`:292`). 44 obligations total, 43 proved.
+"assert" = "unknown"
 
 [[harness]]
 name = "decode_rejects_a_wide_tag_harness"
 
 [harness.expected]
-# blocked at src/de/impls.rs:60 (u16::decode -> decoder.reader())
-"harness" = "unsupported"
+# 1 site: 1 unknown (site src/harness.rs:315:5, solver-model-rejected on
+# OxiZ 0.3.3). Unlike the round-trip harnesses, this is the harness's **only**
+# assertion and its whole point, so the stated property -- a `u16` decode
+# refuses a 252/253/254 tag byte -- is **not established on this pin**. Its
+# 11 incidental obligations (`arith-overflow`, `bounds-check`, `slice-range`)
+# are all proved; 12 obligations total.
+"assert" = "unknown"
 
 [[harness]]
 name = "decode_never_panics_on_arbitrary_bytes_harness"
 
 [harness.expected]
-# blocked at src/de/impls.rs:98 (u64::decode -> decoder.reader())
-"harness" = "unsupported"
+# No assertion of its own: the harness is exactly "no MIR-inserted check of
+# `decode_from_slice::<u64>` fires on 12 arbitrary bytes". 8 obligations, all
+# proved -- 1 `arith-overflow` (`oxicode/src/lib.rs:951`, the
+# `src.len() - decoder.reader().slice.len()` this harness was written to
+# cover), 4 `bounds-check` in `varint/decode_unsigned.rs`, 3 `slice-range` in
+# `de/read.rs`. No `unwinding-assertion` obligation was raised, so this run
+# says nothing either way about the `unwind = 16` bound.
+"harness" = "proved"

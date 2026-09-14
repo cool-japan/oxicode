@@ -26,23 +26,45 @@
 //!   instance each call site actually resolves to
 //!   (`encode_to_fixed_array::<3, u16>`, `<SliceReader as Reader>::read`,
 //!   ...), whose bodies carry the evaluated array length and the resolved
-//!   impl method. The vendored trial (`examples/ecosystem/oxicode-varint`)
-//!   measured this exact transition: eight whole-harness
-//!   `unsupported(no-body)` results before D2, 176 proved / 1 refuted /
-//!   2 unknown obligations after. This package is `oxicode`'s own public
-//!   API and was measured only once D2 was in the tree.
+//!   impl method. An instance signature is normalized with the **fallible**
+//!   normalizer under `TypingEnv::fully_monomorphized()` (cargo-formal
+//!   `P2-14`), without which an associated-type projection such as
+//!   `<EncoderImpl<SliceWriter<'_>, Configuration> as Encoder>::W` survives
+//!   into the signature and every instance is refused -- which is exactly
+//!   what used to block all nine harnesses here, since `encoder.writer()`/
+//!   `decoder.reader()` are `oxicode`'s only dispatch path into the varint
+//!   codec. See [`harness`]'s module docs for that history in full.
 //!
-//!   **Measured for this package: all nine harnesses `unsupported(no-body)`,
-//!   0 proved / 0 refuted.** D1/D2 otherwise worked (68 monomorphic
-//!   instances lowered, all reachable, including every
-//!   `varint_encode_*`/`varint_decode_*` function and every per-type
-//!   `Encode`/`Decode` impl this package reaches); what remains unlowered is
-//!   a narrower, single shared gap -- the `Self::W`/`Self::R`
-//!   associated-type projection on `EncoderImpl::writer`/`DecoderImpl::reader`'s
-//!   own monomorphic instances, which every harness here transitively calls
-//!   because it is `oxicode`'s only dispatch path into the codec. See
-//!   [`harness`]'s module docs and `EXPECTED.toml`/`README.md` for the full
-//!   account and the exact driver messages.
+//! **Measured L1 verdict for this package** (2026-09-14, release CLI +
+//! release driver with D1/D2, OxiZ 0.3.3, rustc nightly-2026-06-20): `bmc`
+//! **218 proved / 0 refuted / 6 unknown / 0 timeout / 0 unsupported /
+//! 0 unverifiable over 224 obligations**, 0 cached, 6 s wall, exit 0;
+//! 42 dependency bodies lowered (6 reachable) and 68 monomorphic instances
+//! lowered (all 68 reachable); `contract` 0 proved / 0 refuted; `theorem` not
+//! run; `hygiene` pass. Per harness, the measured L1 verdicts are:
+//!
+//! * `varint_u16_roundtrip_harness` -- `assert` **unknown** (23 obligations,
+//!   22 proved);
+//! * `varint_u32_roundtrip_harness` -- `assert` **unknown** (30, 29 proved);
+//! * `varint_u64_roundtrip_harness` -- `assert` **unknown** (41, 40 proved);
+//! * `varint_u64_bound_is_tight_harness` -- `assert` **proved** (20, all);
+//! * `fixed_int_roundtrip_harness` -- `assert` **proved** (13, all);
+//! * `zigzag_i32_roundtrip_harness` -- `assert` **unknown** (33, 32 proved);
+//! * `zigzag_i64_roundtrip_harness` -- `assert` **unknown** (44, 43 proved);
+//! * `decode_rejects_a_wide_tag_harness` -- `assert` **unknown** (12, 11
+//!   proved);
+//! * `decode_never_panics_on_arbitrary_bytes_harness` -- `harness` **proved**
+//!   (8, all).
+//!
+//! All six `unknown`s are `solver-model-rejected` on the OxiZ `=0.3.3` pin
+//! (upstream U-Z10, fixed in the `../oxiz` working tree but unreleased), not
+//! refutations, and are expected to prove once that release ships. The
+//! vendored trial (`examples/ecosystem/oxicode-varint`) measured 176 proved /
+//! 1 refuted / 2 unknown on the same driver, but reaches the codec through
+//! hand-rolled `Writer`/`Reader` generics rather than `oxicode`'s real
+//! `Encoder`/`Decoder` dispatch; this package exercises that dispatch. Both
+//! now encode. See [`harness`]'s module docs, `EXPECTED.toml` and `README.md`
+//! for the per-site detail.
 //!
 //! No self-host note applies here: `oxicode` does not depend on
 //! `cargo-formal` or `oxiformal`.

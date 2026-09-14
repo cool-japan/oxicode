@@ -11,93 +11,93 @@
 //! (`(v << 1) ^ (v >> (BITS - 1))`, branchless and total, including at
 //! `i32::MIN`/`i64::MIN`), so they share the unsigned bounds.
 //!
-//! # Measured reality: 0 proved / 0 refuted / 9 unsupported, and why
+//! # Measured reality: 218 proved / 0 refuted / 6 unknown over 224
 //!
-//! `encode_to_fixed_array::<const N: usize, E: Encode>` builds `[0u8; N]`
-//! for a **const generic parameter**, and `decode_from_slice::<D: Decode>`
-//! reaches `SliceReader::read` through a `R: Reader` trait bound. D2
-//! (on-demand monomorphic instance lowering) handles both of those cases
-//! well: a real `cargo formal check` run (release CLI + release driver with
-//! D1/D2, `--target-dir` recorded in the Phase 2b report) shows **68
-//! monomorphic instances lowered, all 68 reachable**, including every
-//! `varint_encode_*`/`varint_decode_*` function, every per-type
-//! `Encode::encode`/`Decode::decode` impl for `u16`/`u32`/`u64`/`i32`/`i64`,
-//! `EncoderImpl::new`/`into_writer`, `DecoderImpl::new`/`claim_bytes_read`,
-//! `SliceWriter::new`/`bytes_written`, `SliceReader::new`, and every
-//! `config::*` helper this package calls.
+//! Measured 2026-09-14 (release CLI + release driver with dependency-body
+//! lowering (D1) and on-demand monomorphic instance lowering (D2), OxiZ
+//! 0.3.3, rustc nightly-2026-06-20; 224 VCs, 0 cached, 6 s wall, exit 0).
+//! Every harness below encodes and reaches the solver: `bmc` reports
+//! **218 proved / 0 refuted / 6 unknown / 0 timeout / 0 unsupported /
+//! 0 unverifiable**, with 42 dependency bodies lowered (6 reachable) and
+//! 68 monomorphic instances lowered (all 68 reachable) -- the latter
+//! including every `varint_encode_*`/`varint_decode_*` function, every
+//! per-type `Encode::encode`/`Decode::decode` impl for
+//! `u16`/`u32`/`u64`/`i32`/`i64`, `EncoderImpl::new`/`into_writer`,
+//! `DecoderImpl::new`/`claim_bytes_read`, `SliceWriter::new`/`bytes_written`,
+//! `SliceReader::new`, every `config::*` helper this package calls, and the
+//! two `Encoder::writer`/`Decoder::reader` accessors that used to block
+//! everything (see "History" below).
 //!
-//! What D2 does **not** yet lower is two specific instances that every one
-//! of the nine harnesses below transitively calls:
-//! `<oxicode::enc::EncoderImpl<W, C> as oxicode::enc::Encoder>::writer`
-//! (`oxicode/src/enc/encoder.rs:46`) and
-//! `<oxicode::de::DecoderImpl<R, C> as oxicode::de::Decoder>::reader`
-//! (`oxicode/src/de/decoder.rs`, the symmetric accessor). Both impls define
-//! their associated type as exactly their own generic parameter
-//! (`type W = W;` / `type R = R;`), and at the monomorphic instance
-//! (`W = SliceWriter<'_>`, `C = Configuration`) the driver reports:
+//! # The six `unknown`s: the OxiZ 0.3.3 pin, nothing else
 //!
-//! ```text
-//! the driver lowered no body for `oxicode::enc::encoder::{impl-1}::writer::{inst-...}`:
-//! unsupported-type(<oxicode::enc::EncoderImpl<oxicode::enc::SliceWriter<'_>,
-//! oxicode::config::Configuration> as oxicode::enc::Encoder>::W)
-//! ```
+//! All six carry the same `report.json` message -- `solver-model-rejected:
+//! OxiZ 0.3.3 returned a model that does not satisfy the verification
+//! condition`. cargo-formal pins OxiZ `=0.3.3`, whose model gate (upstream
+//! U-Z10) turns a model failing the driver's mandatory model check into
+//! `unknown` rather than an invented counterexample; that is why none of the
+//! six is reported as a refutation. U-Z10 is fixed in the `../oxiz` working
+//! tree but unreleased, so the pin stays; the six rows are *expected* to move
+//! to `proved` when it ships (an expectation -- no 0.3.4 run was measured).
 //!
-//! (symmetrically for `{impl-2}::reader` and `::R`). `FORMAL_LOG=debug`
-//! shows the **generic definition** of `writer`/`reader` lowering fine as a
-//! dependency body (`lowered dependency oxicode::enc::encoder::{impl-1}::writer
-//! (body: true)`) -- its body is the trivial `&mut self.writer` field access
-//! -- but that generic body has no encodable layout for an abstract `W`, so
-//! the encoder needs the *instance*, and the instance's return type
-//! (`Self::W`) is left as an un-normalized associated-type projection rather
-//! than reduced to the concrete `SliceWriter<'_>` the substitution implies.
-//! Both accessors are called from every `Encode`/`Decode` impl in this
-//! crate (`encoder.writer().write(..)`, `decoder.reader().read(..)`,
-//! `oxicode/src/enc/impls.rs`, `oxicode/src/de/impls.rs`), so this one gap
-//! blocks every harness in this package identically -- it is not a property
-//! of any one harness, and no harness rewrite avoids it: `writer()`/
-//! `reader()` are `oxicode`'s own dispatch mechanism, unreachable from
-//! outside it, and there is no public entry point into the varint codec
-//! that does not go through them.
+//! Where they sit differs by harness, and it matters:
 //!
-//! **This is a different, more specific finding than the harness inventory
-//! (`I0-d.md` §5.4) predicted.** That inventory's "proved (post-D2)"
-//! prediction was calibrated against the in-repository vendored twin,
-//! `examples/ecosystem/oxicode-varint`, which measured 176 proved / 1
-//! refuted / 2 unknown once D2 landed -- but the vendored twin's harnesses
-//! call the raw `varint_encode_*`/`varint_decode_*` functions through its
-//! *own* hand-rolled `Writer`/`Reader` generics (`ArrayWriter`/
-//! `SliceReader` defined in the trial itself), never through `oxicode`'s
-//! real `Encoder`/`Decoder`/`EncoderImpl`/`DecoderImpl` dispatch, because
-//! `oxicode`'s `varint` module is `pub(crate)` and was vendored rather than
-//! called. This package calls the **real public API**
-//! (`encode_to_fixed_array`, `decode_from_slice`), which is exactly what
-//! routes every harness through the two accessors above -- an indirection
-//! layer the vendored twin structurally could not exercise. Put plainly:
-//! this package found a real, narrowly-localized driver gap that the
-//! vendored trial's design made invisible.
+//! * In the five round-trip harnesses the `unknown` is the `Err(_) =>
+//!   assert(false)` arm of the **inner** `decode_from_slice` match -- the
+//!   claim "decoding the bytes the encoder just produced cannot fail". The
+//!   headline equalities `decoded == value` and `consumed == written` are
+//!   **proved** at every width, zigzag extremes included. The *outer*
+//!   `Err(_) => assert(false)` arm (encode into a worst-case-size buffer)
+//!   raises no item in `report.json` at all.
+//! * In `decode_rejects_a_wide_tag_harness` the `unknown` is the harness's
+//!   only assertion and its whole point, so that property is *stated and
+//!   encoded but not established on this pin*.
 //!
-//! One open question this package cannot resolve from the release binary
-//! alone, for the D2 owner: design v1.1 §3.2 item 2 says a call site's
-//! `Callee::path` becomes the instance path "only after the driver has
-//! queued/lowered that instance". The debug log is consistent with either
-//! reading of "lowered" -- "attempted" (current behaviour is as designed;
-//! the fix is purely normalizing the projection) or "succeeded" (the
-//! redirect onto a bodyless instance is itself a deviation, and a
-//! successful-instance-only redirect would have kept the call at the
-//! definition path, which has a body, even though that body still could
-//! not be encoded for an abstract `W`/`R`). This package does not guess
-//! which; see `EXPECTED.toml` and the Phase 2b report for the raw evidence.
+//! No `unwinding-assertion` obligation was raised anywhere in this run, so it
+//! gives no evidence either way about the `unwind` bounds (12 package-wide,
+//! 16 for `decode_never_panics_on_arbitrary_bytes_harness`).
+//!
+//! # History: why this package once reported nine `unsupported(no-body)`
+//!
+//! Before Phase 2b's `P2-14` landed, every harness here was a whole-harness
+//! `unsupported(no-body)` and no VC from this package ever reached OxiZ.
+//! `oxicode` reaches its varint codec only through `encoder.writer()` /
+//! `decoder.reader()` (`<EncoderImpl<W, C> as Encoder>::writer`,
+//! `<DecoderImpl<R, C> as Decoder>::reader`), called from inside every
+//! `Encode`/`Decode` impl the crate ships. Both impls define their associated
+//! type as exactly their own generic parameter (`type W = W;`/`type R = R;`),
+//! and the driver did **not** normalize associated-type projections in a
+//! *monomorphic instance* signature, so at `W = SliceWriter<'_>`,
+//! `C = Configuration` the signature still carried
+//! `<EncoderImpl<SliceWriter<'_>, Configuration> as Encoder>::W`
+//! (symmetrically `::R`) un-normalized, and the instance was refused before
+//! its body was ever requested. As those accessors are `oxicode`'s only
+//! dispatch path into the codec, that one gap blocked all nine harnesses
+//! identically and no harness rewrite could have avoided it.
+//!
+//! `P2-14` normalizes an instance signature with the **fallible** normalizer
+//! under `TypingEnv::fully_monomorphized()` (see cargo-formal's
+//! `CHANGELOG.md`, `P2-14` bullet, which names this exact projection shape),
+//! and all nine harnesses now encode. That bullet also settles the design
+//! v1.1 §3.2 open question these docs used to raise: `Callee::path` is
+//! rewritten at **queue** time, so a callee path names a `Function` entry.
+//!
+//! The vendored twin `examples/ecosystem/oxicode-varint` (176 proved /
+//! 1 refuted / 2 unknown) drives five vendored `pub(crate)` varint files
+//! through its *own* hand-rolled `Writer`/`Reader` generics, bypassing
+//! `oxicode`'s real `Encoder`/`Decoder` dispatch; this package goes through
+//! that dispatch. Both now encode. Its `varint_u64_bound_is_tight_harness` is
+//! `refuted` where this one is `proved` because the two state different
+//! propositions -- see `EXPECTED.toml`.
 //!
 //! # Why `match` and never `assert(.. == Ok(..))`
 //!
-//! `Result<T, oxicode::error::Error>`'s `PartialEq` lives in `oxicode`
-//! itself (a `#[derive]`), and even where D1 lowers the derived impl, a
-//! direct `assert(encode(..) == Ok((value, n)))` is needless risk for zero
-//! benefit here: every harness below already needs to open the `Ok` case to
-//! read out `value`/`n`, so it is written as a `match` throughout, exactly
-//! as `examples/ecosystem/oxicode-varint/src/harness.rs` documents doing.
-//! Every comparison that *is* asserted is between two primitive integers or
-//! two `bool`s (`core::cmp::impls`, always in the builtin registry).
+//! `Result<T, oxicode::error::Error>`'s `PartialEq` lives in `oxicode` itself
+//! (a `#[derive]`), and a direct `assert(encode(..) == Ok((value, n)))` is
+//! needless risk for zero benefit here: every harness below already needs to
+//! open the `Ok` case to read out `value`/`n`, so it is written as a `match`
+//! throughout, exactly as `examples/ecosystem/oxicode-varint/src/harness.rs`
+//! documents doing. Every comparison that *is* asserted is between two
+//! primitive integers or two `bool`s (`core::cmp::impls`, builtin registry).
 
 // A `#[harness]` body exists only under `formal` or under
 // `all(test, oxiformal_runtime_checks)` (see `oxiformal_macros::harness`). In
@@ -126,19 +126,19 @@ pub const U32_BOUND: usize = 5;
 /// Worst-case encoded size of a `u64`/`i64`.
 pub const U64_BOUND: usize = 9;
 
-/// Property intended: for every `u16`, `encode_to_fixed_array::<U16_BOUND,
-/// u16>` under the default (variable-width, little-endian) configuration
-/// succeeds, and `decode_from_slice::<u16>` on exactly the bytes written
-/// recovers the value and consumes exactly that many bytes.
+/// Property: `assert`, three source sites. **Measured L1 verdict: unknown**
+/// -- 23 obligations, 22 proved and 1 unknown. The round trip itself is
+/// established: `decoded == value` (`:148`) and `consumed == written`
+/// (`:149`) are both proved for every `u16`. The unknown is the `Err(_) =>
+/// assert(false)` arm at `:151` -- "decoding the bytes the encoder just
+/// produced cannot fail" -- `solver-model-rejected` on the OxiZ 0.3.3 pin
+/// (U-Z10), not refuted, and expected to prove once the pin moves. The
+/// outer `Err` arm at `:153` raises no item at all.
 ///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Blocked at
-/// `oxicode/src/enc/impls.rs:44` (`encoder.writer()`, the `u16::encode`
-/// call site) by the un-normalized `Self::W` projection on
-/// `<EncoderImpl<SliceWriter<'_>, Configuration> as Encoder>::writer`'s
-/// monomorphic instance -- see the module docs above for the full finding.
-/// Not reached by the solver: this row costs nothing against the
-/// `solver-model-rejected`/OxiZ-0.3.3 budget, and moving the OxiZ pin does
-/// not change it.
+/// Stated in full: for every `u16`, `encode_to_fixed_array::<U16_BOUND, u16>`
+/// under the default (variable-width, little-endian) configuration succeeds,
+/// and `decode_from_slice::<u16>` on exactly the bytes written recovers the
+/// value and consumes exactly that many bytes.
 #[harness]
 fn varint_u16_roundtrip_harness() {
     let value: u16 = any();
@@ -154,13 +154,13 @@ fn varint_u16_roundtrip_harness() {
     }
 }
 
-/// Property intended: same statement as
-/// [`varint_u16_roundtrip_harness`] for `u32`, the width whose encoding
-/// needs the two-byte-tag branch (`251 <= value <= 65535`) as well as the
-/// four-byte-tag branch.
-///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Same root
-/// cause, blocked at `oxicode/src/enc/impls.rs:58`.
+/// Same statement as `varint_u16_roundtrip_harness` for `u32`, the width
+/// whose encoding needs the two-byte-tag branch (`251 <= value <= 65535`) as
+/// well as the four-byte-tag branch. Property: `assert`, three sites.
+/// **Measured L1 verdict: unknown** -- 30 obligations, 29 proved and 1
+/// unknown. `decoded == value` (`:170`) and `consumed == written` (`:171`)
+/// are proved; the unknown is the same inner-decode `Err` arm, here at
+/// `:173`, `solver-model-rejected` on OxiZ 0.3.3.
 #[harness]
 fn varint_u32_roundtrip_harness() {
     let value: u32 = any();
@@ -176,13 +176,13 @@ fn varint_u32_roundtrip_harness() {
     }
 }
 
-/// Property intended: same statement for `u64`, the widest value this
-/// package encodes. The encoder's four-way branch on `value` (`<= 250`,
-/// `<= u16::MAX`, `<= u32::MAX`, else) is the only control flow in
-/// `varint_encode_u64`.
-///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Same root
-/// cause, blocked at `oxicode/src/enc/impls.rs:72`.
+/// Same statement for `u64`, the widest value this package encodes. The
+/// encoder's four-way branch on `value` (`<= 250`, `<= u16::MAX`,
+/// `<= u32::MAX`, else) is the only control flow in `varint_encode_u64`.
+/// Property: `assert`, three sites. **Measured L1 verdict: unknown** -- 41
+/// obligations, 40 proved and 1 unknown. `decoded == value` (`:192`) and
+/// `consumed == written` (`:193`) are proved; the unknown is the inner-decode
+/// `Err` arm at `:195`, `solver-model-rejected` on OxiZ 0.3.3.
 #[harness]
 fn varint_u64_roundtrip_harness() {
     let value: u64 = any();
@@ -198,21 +198,21 @@ fn varint_u64_roundtrip_harness() {
     }
 }
 
-/// Property intended: states the boundary that makes [`U64_BOUND`] *tight*:
-/// an eight-byte buffer (`U64_BOUND - 1`) can hold `varint_encode_u64`'s
-/// output exactly when `value <= u32::MAX` (single byte, or the
-/// two/four-byte-tag forms all fit in eight bytes) and cannot when
-/// `value > u32::MAX` (the encoder then needs the nine-byte `U64_BYTE` tag
-/// form). Deliberately a `Result::is_err` check, never a panic:
-/// `SliceWriter::write` returns `Err(Error::UnexpectedEnd { .. })` when the
-/// buffer is too small (`oxicode/src/enc/write.rs:80-88`); it does not trap.
+/// Property: `assert`, one source site (`:220`). **Measured L1 verdict:
+/// proved** -- and so is every other obligation of this harness: 20 proved,
+/// nothing else. This is the strongest result in the package.
 ///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Same root
-/// cause as [`varint_u16_roundtrip_harness`], blocked at
-/// `oxicode/src/enc/impls.rs:72` (`u64::encode`'s call to `encoder.writer()`,
-/// reached with `N = U64_BOUND - 1` here). The `Result::is_err`-vs-panic
-/// design point above is a source-reading claim, not something this run
-/// verified.
+/// It states the boundary that makes [`U64_BOUND`] *tight*: an eight-byte
+/// buffer (`U64_BOUND - 1`) holds `varint_encode_u64`'s output exactly when
+/// `value <= u32::MAX` (single byte, or the two/four-byte-tag forms, all of
+/// which fit in eight bytes) and cannot when `value > u32::MAX` (the encoder
+/// then needs the nine-byte `U64_BYTE` tag form). Proved as a biconditional
+/// over every `u64`, not sampled.
+///
+/// Deliberately a `Result::is_err` check, never a panic: `SliceWriter::write`
+/// returns `Err(Error::UnexpectedEnd { .. })` when the buffer is too small
+/// (`oxicode/src/enc/write.rs:80-88`); it does not trap. The 0 refutations
+/// measured across this package are consistent with that reading.
 #[harness]
 fn varint_u64_bound_is_tight_harness() {
     let value: u64 = any();
@@ -220,16 +220,16 @@ fn varint_u64_bound_is_tight_harness() {
     assert(result.is_err() == (value > u32::MAX as u64));
 }
 
-/// Property intended: under `config::standard().with_fixed_int_encoding()`,
+/// Property: `assert`, three source sites (`:239`, `:242`, `:243`).
+/// **Measured L1 verdict: proved** -- 13 obligations, all proved. Neither
+/// `Err` arm (`:245`, `:248`) raises an item.
+///
+/// Stated in full: under `config::standard().with_fixed_int_encoding()`,
 /// encoding a `u64` always writes exactly 8 bytes (the `IntEncoding::Fixed`
 /// arm of `u64`'s `Encode` impl always calls `to_le_bytes`/`to_be_bytes`,
 /// never the varint tag logic), and decoding those 8 bytes with the same
-/// configuration recovers the value.
-///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Same root
-/// cause, blocked at `oxicode/src/enc/impls.rs:76` -- the `Self::W`
-/// projection gap does not depend on which `IntEncoding`/`Endianness` the
-/// `Configuration` type parameter carries.
+/// configuration recovers the value. The `Configuration` type parameter is
+/// carried through the lowered instances like any other generic argument.
 #[harness]
 fn fixed_int_roundtrip_harness() {
     let value: u64 = any();
@@ -249,15 +249,15 @@ fn fixed_int_roundtrip_harness() {
     }
 }
 
-/// Property intended: zigzag round trip for `i32`: `(v << 1) ^ (v >> 31)`
-/// maps every `i32` (including `i32::MIN`, whose image is `u32::MAX`) onto
-/// a `u32` that the unsigned varint codec above already round-trips, and
-/// the inverse `(n >> 1) ^ -(n & 1)` recovers `v` exactly.
-///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Same root
-/// cause, blocked at `oxicode/src/enc/impls.rs:136` (`i32::encode`'s call
-/// to `encoder.writer()`, after the zigzag transform has already produced
-/// the `u32` to write).
+/// Property: `assert`, three source sites. **Measured L1 verdict: unknown**
+/// -- 33 obligations, 32 proved and 1 unknown. The zigzag round trip itself
+/// is established: `(v << 1) ^ (v >> 31)` maps every `i32` (including
+/// `i32::MIN`, whose image is `u32::MAX`) onto a `u32` the unsigned codec
+/// round-trips, and the inverse `(n >> 1) ^ -(n & 1)` recovers `v` exactly --
+/// `decoded == value` (`:267`) and `consumed == written` (`:268`) are proved,
+/// as are the `shift-overflow` and `neg-overflow` checks of the zigzag
+/// arithmetic. The unknown is the inner-decode `Err` arm at `:270`,
+/// `solver-model-rejected` on OxiZ 0.3.3.
 #[harness]
 fn zigzag_i32_roundtrip_harness() {
     let value: i32 = any();
@@ -273,11 +273,11 @@ fn zigzag_i32_roundtrip_harness() {
     }
 }
 
-/// Property intended: the `i64` half of the same statement, at the widest
-/// width this package encodes.
-///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Same root
-/// cause, blocked at `oxicode/src/enc/impls.rs:150`.
+/// The `i64` half of the same statement, at the widest width this package
+/// encodes. Property: `assert`, three sites. **Measured L1 verdict: unknown**
+/// -- 44 obligations, 43 proved and 1 unknown; `decoded == value` (`:287`)
+/// and `consumed == written` (`:288`) are proved, and the unknown is the
+/// inner-decode `Err` arm at `:290`, `solver-model-rejected` on OxiZ 0.3.3.
 #[harness]
 fn zigzag_i64_roundtrip_harness() {
     let value: i64 = any();
@@ -293,21 +293,21 @@ fn zigzag_i64_roundtrip_harness() {
     }
 }
 
-/// Property intended: a `u16` decode must refuse a stream whose tag byte
-/// announces a wider integer (`U32_BYTE = 252`, `U64_BYTE = 253`,
-/// `U128_BYTE = 254`): every one of those three first bytes is an error,
-/// never a silently truncated value. Written over a fixed-size `[u8; 4]`
-/// (not `any_vec`, per `I0-d.md` §5.4's own recommendation on that point):
-/// the property is about the first byte only, and `decode_from_slice`'s
-/// bound-check on a too-short slice is exactly
-/// [`decode_never_panics_on_arbitrary_bytes_harness`]'s statement, not this
-/// one's.
+/// Property: `assert`, one source site (`:315`), which is this harness's
+/// whole point. **Measured L1 verdict: unknown** -- and unlike the round-trip
+/// harnesses, the unknown *is* the stated property, so it is **not
+/// established on the OxiZ 0.3.3 pin**: `solver-model-rejected` (U-Z10), not
+/// refuted, and expected to prove once the pin moves. The harness's other
+/// 11 obligations (`arith-overflow`, `bounds-check`, `slice-range`) are all
+/// proved; 12 in total.
 ///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Blocked at
-/// `oxicode/src/de/impls.rs:60` (`u16::decode`'s call to `decoder.reader()`)
-/// by the symmetric `Self::R` projection gap on
-/// `<DecoderImpl<SliceReader<'_>, Configuration> as Decoder>::reader`'s
-/// monomorphic instance -- see the module docs above.
+/// Stated in full: a `u16` decode must refuse a stream whose tag byte
+/// announces a wider integer (`U32_BYTE = 252`, `U64_BYTE = 253`,
+/// `U128_BYTE = 254`) -- every one of those three first bytes is an error,
+/// never a silently truncated value. Written over a fixed-size `[u8; 4]`
+/// (not `any_vec`, per `I0-d.md` §5.4): the property is about the first byte
+/// only, and the too-short-slice case is
+/// `decode_never_panics_on_arbitrary_bytes_harness`'s statement, not this.
 #[harness]
 fn decode_rejects_a_wide_tag_harness() {
     let src: [u8; 4] = any();
@@ -315,25 +315,25 @@ fn decode_rejects_a_wide_tag_harness() {
     assert(decode_from_slice::<u16>(&src).is_err());
 }
 
-/// Property intended, no assertion of its own: `decode_from_slice::<u64>`
-/// never panics for *any* twelve bytes, whatever tag byte they start with --
-/// it either returns a value or an `Err`. `SliceReader::read` checks the
-/// requested length against the remaining slice before it copies
-/// (`oxicode/src/de/read.rs:50-54`), and `decode_from_slice`'s own
-/// `bytes_read` computation (`src.len() - decoder.reader().slice.len()`,
-/// `oxicode/src/lib.rs:951`) is an `arith-overflow` obligation this harness
-/// was also meant to cover.
+/// No assertion of its own, so the whole-harness pseudo-key applies.
+/// **Measured L1 verdict: `harness` proved** -- 8 obligations, every one
+/// proved: 1 `arith-overflow` (`oxicode/src/lib.rs:951`), 4 `bounds-check` in
+/// `varint/decode_unsigned.rs`, 3 `slice-range` in `de/read.rs`.
+///
+/// Stated in full: `decode_from_slice::<u64>` never panics for *any* twelve
+/// bytes, whatever tag byte they start with -- it either returns a value or
+/// an `Err`. `SliceReader::read` checks the requested length against the
+/// remaining slice before it copies (`oxicode/src/de/read.rs:50-54`), and
+/// `decode_from_slice`'s own `bytes_read` computation
+/// (`src.len() - decoder.reader().slice.len()`, `oxicode/src/lib.rs:951`) is
+/// the `arith-overflow` obligation this harness was written to cover. Both
+/// are discharged.
 ///
 /// `unwind = 16`, not the package default of 12: the nine-byte `U64_BYTE`
-/// path plus the loop-header visit that reads the discriminant is the
-/// longest control-flow walk this harness would have reached.
-///
-/// **MEASURED L1 verdict: `harness` unsupported (`no-body`).** Blocked at
-/// `oxicode/src/de/impls.rs:98` (`u64::decode`'s call to `decoder.reader()`),
-/// the same `Self::R` projection gap as
-/// [`decode_rejects_a_wide_tag_harness`]. The `unwind` bound was never
-/// exercised: the driver refused to lower a body before any unwinding
-/// happened.
+/// path plus the loop-header visit that reads the discriminant is the longest
+/// control-flow walk this harness reaches. The run raised no
+/// `unwinding-assertion` obligation here, so it gives no evidence either way
+/// about whether that bound binds.
 #[harness(unwind = 16)]
 fn decode_never_panics_on_arbitrary_bytes_harness() {
     let src: [u8; 12] = any();
@@ -376,7 +376,7 @@ mod plain_tests {
         );
     }
 
-    /// Concrete witness for the boundary [`super::varint_u64_bound_is_tight_harness`]
+    /// Concrete witness for the boundary `super::varint_u64_bound_is_tight_harness`
     /// states: the value one past `u32::MAX` needs nine bytes, so an
     /// eight-byte buffer rejects it, and `u32::MAX` itself still fits.
     #[test]
