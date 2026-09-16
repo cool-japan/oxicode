@@ -76,6 +76,27 @@
 # `proved` when it does -- no 0.3.4 run has been measured, so that is an
 # expectation and not a measurement.
 #
+# Re-measured 2026-09-15 with the Phase 3 release CLI (options: autoharness
+# off, modular on, vacuity check on; release cargo-formal 0621fc0, 0
+# uncommitted files, OxiZ 0.3.3, rustc nightly-2026-06-20, --jobs 4, fresh
+# --target-dir, two runs): every row reproduces identically -- bmc 218
+# proved / 0 refuted / 6 unknown, contract 0 proved / 0 refuted, 224
+# obligations, hygiene PASS, exit 0, 5 s both times. run1<->run2 is
+# byte-identical (0 verdict/id/message changes). Against the 2026-09-14
+# report (`compare_expected.py --prev`): 0 added/removed ids, 0 FLIPs, 0
+# message-only changes -- measured directly (`bounded-sequence` appears in 0
+# of 224 messages in both this run and the 2026-09-14 one), so this package
+# is the one D4 package with a byte-identical report end to end, unlike
+# oxiarc-formal's 504 `bounded-sequence` message additions. The six
+# `solver-model-rejected` rows above are unchanged in identity and count.
+# `coverage.claim` now appears (`claim unmet 218 of 218 proved`, requires
+# lrat/oxilean-verify/external-replay) where the 2026-09-14 report had none --
+# confirmed from `crates/formal-config/src/resolved.rs`'s
+# `defaults::claim_requires()` to be an unconditional CLI default applied to
+# every package that does not set `claim-requires` in its manifest,
+# regardless of `self_host` -- a new Phase 3 default report surface, not a
+# verdict row (see the D4 report for detail).
+#
 # History, not current state. Before Phase 2b's `P2-14` landed, every harness
 # in this package was a whole-harness `unsupported(no-body)` and this file
 # recorded nine such rows. The cause was specific: `oxicode` reaches its varint
