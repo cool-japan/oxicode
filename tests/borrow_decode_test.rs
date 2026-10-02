@@ -95,6 +95,11 @@ fn test_borrow_decode_str() {
 
     // Verify it's actually borrowing from the input
     // Length is encoded as varint - for "Hello, OxiCode! 🦀" (21 bytes), varint uses 1 byte
+    // SAFETY: `ptr.add(1)` only computes an address, nothing is dereferenced.
+    // `decoded` was borrow-decoded from `bytes` and the decoder consumed a
+    // 1-byte length prefix before the payload, so `bytes.len() >= 1` and
+    // offset 1 is in bounds or one past the end of the `Vec`'s allocation, as
+    // `pointer::add` requires.
     assert_eq!(decoded.as_ptr(), unsafe { bytes.as_ptr().add(1) });
 }
 
@@ -112,6 +117,11 @@ fn test_borrow_decode_bytes() {
     assert_eq!(original, decoded);
 
     // Verify it's actually borrowing (8 bytes because length=8, varint uses 1 byte)
+    // SAFETY: `ptr.add(1)` only computes an address, nothing is dereferenced.
+    // `encoded` holds the 1-byte varint length prefix followed by the 8 payload
+    // bytes (the assert above compared all 8 against `original`), so
+    // `encoded.len() >= 1` and offset 1 is inside the `Vec`'s allocation, as
+    // `pointer::add` requires.
     assert_eq!(decoded.as_ptr(), unsafe { encoded.as_ptr().add(1) });
 }
 

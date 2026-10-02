@@ -82,11 +82,98 @@ pub unsafe trait BorrowableSliceElement: Sized + Copy + 'static {
     }
 }
 
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `u16` is an
+// unsigned integer of exactly 2 bytes with no padding, a layout fixed by the
+// language; every one of the 2^16 bit patterns is a valid `u16`; and it is
+// `Copy + Sized + 'static`.
+// Item 4: `Encode for u16` (`src/enc/impls.rs`) writes `to_le_bytes` or
+// `to_be_bytes` under `IntEncoding::Fixed`, which is the in-memory byte
+// sequence when the endianness is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<u16>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for u16 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `u32` is an
+// unsigned integer of exactly 4 bytes with no padding, a layout fixed by the
+// language; every one of the 2^32 bit patterns is a valid `u32`; and it is
+// `Copy + Sized + 'static`.
+// Item 4: `Encode for u32` (`src/enc/impls.rs`) writes `to_le_bytes` or
+// `to_be_bytes` under `IntEncoding::Fixed`, which is the in-memory byte
+// sequence when the endianness is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<u32>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for u32 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `u64` is an
+// unsigned integer of exactly 8 bytes with no padding, a layout fixed by the
+// language; every one of the 2^64 bit patterns is a valid `u64`; and it is
+// `Copy + Sized + 'static`.
+// Item 4: `Encode for u64` (`src/enc/impls.rs`) writes `to_le_bytes` or
+// `to_be_bytes` under `IntEncoding::Fixed`, which is the in-memory byte
+// sequence when the endianness is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<u64>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for u64 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `i16` is a
+// signed (two's-complement) integer of exactly 2 bytes with no padding, a
+// layout fixed by the language; every one of the 2^16 bit patterns is a
+// valid `i16`; and it is `Copy + Sized + 'static`.
+// Item 4: `Encode for i16` (`src/enc/impls.rs`) writes `to_le_bytes` or
+// `to_be_bytes` under `IntEncoding::Fixed`, which is the in-memory byte
+// sequence when the endianness is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<i16>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for i16 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `i32` is a
+// signed (two's-complement) integer of exactly 4 bytes with no padding, a
+// layout fixed by the language; every one of the 2^32 bit patterns is a
+// valid `i32`; and it is `Copy + Sized + 'static`.
+// Item 4: `Encode for i32` (`src/enc/impls.rs`) writes `to_le_bytes` or
+// `to_be_bytes` under `IntEncoding::Fixed`, which is the in-memory byte
+// sequence when the endianness is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<i32>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for i32 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `i64` is a
+// signed (two's-complement) integer of exactly 8 bytes with no padding, a
+// layout fixed by the language; every one of the 2^64 bit patterns is a
+// valid `i64`; and it is `Copy + Sized + 'static`.
+// Item 4: `Encode for i64` (`src/enc/impls.rs`) writes `to_le_bytes` or
+// `to_be_bytes` under `IntEncoding::Fixed`, which is the in-memory byte
+// sequence when the endianness is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<i64>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for i64 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `f32` is an
+// IEEE 754 binary32 float of exactly 4 bytes with no padding, a layout fixed
+// by the language; every bit pattern is a valid `f32` (NaN payloads
+// included, no niche); and it is `Copy + Sized + 'static`.
+// Item 4: `Encode for f32` (`src/enc/impls.rs`) always writes `to_le_bytes`
+// or `to_be_bytes`, which is the in-memory byte sequence when the endianness
+// is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<f32>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for f32 {}
+
+// SAFETY: contract items 1, 2 and 5 of `BorrowableSliceElement`: `f64` is an
+// IEEE 754 binary64 float of exactly 8 bytes with no padding, a layout fixed
+// by the language; every bit pattern is a valid `f64` (NaN payloads
+// included, no niche); and it is `Copy + Sized + 'static`.
+// Item 4: `Encode for f64` (`src/enc/impls.rs`) always writes `to_le_bytes`
+// or `to_be_bytes`, which is the in-memory byte sequence when the endianness
+// is the host's.
+// Item 3: the borrow-decode path in `src/de/impls.rs` rejects an input whose
+// address is not a multiple of `align_of::<f64>()`, and any non-Fixed or
+// non-native-endian configuration, before it builds the slice.
 unsafe impl BorrowableSliceElement for f64 {}

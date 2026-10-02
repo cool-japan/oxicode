@@ -288,10 +288,34 @@ impl<T> AlignedVec<T> {
 
         let new_ptr = if self.cap == 0 {
             // First allocation
+            // SAFETY: `new_layout` comes from `layout_for_capacity`, which only
+            // returns a `Layout` that `Layout::from_size_align` validated (an
+            // unsatisfiable request diverges through `handle_alloc_error`), and
+            // its size is non-zero: the `IS_ZST` early return above excludes a
+            // zero `size_of::<T>()`, and every caller passes `new_cap >= 1`
+            // (`grow` passes 8 or twice a non-zero `cap`, `reserve` passes at
+            // least 8). `alloc` is therefore called with a valid, non-zero
+            // layout, and `self.cap == 0` means no earlier allocation is leaked.
             unsafe { alloc::alloc::alloc(new_layout) as *mut T }
         } else {
             // Reallocate
             let old_layout = Self::layout_for_capacity(self.cap);
+            // SAFETY: here `T` is not zero-sized (the `IS_ZST` early return at
+            // the top of this function) and `self.cap != 0` (this branch). For
+            // a non-ZST `T` with `cap != 0`, `self.ptr` was set only from a
+            // successful `alloc`/`realloc` made with `layout_for_capacity(cap)`
+            // for the `cap` stored beside it (`with_capacity` and the `Some`
+            // arm below); `new()` (also what `with_capacity(0)` returns) and
+            // the ZST path of `with_capacity` store `NonNull::dangling()`, but
+            // only with `cap == 0` or `IS_ZST`, both excluded here, and the
+            // only `dealloc` is in `Drop`. So `self.ptr` is currently allocated
+            // by the global allocator with exactly `old_layout` (same size
+            // function, same alignment `max(SIMD_ALIGNMENT, align_of::<T>())`).
+            // `new_layout.size()` is non-zero (see the first-allocation block
+            // above) and, because `new_layout` was validated by
+            // `Layout::from_size_align` with that same alignment, does not
+            // overflow `isize` when rounded up to it. These are the four
+            // preconditions of `GlobalAlloc::realloc`.
             unsafe {
                 alloc::alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size())
                     as *mut T

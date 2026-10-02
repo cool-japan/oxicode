@@ -426,6 +426,11 @@ fn test_derive_lifetime_str_ref_zero_copy_ptr() {
 
     // The encoded &str format: 1-byte varint length prefix, then raw UTF-8 bytes.
     // So decoded.s should point to buf[1].
+    // SAFETY: `ptr.add(1)` only computes an address, nothing is dereferenced.
+    // `buf` was filled by two `extend_from_slice` calls whose first operand is
+    // the encoded `&str` (a length prefix plus the payload) and whose second is
+    // the encoded `u32`, so `buf.len() >= 1` and offset 1 is inside the
+    // `Vec`'s allocation, as `pointer::add` requires.
     let expected_ptr = unsafe { buf.as_ptr().add(1) };
     assert_eq!(
         decoded.s.as_ptr(),

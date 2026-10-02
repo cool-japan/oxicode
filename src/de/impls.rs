@@ -1064,13 +1064,16 @@ impl<'de, Context> crate::de::BorrowDecode<'de, Context> for &'de [i8] {
 /// Zero-copy borrow-decode for `&'de [T]` where `T` is a Pod-like primitive.
 ///
 /// Reinterprets a contiguous byte slice from the input buffer as `&'de [T]`
-/// without copying. Three runtime guards ensure soundness:
+/// without copying. Four runtime guards ensure soundness:
 ///
 /// 1. **Encoding gate** — `IntEncoding::Fixed` only; Varint compresses
 ///    elements and breaks the in-memory layout identity.
 /// 2. **Endianness gate** — decoder endianness must match the host's native
 ///    byte order for any `T` wider than one byte.
-/// 3. **Alignment gate** — `take_bytes`'s result must be aligned to
+/// 3. **Length gate** — `take_bytes`'s result must be exactly
+///    `len * size_of::<T>()` bytes long (the `BorrowReader` trait is public
+///    and unsealed, so a custom reader's slice is checked, not trusted).
+/// 4. **Alignment gate** — `take_bytes`'s result must be aligned to
 ///    `align_of::<T>()`.
 ///
 /// All gates produce `Error::InvalidData` with a descriptive message on
@@ -1112,6 +1115,18 @@ where
 
         let bytes = decoder.borrow_reader().take_bytes(byte_count)?;
 
+        // Length gate: `BorrowReader` is a public, unsealed trait whose
+        // `take_bytes` contract is documented but not a safety requirement,
+        // so the slice it hands back is checked before any `unsafe` code
+        // relies on its length (a reader returning fewer bytes would
+        // otherwise make `from_raw_parts` read past the end of the buffer).
+        if bytes.len() != byte_count {
+            return Err(Error::InvalidData {
+                message: "borrow-decode of &[T]: the reader returned a slice whose length is \
+                          not length × element-size",
+            });
+        }
+
         // Alignment gate: pointer must satisfy align_of::<T>().
         let align = core::mem::align_of::<T>();
         if (bytes.as_ptr() as usize) % align != 0 {
@@ -1122,7 +1137,9 @@ where
         }
 
         // SAFETY:
-        // - `bytes` is `&'de [u8]` with length exactly `len * size_of::<T>()`.
+        // - `bytes` is `&'de [u8]` with length exactly `len * size_of::<T>()`
+        //   (checked above; `BorrowReader` is unsealed, so its contract alone
+        //   is not relied upon).
         // - `bytes.as_ptr()` is aligned to `align_of::<T>()` (checked above).
         // - Encoding is Fixed and endianness is native (checked above), so
         //   the bytes are a verbatim copy of `[T; len]` in host memory.
