@@ -143,6 +143,43 @@ obligations backed by a `reproduction` evidence record; `contract` 0 proved /
 `theorem` not run; `coverage` 0 of 0 public functions annotated, 9 harnesses.
 The extraction line reads `Checking oxicode-formal (224 VCs, 0 cached)`.
 
+### Evidence grade
+
+Every `proved` row above is **reproduction only (claim unmet)** under
+cargo-formal's default `claim-requires` (`lrat`, `oxilean-verify`,
+`external-replay`): it is the pinned solver's `unsat`, reproduced under a fixed
+seed and conflict budget, not an independently checked proof, and the default
+run says so (`claim unmet 218 of 218 proved`). OxiZ 0.3.3 has a documented
+wrong-`unsat` class (upstream U-Z19; cargo-formal's conformance fixture
+`u21_pinned_selector_two_define_funs`), which is why a reproduction alone is
+not a proof.
+
+Measured 2026-10-06 with a release CLI and driver built from the cargo-formal
+tree at `e3a3053` plus that day's cross-check change (OxiZ 0.3.3, rustc
+nightly-2026-06-20, `--jobs 2`, a fresh `--target-dir`, `--no-cache`). A
+default `cargo formal check` cross-checks every proved obligation at bit level
+— the obligation is bit-blasted, solved by `oxiz-sat`, and its proof checked
+by `oxiz-proof` — before the verdict is published: of the 218 proved
+obligations, **53 are confirmed** by that check and **165 folded** (the
+bit-level encoder reduced an assertion to the constant `false`, so the encoder
+itself agrees), **0 are contradicted** and **0 are not confirmed**. Every
+verdict, message and piece of evidence is identical to what the binaries built
+at `e3a3053` report for the same sources, and the grade above is unchanged: a
+default run attaches no certificate.
+`cargo formal check --evidence lrat` raises **40 soundness incidents** and
+**exits 5**: it cross-checks every vacuity `unsat` at bit level before it
+relies on it, and of the 56 obligations whose vacuity question the pinned
+solver answers `unsat`, 11 are confirmed and 5 folded, while **40 are
+satisfied at bit level by a model of the hypotheses that the evaluator
+accepts** (the varint and zigzag round-trip harnesses), so they are not
+vacuous, are not labelled `proved vacuously` (16 are), and are each reported
+as an incident. **43 of the 218** proved obligations carry an LRAT certificate
+checked by `oxiz-proof` (11 of the 14 proved user-written `assert` obligations;
+the other 6 `assert` obligations are `unknown`). The
+incidents are the pinned OxiZ 0.3.3's wrong-`unsat` class (upstream U-Z19),
+fixed in OxiZ 0.3.4; this package will report them under `--evidence lrat`
+until cargo-formal's solver pin moves. No verdict moved.
+
 ### Dependency bodies and instances
 
 * **`dependency bodies`: 42 lowered (6 reachable).** `[package.metadata.formal]
